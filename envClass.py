@@ -2,6 +2,7 @@ from enum import Enum
 import numpy as np
 import networkx as nx
 from matplotlib import pyplot as plt
+import torch
 
 graph = nx.Graph()
 
@@ -122,7 +123,7 @@ class EnvRun:
         self.work_cell_num = work_cell_num
         self.agv_cell_num = agv_cell_num
         self.work_cell_list = [
-            WorkCell(cell_id=0, function_ids=[1, 4], function_times=[10, 12], position=[0, 0]),
+            WorkCell(cell_id=0, function_ids=[1], function_times=[10, 12], position=[0, 0]),
             WorkCell(cell_id=1, function_ids=[2, 3], function_times=[5, 12], position=[0, 1]),
             WorkCell(cell_id=2, function_ids=[3, 4], function_times=[6, 2], position=[0, 2]),
             WorkCell(cell_id=3, function_ids=[1, 2], function_times=[6, 2], position=[1, 0]),
@@ -148,4 +149,6 @@ if __name__ == '__main__':
     for i in range(5):
         pos[env.work_cell_list[i].cell_id] = env.work_cell_list[i].position
     nx.draw_networkx(graph, pos)
+    edge_index = torch.tensor(np.array(graph.edges())).T
+    print(edge_index)
     plt.show()
