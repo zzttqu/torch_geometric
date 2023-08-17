@@ -15,7 +15,6 @@ y = torch.tensor([0, 1, 0, 1])
 # 0连接了1,1连接了0,2连接了1,0连接了3,3连接了2
 edge_index = torch.tensor([[0, 1, 2, 0, 3],
                            [1, 0, 1, 3, 2]])
-nodeTo=Node2Vec()
 graph = nx.Graph()
 graph.add_edges_from(edge_index.T)
 data = Data(x=x, y=y, edge_index=edge_index)

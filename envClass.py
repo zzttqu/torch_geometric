@@ -1,19 +1,39 @@
+import random
 from enum import Enum
 import numpy as np
 import networkx as nx
 from matplotlib import pyplot as plt
 import torch
+from typing import List
 
 graph = nx.Graph()
+plt.rcParams['font.sans-serif'] = ['SimHei']  # 显示中文标签
+plt.rcParams['axes.unicode_minus'] = False
+
+
+def edge_weight_init(raw_array):
+    # 示例二维数组
+    value_counts = {}
+    for value in np.unique(raw_array):
+        count = np.count_nonzero(raw_array == value)
+        value_counts[value] = count
+    total_count = len(raw_array)
+    normalized_value = {}
+    for value, count in value_counts.items():
+        ratio = 1 / count if count != 0 else 0
+        normalized_value[value] = ratio
+    normalized_array = np.copy(raw_array)
+    for value, ratio in normalized_value.items():
+        normalized_array = np.where(normalized_array == value, ratio, normalized_array)
+    return normalized_array
 
 
 class StateCode(Enum):
     workcell_ready = 0
-    workcell_start = 1
-    workcell_function_err = 2
-    workcell_busy = 3
+    workcell_working = 1
+    workcell_low_material = 2
+    workcell_low_product = 3
     # workcell_finish = 4
-    workcell_low_health = 5
     AGVCell_ready = 0
     AGVCell_start = 1
     AGVCell_busy = 2
@@ -22,62 +42,97 @@ class StateCode(Enum):
 
 
 class WorkCell:
-    def __init__(self, cell_id: int, function_ids, function_times, position, health=100):
+    next_id = 0
+
+    def __init__(self, function_id, speed, position, materials=0, products=0):
         super().__init__()
-        self.cell_id = cell_id
-        self.function = {}
-        for function_id, time in zip(function_ids, function_times):
-            self.function[function_id] = time
+        # 需要有当前这个工作单元每个功能的备件，每个功能生产效率
+        self.cell_id = WorkCell.next_id
+        WorkCell.next_id += 1
+        self.function = np.array([function_id, speed, materials, products], dtype=int)
         self.position = np.array(position)
+        self.edge_ratio = 1
         self.health = 100
-        self.working = False
-        self.processing_time = 0
+        self.working = None
         self.idle_time = 0
         self.state = StateCode.workcell_ready
 
     def set_work(self, function):
-        # 该工作站正在运行中，无法设置任务
-        if self.state != StateCode.workcell_ready:
-            self.state = StateCode.workcell_busy
-        # 该工作站没有这种方法
-        if function not in self.function:
-            self.state = StateCode.workcell_function_err
-        self.processing_time = self.function[function]
-        self.working = True
-        self.state = StateCode.workcell_start
+        self.working = function
+        self.state = StateCode.workcell_working
 
-    def work(self, action):
-        if action[0] == 1:
-            self.set_work(action[1])
+    def transport(self, action, num):
+        # 转移生产产品
+        if action == 2:
+            self.function[3] = 0
+
+        # 或者接收原材料
+        elif action == 3:
+            self.function[2] += num
+
+    def work(self, action, action_detail):
+        # 工作/继续工作
+        if action == 1:
+            if action_detail == self.working:
+                pass
+            else:
+                self.set_work(action_detail)
             self.idle_time = 0
-        state = self.state_check()
-        # 工作中
-        if state != StateCode.workcell_busy:
-            self.state = state
-        if self.processing_time <= 0:
-            self.processing_time = 0
+        # 停止工作
+        elif action == 0:
+            # self.working = None
             self.state = StateCode.workcell_ready
+        # 检查当前状态
+        self.state_check()
+        if self.state == StateCode.workcell_working:
+            # 工作中
+            # 2是生产库存数量，0是生产速度,1是原料数量
+            self.function[3] += self.function[1]
+            self.function[2] -= self.function[1]
+            # self.health -= 0.1
         if self.state == StateCode.workcell_ready:
             self.idle_time += 1
-        else:
-            self.health -= 0.1
-            self.processing_time -= 1
 
     def state_check(self):
-        if self.working:
-            return StateCode.workcell_busy
-        if self.health < 50:
-            return StateCode.workcell_low_health
+        # 低健康度
+        # if self.health < 50:
+        #     self.working = None
+        #     self.state = StateCode.workcell_low_health
+        # 缺少原料
+        if self.function[2] <= self.function[1]:
+            self.state = StateCode.workcell_low_material
         else:
-            return StateCode.workcell_ready
+            self.state = StateCode.workcell_working
+        # 爆仓了
+        if self.working is None:
+            return
+        if self.function[3] >= 1000:
+            print('爆仓了')
 
     def reset_state(self):
         self.state = StateCode.workcell_ready
-        self.working = False
-        self.processing_time = 0
+        self.working = None
 
+    # 状态空间
     def get_state(self):
-        return self.state, self.processing_time
+        if self.state == StateCode.workcell_working:
+            return (self.state.value,
+                    self.working,
+                    self.edge_ratio,
+                    self.function[1],
+                    self.function[2],
+                    self.function[3])
+        else:
+            return (self.state.value,
+                    self.function[0],
+                    self.edge_ratio,
+                    self.function[1],
+                    self.function[2],
+                    self.function[3])
+
+    # 动作空间
+    def get_function(self):
+        return self.function[0]
 
 
 class AGVCell:
@@ -118,37 +173,131 @@ class AGVCell:
 
 
 class EnvRun:
-    def __init__(self, step, work_cell_num, agv_cell_num):
+    def __init__(self, step, work_cell_num, function_num, agv_cell_num=0):
         self.step = step
         self.work_cell_num = work_cell_num
         self.agv_cell_num = agv_cell_num
-        self.work_cell_list = [
-            WorkCell(cell_id=0, function_ids=[1], function_times=[10, 12], position=[0, 0]),
-            WorkCell(cell_id=1, function_ids=[2, 3], function_times=[5, 12], position=[0, 1]),
-            WorkCell(cell_id=2, function_ids=[3, 4], function_times=[6, 2], position=[0, 2]),
-            WorkCell(cell_id=3, function_ids=[1, 2], function_times=[6, 2], position=[1, 0]),
-            WorkCell(cell_id=4, function_ids=[3, 4], function_times=[6, 2], position=[2, 1]),
-        ]
+        self.work_cell_state_num = 6
+        self.function_num = function_num
+        self.work_cell_list: List[WorkCell] = []
+        for i in range(work_cell_num):
+            self.work_cell_list.append(
+                WorkCell(function_id=np.random.randint(0, function_num), speed=3,
+                         position=[i, 0], materials=10)
+            )
+        self.products = np.zeros(function_num)
+        self.edge_weight = edge_weight_init(self.get_work_cell_functions())
+        self.edge_tensor = torch.zeros((2, (function_num - 1) * (work_cell_num - function_num + 1)))
+        print(self.edge_tensor.shape)
+        for worker, ratio in zip(self.work_cell_list, self.edge_weight):
+            worker.edge_ratio = ratio[0]
 
     def build_edge(self):
         graph = nx.DiGraph()
+        node_id = np.zeros(len(self.work_cell_list), dtype=int)
+        node_attributes = np.zeros((len(self.work_cell_list), 2))
+        for i, worker in enumerate(self.work_cell_list):
+            if isinstance(worker, WorkCell):
+                node_id[i] = worker.cell_id
+                node_attributes[i] = np.array([worker.state.value])
+                graph.add_node(node_id[i], state=worker.state.value)
+        # print(data)
         for i in range(len(self.work_cell_list)):
             for j in range(len(self.work_cell_list)):
                 if i != j:
-                    cell1_ids = self.work_cell_list[i].function.keys()
-                    cell2_ids = self.work_cell_list[j].function.keys()
-                    if any(id1 + 1 in cell2_ids for id1 in cell1_ids):
-                        graph.add_edge(self.work_cell_list[i].cell_id, self.work_cell_list[j].cell_id)
+                    cell1_ids = self.work_cell_list[i].function[0]
+                    cell2_ids = self.work_cell_list[j].function[0]
+                    # 边信息
+                    if cell1_ids + 1 == cell2_ids:
+                        graph.add_edge(self.work_cell_list[i].cell_id, self.work_cell_list[j].cell_id,
+                                       function=cell2_ids, ratio=self.work_cell_list[j].edge_ratio)
+
         return graph
+
+    def update_material(self, workcell_action, workcell_material_ratio):
+        products = np.zeros(self.function_num)
+        for work_cell in self.work_cell_list:
+            # 取出所有物品，然后清空
+            products[work_cell.function[0]] += (work_cell.function[3] + self.products[work_cell.function[0]])
+            work_cell.transport(2, 0)
+            # 更新边权重
+            work_cell.edge_ratio = workcell_material_ratio[work_cell.cell_id]
+        self.products = products.copy()
+        # 根据边权重传递物料
+        for action, ratio, work_cell in zip(
+                workcell_action,
+                workcell_material_ratio,
+                self.work_cell_list):
+            if action == 2:
+                if work_cell.function[0] == 0:
+                    work_cell.transport(3, 100)
+                else:
+                    # int会导致有盈余，但是至少不会发生没办法转移的情况
+                    self.products[work_cell.function[0] - 1] -= int(products[work_cell.function[0] - 1] * ratio)
+                    work_cell.transport(3, int(products[work_cell.function[0] - 1] * ratio))
+            elif action == 0:
+                if work_cell.function[0] == 0:
+                    pass
+                else:
+                    pass
+        return self.products
+
+    def update_work_cell(self, workcell_id, workcell_action, workcell_function):
+        for _id, action, f_id, work_cell in zip(workcell_id, workcell_action, workcell_function, self.work_cell_list):
+            work_cell.work(action, f_id)
+
+    def get_obs(self):
+        obs_states = np.zeros((self.work_cell_num, self.work_cell_state_num))
+        for work_cell in self.work_cell_list:
+            obs_states[work_cell.cell_id] = work_cell.get_state()
+        return obs_states
+
+    def get_work_cell_functions(self):
+        work_station_functions = np.zeros((self.work_cell_num, 1), dtype=int)
+        for i, work_cell in enumerate(self.work_cell_list):
+            work_station_functions[i] = work_cell.get_function()
+        return work_station_functions
+
+    def get_work_cell_actions(self):
+        return np.array([0, 1, 2, 3])
 
 
 if __name__ == '__main__':
-    env = EnvRun(1, 5, 1)
+    function_num = 3
+    env = EnvRun(1, 6, function_num)
+    work_function = env.get_work_cell_functions()
+    # print(work_function)
+    weight = edge_weight_init(work_function).squeeze()
+    work_action = env.get_work_cell_actions()
+    random_function = [np.random.choice(row) for row in work_function]
+    random_action = [np.random.choice(work_action) for i in range(function_num)]
+    # 设置任务计算生产
+    env.update_work_cell([0, 1, 2, 3, 4], [1, 1, 1, 1, 1], random_function)
+    # 神经网络要输出每个工作站的工作，功能和传输比率
+    # 迁移物料,2是正常接收，其他是不接收
+    products = env.update_material([2, 2, 2, 2, 2, 2], weight)
+    obs_state = env.get_obs()
+    # obs_state = env.update_work_cell(random_action, random_function)
+    print(obs_state, products)
     graph = env.build_edge()
     pos = {}
-    for i in range(5):
+    for i in range(3):
         pos[env.work_cell_list[i].cell_id] = env.work_cell_list[i].position
-    nx.draw_networkx(graph, pos)
+    node_states = nx.get_node_attributes(graph, 'state')
+    node_times = nx.get_node_attributes(graph, 'time')
+    nodes = nx.nodes(graph)
+    node_labels = {}
+    for node in nodes:
+        # 这里只用\n就可以换行了
+        node_labels[node] = f'{node}节点：\n 状态：{node_states[node]} \n'
+    # print(node_labels)
+    pos = nx.shell_layout(graph)
+    nx.draw_networkx_nodes(graph, pos)
+    nx.draw_networkx_labels(graph, pos, node_labels)
+    nx.draw_networkx_edges(graph, pos, connectionstyle="arc3,rad=0.2")
+    a = torch.tensor(list(nx.get_edge_attributes(graph, 'ratio').values()))
     edge_index = torch.tensor(np.array(graph.edges())).T
-    print(edge_index)
-    plt.show()
+    print(a)
+    tensor = torch.where(edge_index[1] == 2)
+    print(tensor)
+    # plt.show()
