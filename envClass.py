@@ -6,6 +6,7 @@ from matplotlib import pyplot as plt
 import torch
 from typing import List
 from torch_geometric.data import Data
+from GNNNet import GNNNet
 
 graph = nx.Graph()
 plt.rcParams['font.sans-serif'] = ['SimHei']  # 显示中文标签
@@ -119,14 +120,12 @@ class WorkCell:
         if self.state == StateCode.workcell_working:
             return (self.state.value,
                     self.working,
-                    self.edge_ratio,
                     self.function[1],
                     self.function[2],
                     )
         else:
             return (self.state.value,
                     self.function[0],
-                    self.edge_ratio,
                     self.function[1],
                     self.function[2],
                     )
@@ -174,14 +173,24 @@ class AGVCell:
 
 
 class TransitCenter:
-    next_id = 255
 
     def __init__(self, product_id):
-        self.center_id = TransitCenter.next_id
-        TransitCenter.next_id += 1
+        self.cell_id = WorkCell.next_id
+        WorkCell.next_id += 1
         self.product_id = product_id
-        self.state = 0
+        self.state = StateCode.workcell_working
         self.product_num = 0
+
+    def putin_product(self, num):
+        self.product_num += num
+        return self.product_num
+
+    def moveout_product(self, num):
+        self.product_num -= num
+        return self.product_num
+
+    def get_state(self):
+        return self.state.value, self.product_id, 10, self.product_num
 
 
 class EnvRun:
@@ -189,13 +198,19 @@ class EnvRun:
         self.step = step
         self.work_cell_num = work_cell_num
         self.agv_cell_num = agv_cell_num
-        self.work_cell_state_num = 5
+        self.work_cell_state_num = 4
+        # 会生产几种类型
         self.function_num = function_num
         self.work_cell_list: List[WorkCell] = []
         for i in range(work_cell_num):
             self.work_cell_list.append(
                 WorkCell(function_id=np.random.randint(0, function_num), speed=6,
-                         position=[i, 0], materials=5)
+                         position=[i, 0], materials=10)
+            )
+        self.center_list: List[TransitCenter] = []
+        for i in range(function_num):
+            self.center_list.append(
+                TransitCenter(i)
             )
         self.products = np.zeros(function_num)
         self.edge_weight = edge_weight_init(self.get_work_cell_functions())
@@ -205,61 +220,73 @@ class EnvRun:
     def build_edge(self):
         # 理论上来说边建立好后就不会变化了
         graph = nx.DiGraph()
-        node_id = np.zeros(len(self.work_cell_list), dtype=int)
-        node_attributes = np.zeros((len(self.work_cell_list), 2))
-        for i, worker in enumerate(self.work_cell_list):
-            if isinstance(worker, WorkCell):
-                node_id[i] = worker.cell_id
-                node_attributes[i] = np.array([worker.state.value])
-                graph.add_node(node_id[i], state=worker.state.value)
-        for i in range(len(self.work_cell_list)):
-            for j in range(len(self.work_cell_list)):
-                if i != j:
-                    cell1_ids = self.work_cell_list[i].function[0]
-                    cell2_ids = self.work_cell_list[j].function[0]
-                    # 边信息
-                    if cell1_ids + 1 == cell2_ids:
-                        graph.add_edge(self.work_cell_list[i].cell_id, self.work_cell_list[j].cell_id,
-                                       function=cell2_ids, ratio=self.work_cell_list[j].edge_ratio)
+        # node_id = np.zeros((self.work_cell_num + self.function_num), dtype=int)
+        index = 0
+        for worker in self.work_cell_list:
+            graph.add_node(worker.cell_id, state=worker.state.value, function=worker.function[0])
+            index += 1
+        for center in self.center_list:
+            graph.add_node(center.cell_id, state=center.state.value, function=center.product_id)
+            index += 1
 
+        for work_cell in self.work_cell_list:
+            for center in self.center_list:
+                cell1_id = work_cell.function[0]
+                product_id = center.product_id
+                # 边信息
+                # 从生产到中转
+                if cell1_id == product_id:
+                    graph.add_edge(work_cell.cell_id, center.cell_id,
+                                   function=cell1_id, ratio=1)
+                # 从中转到下一步
+                if product_id == cell1_id - 1:
+                    graph.add_edge(center.cell_id, work_cell.cell_id,
+                                   function=product_id, ratio=work_cell.edge_ratio)
         return graph
 
-    def update_material(self, workcell_action, workcell_material_ratio):
+    def update_material(self, workcell_material_ratio):
         products = np.zeros(self.function_num)
         for work_cell in self.work_cell_list:
             # 取出所有物品，然后清空
+            self.center_list[work_cell.function[0]].putin_product(work_cell.function[3])
             products[work_cell.function[0]] += (work_cell.function[3] + self.products[work_cell.function[0]])
             work_cell.transport(2, 0)
             # 更新边权重
             work_cell.edge_ratio = workcell_material_ratio[work_cell.cell_id]
-        self.products = products.copy()
         # 根据边权重传递物料
-        for action, ratio, work_cell in zip(
-                workcell_action,
+        for ratio, work_cell in zip(
                 workcell_material_ratio,
                 self.work_cell_list):
-            if action == 2:
-                if work_cell.function[0] == 0:
-                    work_cell.transport(3, 100)
-                else:
-                    # int会导致有盈余，但是至少不会发生没办法转移的情况
-                    self.products[work_cell.function[0] - 1] -= int(products[work_cell.function[0] - 1] * ratio)
-                    work_cell.transport(3, int(products[work_cell.function[0] - 1] * ratio))
-            elif action == 0:
-                if work_cell.function[0] == 0:
-                    pass
-                else:
-                    pass
+            # if action == 2:
+            if work_cell.function[0] == 0:
+                work_cell.transport(3, 100)
+            else:
+                # int会导致有盈余，但是至少不会发生没办法转移的情况
+                self.center_list[work_cell.function[0] - 1].moveout_product(
+                    int(products[work_cell.function[0] - 1] * ratio))
+                work_cell.transport(3, int(products[work_cell.function[0] - 1] * ratio))
+        # elif action == 0:
+        #     if work_cell.function[0] == 0:
+        #         pass
+        #     else:
+        #         pass
 
     def update_work_cell(self, workcell_id, workcell_action, workcell_function):
         for _id, action, f_id, work_cell in zip(workcell_id, workcell_action, workcell_function, self.work_cell_list):
             work_cell.work(action, f_id)
 
     def get_obs(self):
-        obs_states = np.zeros((self.work_cell_num, self.work_cell_state_num))
+        obs_states = np.zeros((self.work_cell_num + self.function_num, self.work_cell_state_num))
         for work_cell in self.work_cell_list:
             obs_states[work_cell.cell_id] = work_cell.get_state()
-        return obs_states, self.products
+        for center in self.center_list:
+            obs_states[center.cell_id] = center.get_state()
+        # 额定扣血
+        reward = -0.1
+        # 生产一个有奖励
+        reward += self.center_list[-1].product_num * 0.1
+
+        return obs_states, reward
 
     def get_work_cell_functions(self):
         work_station_functions = np.zeros((self.work_cell_num, 1), dtype=int)
@@ -268,10 +295,12 @@ class EnvRun:
         return work_station_functions
 
     def get_work_cell_actions(self):
-        return np.array([0, 1, 2, 3])
+        return np.array([0, 1])
 
 
 if __name__ == '__main__':
+    np.set_printoptions(precision=3, suppress=True)
+    torch.set_printoptions(precision=3, sci_mode=False)
     function_num = 3
     env = EnvRun(1, 6, function_num)
     work_function = env.get_work_cell_functions()
@@ -284,41 +313,47 @@ if __name__ == '__main__':
     env.update_work_cell([0, 1, 2, 3, 4], [1, 1, 1, 1, 1], random_function)
     # 神经网络要输出每个工作站的工作，功能和传输比率
     # 迁移物料,2是正常接收，其他是不接收
-    env.update_material([2, 2, 2, 2, 2, 2], weight)
-    obs_state, products = env.get_obs()
-    torch.set_printoptions(precision=3, sci_mode=False)
+    env.update_material(weight)
+    obs_state, _ = env.get_obs()
 
     # print(obs_state, products)
     print("=========")
     env.update_work_cell([0, 1, 2, 3, 4], [1, 1, 1, 1, 1], random_function)
-    env.update_material([2, 2, 2, 2, 2, 2], weight)
-    obs_state, products = env.get_obs()
+    env.update_material(weight)
+    obs_state, _ = env.get_obs()
     # print(obs_state, products)
     print("=========")
     env.update_work_cell([0, 1, 2, 3, 4], [1, 1, 1, 1, 1], random_function)
-    env.update_material([2, 2, 2, 2, 2, 2], weight)
-    obs_state, products = env.get_obs()
-    print(obs_state, products)
+    env.update_material(weight)
+    obs_state, reward = env.get_obs()
+    # print(obs_state, reward)
     graph = env.build_edge()
     pos = {}
     for i in range(3):
         pos[env.work_cell_list[i].cell_id] = env.work_cell_list[i].position
     node_states = nx.get_node_attributes(graph, 'state')
-    node_times = nx.get_node_attributes(graph, 'time')
+    node_function = nx.get_node_attributes(graph, 'function')
+    edge_weight = nx.get_edge_attributes(graph, 'ratio')
     nodes = nx.nodes(graph)
+    edges = nx.edges(graph)
     node_labels = {}
+    edge_labels = {}
     for node in nodes:
         # 这里只用\n就可以换行了
-        node_labels[node] = f'{node}节点：\n 状态：{node_states[node]} \n'
+        node_labels[node] = f'{node}节点：\n 状态：{node_states[node]} \n 功能：{node_function[node]}'
+    for edge in edges:
+        edge_labels[edge] = f'权重{edge_weight[edge]:.2f}'
     # print(node_labels)
-    pos = nx.shell_layout(graph)
+    pos = nx.spring_layout(graph)
     nx.draw_networkx_nodes(graph, pos)
     nx.draw_networkx_labels(graph, pos, node_labels)
-    nx.draw_networkx_edges(graph, pos, connectionstyle="arc3,rad=0.2")
+    # nx.draw_networkx_edges(graph, pos, connectionstyle="arc3,rad=0.2")
+    nx.draw_networkx_edges(graph, pos)
+    nx.draw_networkx_edge_labels(graph, pos, edge_labels)
     edge_weight = torch.tensor(list(nx.get_edge_attributes(graph, 'ratio').values()))
-    edge_index = torch.tensor(np.array(graph.edges())).T
-    print(edge_index)
-    print(edge_weight)
-    data = Data(x=torch.tensor(obs_state), edge_index=edge_index, edge_attr=edge_weight)
-    print(data)
-    plt.show()
+    edge_index = torch.tensor(np.array(graph.edges()), dtype=torch.int64).T
+    data = Data(x=torch.tensor(obs_state, dtype=torch.float64), edge_index=edge_index, edge_attr=edge_weight)
+    net = GNNNet(node_num=6, embed_dim=4).double()
+    print(net(data))
+    print(data.num_features)
+    # plt.show()

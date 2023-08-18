@@ -1,6 +1,6 @@
 import torch
 from torch_geometric.data import Data
-from torch_geometric.nn import GCNConv,Linear,Node2Vec
+from torch_geometric.nn import GCNConv, Linear, Node2Vec
 import networkx as nx
 import matplotlib.pyplot as plt
 from torch_geometric.datasets import KarateClub
@@ -12,6 +12,7 @@ x = torch.tensor([[2, 1], [5, 6], [3, 7], [12, 0]], dtype=torch.float)
 # 节点分类
 y = torch.tensor([0, 1, 0, 1])
 # 边数据
+nn.Linear(10, 10)
 # 0连接了1,1连接了0,2连接了1,0连接了3,3连接了2
 edge_index = torch.tensor([[0, 1, 2, 0, 3],
                            [1, 0, 1, 3, 2]])
