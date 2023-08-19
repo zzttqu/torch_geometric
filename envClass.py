@@ -5,6 +5,8 @@ import networkx as nx
 from matplotlib import pyplot as plt
 import torch
 from typing import List
+
+from torch.distributions import Categorical
 from torch_geometric.data import Data
 from GNNNet import GNNNet
 
@@ -104,7 +106,7 @@ class WorkCell:
         if self.function[2] <= self.function[1]:
             self.state = StateCode.workcell_low_material
         else:
-            self.state = StateCode.workcell_working
+            pass
         # 爆仓了
         if self.working is None:
             return
@@ -118,17 +120,16 @@ class WorkCell:
     # 状态空间
     def get_state(self):
         if self.state == StateCode.workcell_working:
-            return (self.state.value,
-                    self.working,
-                    self.function[1],
-                    self.function[2],
-                    )
+            return torch.tensor([self.state.value,
+                                 self.working,
+                                 self.function[1],
+                                 self.function[2]])
+
         else:
-            return (self.state.value,
-                    self.function[0],
-                    self.function[1],
-                    self.function[2],
-                    )
+            return torch.tensor([self.state.value,
+                                 self.function[0],
+                                 self.function[1],
+                                 self.function[2]])
 
     # 动作空间
     def get_function(self):
@@ -190,7 +191,7 @@ class TransitCenter:
         return self.product_num
 
     def get_state(self):
-        return self.state.value, self.product_id, 10, self.product_num
+        return torch.tensor((self.state.value, self.product_id, 10, self.product_num))
 
 
 class EnvRun:
@@ -204,6 +205,9 @@ class EnvRun:
         self.work_cell_list: List[WorkCell] = []
         for i in range(work_cell_num):
             self.work_cell_list.append(
+                # 随机function或者规定
+                # i // (self.work_cell_num // self.function_num)
+                # np.random.randint(0, function_num)
                 WorkCell(function_id=np.random.randint(0, function_num), speed=6,
                          position=[i, 0], materials=10)
             )
@@ -276,7 +280,8 @@ class EnvRun:
             work_cell.work(action, f_id)
 
     def get_obs(self):
-        obs_states = np.zeros((self.work_cell_num + self.function_num, self.work_cell_state_num))
+        obs_states = torch.zeros((self.work_cell_num + self.function_num, self.work_cell_state_num),
+                                 dtype=torch.float64)
         for work_cell in self.work_cell_list:
             obs_states[work_cell.cell_id] = work_cell.get_state()
         for center in self.center_list:
@@ -302,25 +307,29 @@ if __name__ == '__main__':
     np.set_printoptions(precision=3, suppress=True)
     torch.set_printoptions(precision=3, sci_mode=False)
     function_num = 3
-    env = EnvRun(1, 6, function_num)
+    work_cell_num = 6
+    env = EnvRun(1, work_cell_num=work_cell_num, function_num=function_num)
+    # 针对function的分类
     work_function = env.get_work_cell_functions()
-    # print(work_function)
+    function_id = torch.tensor(work_function.squeeze())
+    unique_labels = torch.unique(function_id)
+    grouped_indices = [torch.where(function_id == label)[0] for label in unique_labels]
+    grouped_indices.pop(0)
     weight = edge_weight_init(work_function).squeeze()
     work_action = env.get_work_cell_actions()
-    random_function = [np.random.choice(row) for row in work_function]
-    random_action = [np.random.choice(work_action) for i in range(function_num)]
+    random_function = [row[0] for row in work_function]
     # 设置任务计算生产
     env.update_work_cell([0, 1, 2, 3, 4], [1, 1, 1, 1, 1], random_function)
     # 神经网络要输出每个工作站的工作，功能和传输比率
     # 迁移物料,2是正常接收，其他是不接收
     env.update_material(weight)
-    obs_state, _ = env.get_obs()
+    # obs_state, _ = env.get_obs()
 
     # print(obs_state, products)
     print("=========")
     env.update_work_cell([0, 1, 2, 3, 4], [1, 1, 1, 1, 1], random_function)
     env.update_material(weight)
-    obs_state, _ = env.get_obs()
+    # obs_state, _ = env.get_obs()
     # print(obs_state, products)
     print("=========")
     env.update_work_cell([0, 1, 2, 3, 4], [1, 1, 1, 1, 1], random_function)
@@ -352,8 +361,47 @@ if __name__ == '__main__':
     nx.draw_networkx_edge_labels(graph, pos, edge_labels)
     edge_weight = torch.tensor(list(nx.get_edge_attributes(graph, 'ratio').values()))
     edge_index = torch.tensor(np.array(graph.edges()), dtype=torch.int64).T
-    data = Data(x=torch.tensor(obs_state, dtype=torch.float64), edge_index=edge_index, edge_attr=edge_weight)
+    data = Data(x=obs_state, edge_index=edge_index, edge_attr=edge_weight)
     net = GNNNet(node_num=6, embed_dim=4).double()
-    print(net(data))
-    print(data.num_features)
+    actions = net(data)
+    actions = actions.reshape((6, 3))
+    split_actions = torch.split(actions, [2, 1], dim=1)
+    # 第一项是功能动作，第二项是权重
+    multi_dist = [Categorical(logits=split_actions[0])]
+    actions = torch.stack([dist.sample() for dist in multi_dist])
+
+    softmax_values = []
+    for indices in grouped_indices:
+        group_values = split_actions[1][indices]
+        softmax_value = torch.softmax(group_values, dim=0)
+        softmax_values.append(softmax_value)
+    flatt = torch.cat(softmax_values).squeeze()
+    flat_id = torch.cat(grouped_indices)
+    # 整理为cellid顺序
+    reorder = torch.zeros(work_cell_num)
+    for i, index in enumerate(flat_id):
+        reorder[index] = flatt[i]
+    any1 = torch.isin(edge_index[1], flat_id)
+    edge_weight_index = torch.where(any1)[0]
+    for i, index in enumerate(edge_weight_index):
+        edge_weight[index] = flatt[i]
+    print("========")
+    print(edge_index)
+    print(edge_weight)
+    print(flatt)
+    print(grouped_indices)
+    raise SystemExit
+    # print(flat_id)
+    # print(flatt)
+    # print(grouped_indices)
+    # print(reorder)
+    # print(actions.squeeze())
+    env.update_work_cell([0, 1, 2, 3, 4, 5], actions.squeeze(), [0, 0, 1, 1, 2, 2])
+    env.update_material(reorder)
+    obs, reward = env.get_obs()
+    data = Data(x=obs, edge_index=edge_index, edge_attr=reorder)
+    actions = net(data)
+
+    print(env.get_obs())
+    # print(actions.squeeze())
     # plt.show()
