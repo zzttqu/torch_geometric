@@ -29,7 +29,7 @@ def edge_weight_init(raw_array):
     normalized_array = np.copy(raw_array)
     for value, ratio in normalized_value.items():
         normalized_array = np.where(normalized_array == value, ratio, normalized_array)
-    return normalized_array
+    return torch.tensor(normalized_array)
 
 
 class StateCode(Enum):
@@ -55,7 +55,6 @@ class WorkCell:
         WorkCell.next_id += 1
         self.function = np.array([function_id, speed, materials, products], dtype=int)
         self.position = np.array(position)
-        self.edge_ratio = 1
         self.health = 100
         self.working = None
         self.idle_time = 0
@@ -74,13 +73,13 @@ class WorkCell:
         elif action == 3:
             self.function[2] += num
 
-    def work(self, action, action_detail):
+    def work(self, action):
         # 工作/继续工作
         if action == 1:
-            if action_detail == self.working:
+            if self.working:
                 pass
             else:
-                self.set_work(action_detail)
+                self.set_work(self.function[0])
             self.idle_time = 0
         # 停止工作
         elif action == 0:
@@ -110,8 +109,6 @@ class WorkCell:
         # 爆仓了
         if self.working is None:
             return
-        if self.function[3] >= 1000:
-            print('爆仓了')
 
     def reset_state(self):
         self.state = StateCode.workcell_ready
@@ -195,10 +192,9 @@ class TransitCenter:
 
 
 class EnvRun:
-    def __init__(self, step, work_cell_num, function_num, agv_cell_num=0):
+    def __init__(self, step, work_cell_num, function_num):
         self.step = step
         self.work_cell_num = work_cell_num
-        self.agv_cell_num = agv_cell_num
         self.work_cell_state_num = 4
         # 会生产几种类型
         self.function_num = function_num
@@ -211,15 +207,14 @@ class EnvRun:
                 WorkCell(function_id=np.random.randint(0, function_num), speed=6,
                          position=[i, 0], materials=10)
             )
+        # 集散中心
         self.center_list: List[TransitCenter] = []
         for i in range(function_num):
             self.center_list.append(
                 TransitCenter(i)
             )
         self.products = np.zeros(function_num)
-        self.edge_weight = edge_weight_init(self.get_work_cell_functions())
-        for worker, ratio in zip(self.work_cell_list, self.edge_weight):
-            worker.edge_ratio = ratio[0]
+        self.function_group = self.get_function_group()
 
     def build_edge(self):
         # 理论上来说边建立好后就不会变化了
@@ -240,44 +235,66 @@ class EnvRun:
                 # 边信息
                 # 从生产到中转
                 if cell1_id == product_id:
-                    graph.add_edge(work_cell.cell_id, center.cell_id,
-                                   function=cell1_id, ratio=1)
+                    graph.add_edge(work_cell.cell_id, center.cell_id)
                 # 从中转到下一步
                 if product_id == cell1_id - 1:
-                    graph.add_edge(center.cell_id, work_cell.cell_id,
-                                   function=product_id, ratio=work_cell.edge_ratio)
+                    graph.add_edge(center.cell_id, work_cell.cell_id)
+        self.edge_index = torch.tensor(np.array(graph.edges()), dtype=torch.int64).T
         return graph
 
-    def update_material(self, workcell_material_ratio):
+    def update_material(self, workcell_get_material):
+        # workcell_get_material = torch.tensor([1, 1, 1, 1, 1, 1], dtype=torch.float)
+        #  处理边数据
+        collect = torch.zeros(self.work_cell_num)
+        for indices in self.function_group:
+            if workcell_get_material[indices].sum() != 0:
+                softmax_value = 1 / (workcell_get_material[indices].sum())
+            else:
+                softmax_value = 0
+            collect[indices] = softmax_value * workcell_get_material[indices].float()
+            # print(f"总共有{workcell_get_material[indices]}")
+            # print(f"softmax_value{softmax_value}")
+            # print(indices)
+        # flatt = torch.cat(softmax_values).squeeze()
+        # flat_id = torch.cat(self.function_group)
+        # # print(flatt, flat_id)
+        # # edgeindex第二行是接收方，选择出除了function0的节点id在接收方的
+        # any1 = torch.isin(self.edge_index[1], flat_id)
+        # edge_weight_index = torch.where(any1)[0]
+        # # 重新给edgeweigh赋值
+        # for i, index in enumerate(edge_weight_index):
+        #     self.edge_weight[index] = flatt[i]
         products = np.zeros(self.function_num)
         for work_cell in self.work_cell_list:
             # 取出所有物品，然后清空
             self.center_list[work_cell.function[0]].putin_product(work_cell.function[3])
             products[work_cell.function[0]] += (work_cell.function[3] + self.products[work_cell.function[0]])
             work_cell.transport(2, 0)
-            # 更新边权重
-            work_cell.edge_ratio = workcell_material_ratio[work_cell.cell_id]
         # 根据边权重传递物料
-        for ratio, work_cell in zip(
-                workcell_material_ratio,
-                self.work_cell_list):
-            # if action == 2:
+        for work_cell in self.work_cell_list:
+            # 如果为原料处理单元，function_id为0
             if work_cell.function[0] == 0:
-                work_cell.transport(3, 100)
+                work_cell.transport(3, work_cell.function[2])
             else:
-                # int会导致有盈余，但是至少不会发生没办法转移的情况
                 self.center_list[work_cell.function[0] - 1].moveout_product(
-                    int(products[work_cell.function[0] - 1] * ratio))
-                work_cell.transport(3, int(products[work_cell.function[0] - 1] * ratio))
-        # elif action == 0:
-        #     if work_cell.function[0] == 0:
-        #         pass
-        #     else:
-        #         pass
+                    int(products[work_cell.function[0] - 1] * collect[work_cell.cell_id])
+                )
+                work_cell.transport(3,
+                                    int(products[work_cell.function[0] - 1] * collect[work_cell.cell_id]))
+                # # 看看当前id在flat里边排第几个，然后把对应权重进行计算
+                # collect = flatt[torch.where(work_cell.cell_id == flat_id)[0].item()]
+                # # int会导致有盈余，但是至少不会发生没办法转移的情况
+                # self.center_list[work_cell.function[0] - 1].moveout_product(
+                #     int(products[work_cell.function[0] - 1] * collect))
+                # work_cell.transport(3, int(products[work_cell.function[0] - 1] * collect))
 
-    def update_work_cell(self, workcell_id, workcell_action, workcell_function):
-        for _id, action, f_id, work_cell in zip(workcell_id, workcell_action, workcell_function, self.work_cell_list):
-            work_cell.work(action, f_id)
+    def update_work_cell(self, workcell_id, workcell_action, workcell_function=0):
+        for _id, action, work_cell in zip(workcell_id, workcell_action, self.work_cell_list):
+            work_cell.work(action)
+
+    def update_all_work_cell(self, workcell_action, workcell_function=0):
+        for action, work_cell in zip(workcell_action, self.work_cell_list):
+            work_cell.work(action)
 
     def get_obs(self):
         obs_states = torch.zeros((self.work_cell_num + self.function_num, self.work_cell_state_num),
@@ -290,8 +307,8 @@ class EnvRun:
         reward = -0.1
         # 生产一个有奖励
         reward += self.center_list[-1].product_num * 0.1
-
-        return obs_states, reward
+        # 构造边和节点
+        return obs_states, self.edge_index, reward
 
     def get_work_cell_functions(self):
         work_station_functions = np.zeros((self.work_cell_num, 1), dtype=int)
@@ -299,8 +316,14 @@ class EnvRun:
             work_station_functions[i] = work_cell.get_function()
         return work_station_functions
 
-    def get_work_cell_actions(self):
-        return np.array([0, 1])
+    def get_function_group(self):
+        # 针对function的分类
+        work_function = self.get_work_cell_functions()
+        function_id = torch.tensor(work_function.squeeze())
+        unique_labels = torch.unique(function_id)
+        grouped_indices = [torch.where(function_id == label)[0] for label in unique_labels]
+        # 因为功能0是从原材料是无穷无尽的，所以不需要考虑不需要改变
+        return grouped_indices
 
 
 if __name__ == '__main__':
@@ -309,40 +332,21 @@ if __name__ == '__main__':
     function_num = 3
     work_cell_num = 6
     env = EnvRun(1, work_cell_num=work_cell_num, function_num=function_num)
-    # 针对function的分类
+    graph = env.build_edge()
     work_function = env.get_work_cell_functions()
-    function_id = torch.tensor(work_function.squeeze())
-    unique_labels = torch.unique(function_id)
-    grouped_indices = [torch.where(function_id == label)[0] for label in unique_labels]
-    grouped_indices.pop(0)
-    weight = edge_weight_init(work_function).squeeze()
-    work_action = env.get_work_cell_actions()
+    weight = torch.tensor([1] * work_cell_num, dtype=torch.float)
     random_function = [row[0] for row in work_function]
     # 设置任务计算生产
-    env.update_work_cell([0, 1, 2, 3, 4], [1, 1, 1, 1, 1], random_function)
+    env.update_work_cell([0, 1, 2, 3, 4, 5], [1, 1, 1, 1, 1, 1])
     # 神经网络要输出每个工作站的工作，功能和传输比率
     # 迁移物料,2是正常接收，其他是不接收
     env.update_material(weight)
-    # obs_state, _ = env.get_obs()
+    obs_state, obs_edge_index, reward = env.get_obs()
+    # print(obs_state)
 
-    # print(obs_state, products)
-    print("=========")
-    env.update_work_cell([0, 1, 2, 3, 4], [1, 1, 1, 1, 1], random_function)
-    env.update_material(weight)
-    # obs_state, _ = env.get_obs()
-    # print(obs_state, products)
-    print("=========")
-    env.update_work_cell([0, 1, 2, 3, 4], [1, 1, 1, 1, 1], random_function)
-    env.update_material(weight)
-    obs_state, reward = env.get_obs()
-    # print(obs_state, reward)
-    graph = env.build_edge()
-    pos = {}
-    for i in range(3):
-        pos[env.work_cell_list[i].cell_id] = env.work_cell_list[i].position
+    # 可视化
     node_states = nx.get_node_attributes(graph, 'state')
     node_function = nx.get_node_attributes(graph, 'function')
-    edge_weight = nx.get_edge_attributes(graph, 'ratio')
     nodes = nx.nodes(graph)
     edges = nx.edges(graph)
     node_labels = {}
@@ -350,58 +354,33 @@ if __name__ == '__main__':
     for node in nodes:
         # 这里只用\n就可以换行了
         node_labels[node] = f'{node}节点：\n 状态：{node_states[node]} \n 功能：{node_function[node]}'
-    for edge in edges:
-        edge_labels[edge] = f'权重{edge_weight[edge]:.2f}'
+
     # print(node_labels)
     pos = nx.spring_layout(graph)
     nx.draw_networkx_nodes(graph, pos)
     nx.draw_networkx_labels(graph, pos, node_labels)
     # nx.draw_networkx_edges(graph, pos, connectionstyle="arc3,rad=0.2")
     nx.draw_networkx_edges(graph, pos)
-    nx.draw_networkx_edge_labels(graph, pos, edge_labels)
-    edge_weight = torch.tensor(list(nx.get_edge_attributes(graph, 'ratio').values()))
-    edge_index = torch.tensor(np.array(graph.edges()), dtype=torch.int64).T
-    data = Data(x=obs_state, edge_index=edge_index, edge_attr=edge_weight)
-    net = GNNNet(node_num=6, embed_dim=4).double()
-    actions = net(data)
-    actions = actions.reshape((6, 3))
-    split_actions = torch.split(actions, [2, 1], dim=1)
-    # 第一项是功能动作，第二项是权重
-    multi_dist = [Categorical(logits=split_actions[0])]
-    actions = torch.stack([dist.sample() for dist in multi_dist])
 
-    softmax_values = []
-    for indices in grouped_indices:
-        group_values = split_actions[1][indices]
-        softmax_value = torch.softmax(group_values, dim=0)
-        softmax_values.append(softmax_value)
-    flatt = torch.cat(softmax_values).squeeze()
-    flat_id = torch.cat(grouped_indices)
-    # 整理为cellid顺序
-    reorder = torch.zeros(work_cell_num)
-    for i, index in enumerate(flat_id):
-        reorder[index] = flatt[i]
-    any1 = torch.isin(edge_index[1], flat_id)
-    edge_weight_index = torch.where(any1)[0]
-    for i, index in enumerate(edge_weight_index):
-        edge_weight[index] = flatt[i]
-    print("========")
-    print(edge_index)
-    print(edge_weight)
-    print(flatt)
-    print(grouped_indices)
-    raise SystemExit
-    # print(flat_id)
-    # print(flatt)
-    # print(grouped_indices)
-    # print(reorder)
-    # print(actions.squeeze())
-    env.update_work_cell([0, 1, 2, 3, 4, 5], actions.squeeze(), [0, 0, 1, 1, 2, 2])
-    env.update_material(reorder)
-    obs, reward = env.get_obs()
-    data = Data(x=obs, edge_index=edge_index, edge_attr=reorder)
+    data = Data(x=obs_state, edge_index=obs_edge_index)
+    net = GNNNet(node_num=6, state_dim=4, action_dim=4).double()
     actions = net(data)
+    actions = actions.reshape((12, 2)).squeeze()
+    # split_actions = torch.split(actions, 4, dim=1)
 
-    print(env.get_obs())
-    # print(actions.squeeze())
+    print(actions)
+    # 第一项是功能动作，第二项是是否接受上一级运输
+    actions_dist = Categorical(logits=actions)
+    print(actions_dist)
+    material_dist = [Categorical(logits=actions[6:, :])]
+    actions = actions_dist.sample()
+    actions = actions[:6]
+    print(actions)
+    materials = torch.stack([dist.sample() for dist in material_dist]).squeeze()
+    env.update_work_cell([0, 1, 2, 3, 4, 5], actions)
+    env.update_material(materials)
+    obs_state, obs_edge_index, reward = env.get_obs()
+    data = Data(x=obs_state, edge_index=obs_edge_index)
+    # print(obs_state)
+
     # plt.show()

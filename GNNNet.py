@@ -1,4 +1,4 @@
-from torch_geometric.nn import GCNConv, SAGEConv, TopKPooling, global_mean_pool
+from torch_geometric.nn import GCNConv, SAGEConv, TopKPooling, global_mean_pool, Node2Vec
 import torch
 from torch import nn
 from torch_geometric.data import Data
@@ -6,20 +6,20 @@ import torch.nn.functional as F
 
 
 class GNNNet(nn.Module):
-    def __init__(self, embed_dim: int, node_num: int):
+    def __init__(self, state_dim: int, node_num: int, action_dim: int):
         super(GNNNet, self).__init__()
         # 将节点映射为一个四维向量
-        self.embedding = nn.Embedding(num_embeddings=1000, embedding_dim=embed_dim)
-        self.conv1 = GCNConv(embed_dim, 128)
+        self.embedding = nn.Embedding(num_embeddings=1000, embedding_dim=state_dim)
+        self.conv1 = GCNConv(state_dim, 128)
         self.pool1 = TopKPooling(128, ratio=0.8)
         self.conv2 = GCNConv(128, 128)
         self.pool2 = TopKPooling(128, ratio=0.8)
         self.lin1 = nn.Linear(128, 128)
         self.lin2 = nn.Linear(128, 64)
-        self.lin3 = nn.Linear(64, 3 * node_num)
+        self.lin3 = nn.Linear(64, action_dim * node_num)
+        self.linV = nn.Linear(64, 1)
         self.bn1 = nn.BatchNorm1d(128)
         self.bn2 = nn.BatchNorm1d(64)
-        self.ratio = nn.Softmax(dim=1)
 
     def forward(self, data: Data):
         x, edge_index, batch, edge_attr = data.x, data.edge_index, data.batch, data.edge_attr
@@ -37,5 +37,7 @@ class GNNNet(nn.Module):
         x = x1 + x2
         x = self.lin1(x)
         x = self.lin2(x)
-        x = self.lin3(x)
+        # 两个输出
+        value = self.linV(x)
+        x = torch.tanh(self.lin3(x))
         return x
