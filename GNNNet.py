@@ -22,17 +22,17 @@ class GNNNet(nn.Module):
         self.bn2 = nn.BatchNorm1d(64)
 
     def forward(self, data: Data):
-        x, edge_index, batch, edge_attr = data.x, data.edge_index, data.batch, data.edge_attr
+        x, edge_index, batch = data.x, data.edge_index, data.batch
         # x = self.embedding(x)
         # x = x.squeeze(1)
         # print(x, edge_index, edge_attr)
         # print(x.dtype)
-        x = F.relu(self.conv1(x, edge_index, edge_attr))
+        x = F.relu(self.conv1(x, edge_index))
         # print(x.dtype)
-        x, edge_index, edge_attr, batch, _, _ = self.pool1(x, edge_index, edge_attr, batch)
+        x, edge_index, edge_attr, batch, _, _ = self.pool1(x, edge_index, None, batch)
         x1 = global_mean_pool(x, batch)
-        x = F.relu(self.conv2(x, edge_index, edge_attr))
-        x, edge_index, edge_attr, batch, _, _ = self.pool2(x, edge_index, edge_attr, batch)
+        x = F.relu(self.conv2(x, edge_index))
+        x, edge_index, edge_attr, batch, _, _ = self.pool2(x, edge_index, None, batch)
         x2 = global_mean_pool(x, batch)
         x = x1 + x2
         x = self.lin1(x)

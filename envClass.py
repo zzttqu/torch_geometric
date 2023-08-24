@@ -242,7 +242,7 @@ class EnvRun:
         self.edge_index = torch.tensor(np.array(graph.edges()), dtype=torch.int64).T
         return graph
 
-    def update_material(self, workcell_get_material):
+    def update_centers(self, workcell_get_material):
         # workcell_get_material = torch.tensor([1, 1, 1, 1, 1, 1], dtype=torch.float)
         #  处理边数据
         collect = torch.zeros(self.work_cell_num)
@@ -296,6 +296,12 @@ class EnvRun:
         for action, work_cell in zip(workcell_action, self.work_cell_list):
             work_cell.work(action)
 
+    def update_all(self, raw):
+        centers = raw[self.work_cell_num:]
+        work_cells = raw[:self.work_cell_num]
+        self.update_centers(centers)
+        self.update_all_work_cell(work_cells)
+
     def get_obs(self):
         obs_states = torch.zeros((self.work_cell_num + self.function_num, self.work_cell_state_num),
                                  dtype=torch.float64)
@@ -308,7 +314,10 @@ class EnvRun:
         # 生产一个有奖励
         reward += self.center_list[-1].product_num * 0.1
         # 构造边和节点
-        return obs_states, self.edge_index, reward
+        dones = 0
+        if reward > 100:
+            dones = 1
+        return obs_states, self.edge_index, reward, dones
 
     def get_work_cell_functions(self):
         work_station_functions = np.zeros((self.work_cell_num, 1), dtype=int)
@@ -325,6 +334,13 @@ class EnvRun:
         # 因为功能0是从原材料是无穷无尽的，所以不需要考虑不需要改变
         return grouped_indices
 
+    def reset(self):
+        for worker in self.work_cell_list:
+            worker.state = StateCode.workcell_ready
+            worker.function[3] = 0
+        for center in self.center_list:
+            center.product_num = 0
+
 
 if __name__ == '__main__':
     np.set_printoptions(precision=3, suppress=True)
@@ -340,7 +356,7 @@ if __name__ == '__main__':
     env.update_work_cell([0, 1, 2, 3, 4, 5], [1, 1, 1, 1, 1, 1])
     # 神经网络要输出每个工作站的工作，功能和传输比率
     # 迁移物料,2是正常接收，其他是不接收
-    env.update_material(weight)
+    env.update_centers(weight)
     obs_state, obs_edge_index, reward = env.get_obs()
     # print(obs_state)
 
@@ -368,17 +384,16 @@ if __name__ == '__main__':
     actions = actions.reshape((12, 2)).squeeze()
     # split_actions = torch.split(actions, 4, dim=1)
 
-    print(actions)
     # 第一项是功能动作，第二项是是否接受上一级运输
     actions_dist = Categorical(logits=actions)
-    print(actions_dist)
+
     material_dist = [Categorical(logits=actions[6:, :])]
     actions = actions_dist.sample()
     actions = actions[:6]
-    print(actions)
+
     materials = torch.stack([dist.sample() for dist in material_dist]).squeeze()
     env.update_work_cell([0, 1, 2, 3, 4, 5], actions)
-    env.update_material(materials)
+    env.update_centers(materials)
     obs_state, obs_edge_index, reward = env.get_obs()
     data = Data(x=obs_state, edge_index=obs_edge_index)
     # print(obs_state)
