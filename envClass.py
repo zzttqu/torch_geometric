@@ -56,7 +56,7 @@ class WorkCell:
         self.function = np.array([function_id, speed, materials, products], dtype=int)
         self.position = np.array(position)
         self.health = 100
-        self.working = None
+        self.working = False
         self.idle_time = 0
         self.state = StateCode.workcell_ready
 
@@ -80,10 +80,12 @@ class WorkCell:
                 pass
             else:
                 self.set_work(self.function[0])
+                self.working = self.function[0]
             self.idle_time = 0
         # 停止工作
         elif action == 0:
             # self.working = None
+            self.working = None
             self.state = StateCode.workcell_ready
         # 检查当前状态
         self.state_check()
@@ -102,16 +104,20 @@ class WorkCell:
         #     self.working = None
         #     self.state = StateCode.workcell_low_health
         # 缺少原料
-        if self.function[2] <= self.function[1]:
+        if self.function[2] < self.function[1]:
             self.state = StateCode.workcell_low_material
-        else:
-            pass
+            self.working = None
+        # 不缺货就变为ready状态
+        elif self.function[2] >= self.function[1] and self.state == StateCode.workcell_low_material:
+            self.state = StateCode.workcell_ready
         # 爆仓了
         if self.working is None:
             return
 
     def reset_state(self):
         self.state = StateCode.workcell_ready
+        self.function[2] = self.function[1]
+        self.function[3] = 0
         self.working = None
 
     # 状态空间
@@ -192,7 +198,9 @@ class TransitCenter:
 
 
 class EnvRun:
-    def __init__(self, step, work_cell_num, function_num):
+    def __init__(self, step, work_cell_num, function_num, device):
+        self.device = device
+        self.edge_index = None
         self.step = step
         self.work_cell_num = work_cell_num
         self.work_cell_state_num = 4
@@ -204,7 +212,7 @@ class EnvRun:
                 # 随机function或者规定
                 # i // (self.work_cell_num // self.function_num)
                 # np.random.randint(0, function_num)
-                WorkCell(function_id=np.random.randint(0, function_num), speed=6,
+                WorkCell(function_id=i // (self.work_cell_num // self.function_num), speed=6,
                          position=[i, 0], materials=10)
             )
         # 集散中心
@@ -274,7 +282,7 @@ class EnvRun:
         for work_cell in self.work_cell_list:
             # 如果为原料处理单元，function_id为0
             if work_cell.function[0] == 0:
-                work_cell.transport(3, work_cell.function[2])
+                work_cell.transport(3, work_cell.function[1])
             else:
                 self.center_list[work_cell.function[0] - 1].moveout_product(
                     int(products[work_cell.function[0] - 1] * collect[work_cell.cell_id])
@@ -288,19 +296,19 @@ class EnvRun:
                 #     int(products[work_cell.function[0] - 1] * collect))
                 # work_cell.transport(3, int(products[work_cell.function[0] - 1] * collect))
 
-    def update_work_cell(self, workcell_id, workcell_action, workcell_function=0):
-        for _id, action, work_cell in zip(workcell_id, workcell_action, self.work_cell_list):
-            work_cell.work(action)
+    # def update_work_cell(self, workcell_id, workcell_action, workcell_function=0):
+    #     for _id, action, work_cell in zip(workcell_id, workcell_action, self.work_cell_list):
+    #         work_cell.work(action)
 
     def update_all_work_cell(self, workcell_action, workcell_function=0):
         for action, work_cell in zip(workcell_action, self.work_cell_list):
             work_cell.work(action)
 
-    def update_all(self, raw):
+    def update_all(self, raw: torch.Tensor):
         centers = raw[self.work_cell_num:]
         work_cells = raw[:self.work_cell_num]
-        self.update_centers(centers)
         self.update_all_work_cell(work_cells)
+        self.update_centers(centers)
 
     def get_obs(self):
         obs_states = torch.zeros((self.work_cell_num + self.function_num, self.work_cell_state_num),
@@ -312,12 +320,17 @@ class EnvRun:
         # 额定扣血
         reward = -0.1
         # 生产一个有奖励
-        reward += self.center_list[-1].product_num * 0.1
+        # reward += self.center_list[-1].product_num * 0.1
         # 构造边和节点
-        dones = 0
-        if reward > 100:
-            dones = 1
-        return obs_states, self.edge_index, reward, dones
+        done = 0
+        if self.center_list[-1].product_num > 30:
+            reward += 10
+            done = 1
+        device_state = obs_states.to(self.device)
+        device_edge = self.edge_index.to(self.device)
+        device_reward = reward
+
+        return device_state, device_edge, device_reward, done
 
     def get_work_cell_functions(self):
         work_station_functions = np.zeros((self.work_cell_num, 1), dtype=int)
@@ -336,8 +349,7 @@ class EnvRun:
 
     def reset(self):
         for worker in self.work_cell_list:
-            worker.state = StateCode.workcell_ready
-            worker.function[3] = 0
+            worker.reset_state()
         for center in self.center_list:
             center.product_num = 0
 
@@ -347,17 +359,18 @@ if __name__ == '__main__':
     torch.set_printoptions(precision=3, sci_mode=False)
     function_num = 3
     work_cell_num = 6
-    env = EnvRun(1, work_cell_num=work_cell_num, function_num=function_num)
+    env = EnvRun(1, work_cell_num=work_cell_num, function_num=function_num,
+                 device=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu'))
     graph = env.build_edge()
     work_function = env.get_work_cell_functions()
     weight = torch.tensor([1] * work_cell_num, dtype=torch.float)
     random_function = [row[0] for row in work_function]
     # 设置任务计算生产
-    env.update_work_cell([0, 1, 2, 3, 4, 5], [1, 1, 1, 1, 1, 1])
+    env.update_all(torch.tensor([0, 1, 2, 3, 4, 5, 1, 1, 1, 1, 1, 1]))
     # 神经网络要输出每个工作站的工作，功能和传输比率
     # 迁移物料,2是正常接收，其他是不接收
     env.update_centers(weight)
-    obs_state, obs_edge_index, reward = env.get_obs()
+
     # print(obs_state)
 
     # 可视化
@@ -378,24 +391,8 @@ if __name__ == '__main__':
     # nx.draw_networkx_edges(graph, pos, connectionstyle="arc3,rad=0.2")
     nx.draw_networkx_edges(graph, pos)
 
-    data = Data(x=obs_state, edge_index=obs_edge_index)
-    net = GNNNet(node_num=6, state_dim=4, action_dim=4).double()
-    actions = net(data)
-    actions = actions.reshape((12, 2)).squeeze()
-    # split_actions = torch.split(actions, 4, dim=1)
+    device_state, device_edge, device_reward, done = env.get_obs()
 
-    # 第一项是功能动作，第二项是是否接受上一级运输
-    actions_dist = Categorical(logits=actions)
-
-    material_dist = [Categorical(logits=actions[6:, :])]
-    actions = actions_dist.sample()
-    actions = actions[:6]
-
-    materials = torch.stack([dist.sample() for dist in material_dist]).squeeze()
-    env.update_work_cell([0, 1, 2, 3, 4, 5], actions)
-    env.update_centers(materials)
-    obs_state, obs_edge_index, reward = env.get_obs()
-    data = Data(x=obs_state, edge_index=obs_edge_index)
     # print(obs_state)
 
-    # plt.show()
+    plt.show()
