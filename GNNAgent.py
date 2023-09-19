@@ -49,15 +49,15 @@ class Agent:
     def get_value(self, state, edge_index) -> torch.Tensor:
         state = state.squeeze()
         edge_index = edge_index.squeeze()
-        data = Data(x=state, edge_index=edge_index)
-        _, value = self.network(data)
+        # data = Data(x=state, edge_index=edge_index)
+        _, value = self.network(state,edge_index)
         return value
 
     def get_action(self, state: torch.Tensor, edge_index: torch.Tensor, raw=None):
         state = state.squeeze()
         edge_index = edge_index.squeeze()
         data = Data(x=state, edge_index=edge_index)
-        logits, _ = self.network(data)
+        logits, _ = self.network(state,edge_index)
         # 第一项是功能动作，第二项是是否接受上一级运输
         logits = logits.reshape((-1, 2))
         action_material_dist = Categorical(logits=logits)

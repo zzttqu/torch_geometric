@@ -9,8 +9,10 @@ torchvision = "*"
 torchaudio = "*"
 matplotlib = "*"
 torch-geometric = "*"
+tensorboard = "*"
 
 [dev-packages]
+torch-tb-profiler = "*"
 
 [requires]
 python_version = "3.9"
