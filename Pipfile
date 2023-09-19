@@ -4,6 +4,11 @@ verify_ssl = true
 name = "pip_conf_index_global"
 
 [packages]
+torch = "*"
+torchvision = "*"
+torchaudio = "*"
+matplotlib = "*"
+torch-geometric = "*"
 
 [dev-packages]
 
