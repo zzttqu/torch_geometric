@@ -198,10 +198,9 @@ class TransitCenter:
 
 
 class EnvRun:
-    def __init__(self, step, work_cell_num, function_num, device):
+    def __init__(self, work_cell_num, function_num, device):
         self.device = device
         self.edge_index = None
-        self.step = step
         self.work_cell_num = work_cell_num
         self.work_cell_state_num = 4
         # 会生产几种类型
@@ -323,7 +322,7 @@ class EnvRun:
         # reward += self.center_list[-1].product_num * 0.1
         # 构造边和节点
         done = 0
-        if self.center_list[-1].product_num > 30:
+        if self.center_list[-1].product_num > 50:
             reward += 10
             done = 1
         device_state = obs_states.to(self.device)
