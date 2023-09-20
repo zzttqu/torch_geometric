@@ -211,6 +211,7 @@ class EnvRun:
                 # 随机function或者规定
                 # i // (self.work_cell_num // self.function_num)
                 # np.random.randint(0, function_num)
+                # todo 需要修改为random
                 WorkCell(function_id=i // (self.work_cell_num // self.function_num), speed=6,
                          position=[i, 0], materials=10)
             )

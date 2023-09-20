@@ -12,16 +12,16 @@ from torch.utils.tensorboard import SummaryWriter
 import csv
 
 if __name__ == "__main__":
-    # 读取一个csv文件
-    f = open("./log.csv", "r", encoding="utf-8")
-    data = np.genfromtxt("./log.csv", delimiter=" ",skip_header=1)
-    reader = csv.reader(f)
-    # 读取csv文件最后一
-    # reader.__next__()
-    for raw in reader:
-        print(raw)
+    # # 写入一个csv文件
+    # with open("./log.csv", "a", newline="") as csvfile:
+    #     writer = csv.writer(csvfile)
+    #     writer.writerow([0, 0, 0])
+    # 读取用np读，写入用csv写
+    data = np.genfromtxt("./log.csv", delimiter=",", skip_header=1)
+    # 检测nparray有几个维度
+    data.ndim
+    init_step = int(1)
     print(data)
-    f.close()
     raise SystemExit
     # 设置显示
     plt.rcParams["font.sans-serif"] = ["SimHei"]  # 显示中文标签
@@ -34,7 +34,7 @@ if __name__ == "__main__":
     batch_size = 4
     agent_reward = 0
     max_steps = 500
-    total_step = 0
+    total_step = init_step
     epoch_step = 0
     memory = PPOMemory(batch_size, work_cell_num, function_num, 4, 2, device)
     env = EnvRun(work_cell_num=work_cell_num, function_num=function_num, device=device)
@@ -57,12 +57,13 @@ if __name__ == "__main__":
     # 加载之前的
     # agent.load_model()
     obs_states, edge_index, reward, dones = env.get_obs()
+    print(obs_states)
     # 添加计算图
     writer.add_graph(
         agent.network, input_to_model=[obs_states, edge_index], verbose=False
     )
     # 添加
-    while total_step < max_steps:
+    while total_step < init_step + max_steps:
         total_step += 1
         epoch_step += 1
         agent.network.eval()
@@ -73,6 +74,7 @@ if __name__ == "__main__":
         obs_states, edge_index, reward, dones = env.get_obs()
         agent_reward += reward
         memory.remember(obs_states, value, agent_reward, dones, raw, log_prob)
+        # 如果记忆数量等于batch_size就学习
         if memory.count == batch_size:
             agent.network.train()
             loss = agent.learn(
@@ -86,7 +88,11 @@ if __name__ == "__main__":
             print("=======")
             print(agent_reward)
             writer.add_scalar("reward", agent_reward, total_step)
+            with open("./log.csv", "a", newline="") as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow([total_step, agent_reward, loss])
             epoch_step = 0
+            agent.network.save_model("model_" + str(total_step) + ".pth")
             # print(env.center_list[2].product_num)
             env.reset()
             agent_reward = 0

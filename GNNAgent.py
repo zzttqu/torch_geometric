@@ -155,5 +155,4 @@ class Agent:
                 self.optimizer.zero_grad()
                 total_loss.backward()
                 self.optimizer.step()
-            self.network.save_model()
         return total_loss
