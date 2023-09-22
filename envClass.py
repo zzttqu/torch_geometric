@@ -11,8 +11,26 @@ from torch_geometric.data import Data
 from GNNNet import GNNNet
 
 graph = nx.Graph()
-plt.rcParams['font.sans-serif'] = ['SimHei']  # 显示中文标签
-plt.rcParams['axes.unicode_minus'] = False
+plt.rcParams["font.sans-serif"] = ["SimHei"]  # 显示中文标签
+plt.rcParams["axes.unicode_minus"] = False
+
+import random
+
+
+def select_functions(start, end, num_selections):
+    # 创建一个包含范围内所有数字的列表
+    numbers = np.arange(start, end + 1)
+
+    # 计算还需要额外选取的次数
+    remaining_selections = num_selections - len(numbers)
+
+    # 如果还需要额外选取，就继续随机选取，确保每个数字都被选取至少一次
+    if remaining_selections > 0:
+        additional_selections = np.random.choice(numbers, size=remaining_selections)
+        np.concatenate((numbers, additional_selections))
+    np.random.shuffle(numbers)
+
+    return numbers
 
 
 def edge_weight_init(raw_array):
@@ -108,7 +126,10 @@ class WorkCell:
             self.state = StateCode.workcell_low_material
             self.working = None
         # 不缺货就变为ready状态
-        elif self.function[2] >= self.function[1] and self.state == StateCode.workcell_low_material:
+        elif (
+            self.function[2] >= self.function[1]
+            and self.state == StateCode.workcell_low_material
+        ):
             self.state = StateCode.workcell_ready
         # 爆仓了
         if self.working is None:
@@ -123,16 +144,14 @@ class WorkCell:
     # 状态空间
     def get_state(self):
         if self.state == StateCode.workcell_working:
-            return torch.tensor([self.state.value,
-                                 self.working,
-                                 self.function[1],
-                                 self.function[2]])
+            return torch.tensor(
+                [self.state.value, self.working, self.function[1], self.function[2]]
+            )
 
         else:
-            return torch.tensor([self.state.value,
-                                 self.function[0],
-                                 self.function[1],
-                                 self.function[2]])
+            return torch.tensor(
+                [self.state.value, self.function[0], self.function[1], self.function[2]]
+            )
 
     # 动作空间
     def get_function(self):
@@ -177,7 +196,6 @@ class AGVCell:
 
 
 class TransitCenter:
-
     def __init__(self, product_id):
         self.cell_id = WorkCell.next_id
         WorkCell.next_id += 1
@@ -211,16 +229,18 @@ class EnvRun:
                 # 随机function或者规定
                 # i // (self.work_cell_num // self.function_num)
                 # np.random.randint(0, function_num)
-                # todo 需要修改为random
-                WorkCell(function_id=i // (self.work_cell_num // self.function_num), speed=6,
-                         position=[i, 0], materials=10)
+                # TODO 需要修改为random
+                WorkCell(
+                    function_id=select_functions(0, function_num, self.work_cell_num),
+                    speed=6,
+                    position=[i, 0],
+                    materials=10,
+                )
             )
         # 集散中心
         self.center_list: List[TransitCenter] = []
         for i in range(function_num):
-            self.center_list.append(
-                TransitCenter(i)
-            )
+            self.center_list.append(TransitCenter(i))
         self.products = np.zeros(function_num)
         self.function_group = self.get_function_group()
 
@@ -230,10 +250,14 @@ class EnvRun:
         # node_id = np.zeros((self.work_cell_num + self.function_num), dtype=int)
         index = 0
         for worker in self.work_cell_list:
-            graph.add_node(worker.cell_id, state=worker.state.value, function=worker.function[0])
+            graph.add_node(
+                worker.cell_id, state=worker.state.value, function=worker.function[0]
+            )
             index += 1
         for center in self.center_list:
-            graph.add_node(center.cell_id, state=center.state.value, function=center.product_id)
+            graph.add_node(
+                center.cell_id, state=center.state.value, function=center.product_id
+            )
             index += 1
 
         for work_cell in self.work_cell_list:
@@ -276,7 +300,9 @@ class EnvRun:
         for work_cell in self.work_cell_list:
             # 取出所有物品，然后清空
             self.center_list[work_cell.function[0]].putin_product(work_cell.function[3])
-            products[work_cell.function[0]] += (work_cell.function[3] + self.products[work_cell.function[0]])
+            products[work_cell.function[0]] += (
+                work_cell.function[3] + self.products[work_cell.function[0]]
+            )
             work_cell.transport(2, 0)
         # 根据边权重传递物料
         for work_cell in self.work_cell_list:
@@ -285,10 +311,16 @@ class EnvRun:
                 work_cell.transport(3, work_cell.function[1])
             else:
                 self.center_list[work_cell.function[0] - 1].moveout_product(
-                    int(products[work_cell.function[0] - 1] * collect[work_cell.cell_id])
+                    int(
+                        products[work_cell.function[0] - 1] * collect[work_cell.cell_id]
+                    )
                 )
-                work_cell.transport(3,
-                                    int(products[work_cell.function[0] - 1] * collect[work_cell.cell_id]))
+                work_cell.transport(
+                    3,
+                    int(
+                        products[work_cell.function[0] - 1] * collect[work_cell.cell_id]
+                    ),
+                )
                 # # 看看当前id在flat里边排第几个，然后把对应权重进行计算
                 # collect = flatt[torch.where(work_cell.cell_id == flat_id)[0].item()]
                 # # int会导致有盈余，但是至少不会发生没办法转移的情况
@@ -305,14 +337,16 @@ class EnvRun:
             work_cell.work(action)
 
     def update_all(self, raw: torch.Tensor):
-        centers = raw[self.work_cell_num:]
-        work_cells = raw[:self.work_cell_num]
+        centers = raw[self.work_cell_num :]
+        work_cells = raw[: self.work_cell_num]
         self.update_all_work_cell(work_cells)
         self.update_centers(centers)
 
     def get_obs(self):
-        obs_states = torch.zeros((self.work_cell_num + self.function_num, self.work_cell_state_num),
-                                 dtype=torch.float64)
+        obs_states = torch.zeros(
+            (self.work_cell_num + self.function_num, self.work_cell_state_num),
+            dtype=torch.float64,
+        )
         for work_cell in self.work_cell_list:
             obs_states[work_cell.cell_id] = work_cell.get_state()
         for center in self.center_list:
@@ -343,7 +377,9 @@ class EnvRun:
         work_function = self.get_work_cell_functions()
         function_id = torch.tensor(work_function.squeeze())
         unique_labels = torch.unique(function_id)
-        grouped_indices = [torch.where(function_id == label)[0] for label in unique_labels]
+        grouped_indices = [
+            torch.where(function_id == label)[0] for label in unique_labels
+        ]
         # 因为功能0是从原材料是无穷无尽的，所以不需要考虑不需要改变
         return grouped_indices
 
@@ -354,13 +390,17 @@ class EnvRun:
             center.product_num = 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     np.set_printoptions(precision=3, suppress=True)
     torch.set_printoptions(precision=3, sci_mode=False)
     function_num = 3
     work_cell_num = 6
-    env = EnvRun(1, work_cell_num=work_cell_num, function_num=function_num,
-                 device=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu'))
+    env = EnvRun(
+        1,
+        work_cell_num=work_cell_num,
+        function_num=function_num,
+        device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
+    )
     graph = env.build_edge()
     work_function = env.get_work_cell_functions()
     weight = torch.tensor([1] * work_cell_num, dtype=torch.float)
@@ -374,15 +414,17 @@ if __name__ == '__main__':
     # print(obs_state)
 
     # 可视化
-    node_states = nx.get_node_attributes(graph, 'state')
-    node_function = nx.get_node_attributes(graph, 'function')
+    node_states = nx.get_node_attributes(graph, "state")
+    node_function = nx.get_node_attributes(graph, "function")
     nodes = nx.nodes(graph)
     edges = nx.edges(graph)
     node_labels = {}
     edge_labels = {}
     for node in nodes:
         # 这里只用\n就可以换行了
-        node_labels[node] = f'{node}节点：\n 状态：{node_states[node]} \n 功能：{node_function[node]}'
+        node_labels[
+            node
+        ] = f"{node}节点：\n 状态：{node_states[node]} \n 功能：{node_function[node]}"
 
     # print(node_labels)
     pos = nx.spring_layout(graph)

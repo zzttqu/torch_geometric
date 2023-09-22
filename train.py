@@ -7,7 +7,7 @@ from torch.distributions import Categorical
 from torch_geometric.data import Data
 from GNNNet import GNNNet
 from GNNAgent import Agent, PPOMemory
-from envClass import EnvRun, StateCode
+from envClass import EnvRun, StateCode, select_functions
 from torch.utils.tensorboard import SummaryWriter
 import csv
 
@@ -19,11 +19,14 @@ if __name__ == "__main__":
     # 读取用np读，写入用csv写
     data = np.genfromtxt("./log.csv", delimiter=",", skip_header=1)
     # 检测nparray有几个维度
-    data.ndim
-    init_step = int(1)
-    print(data)
-    raise SystemExit
+    if data.ndim <= 1:
+        init_step = 0
+    else:
+        init_step = data[-1][0]
     # 设置显示
+    select_functions(0, 3,10)
+    print(select_functions(0, 3,10))
+    # raise SystemExit
     plt.rcParams["font.sans-serif"] = ["SimHei"]  # 显示中文标签
     plt.rcParams["axes.unicode_minus"] = False
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
