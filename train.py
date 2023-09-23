@@ -2,12 +2,8 @@ import numpy as np
 import networkx as nx
 from matplotlib import pyplot as plt
 import torch
-from torch_geometric.data import Data
-from torch.distributions import Categorical
-from torch_geometric.data import Data
-from GNNNet import GNNNet
 from GNNAgent import Agent, PPOMemory
-from envClass import EnvRun, StateCode, select_functions
+from envClass import EnvRun, select_functions
 from torch.utils.tensorboard import SummaryWriter
 import csv
 
@@ -24,8 +20,7 @@ if __name__ == "__main__":
     else:
         init_step = data[-1][0]
     # 设置显示
-    select_functions(0, 3,10)
-    print(select_functions(0, 3,10))
+    # print(select_functions(0, 6, 14))
     # raise SystemExit
     plt.rcParams["font.sans-serif"] = ["SimHei"]  # 显示中文标签
     plt.rcParams["axes.unicode_minus"] = False
@@ -36,7 +31,7 @@ if __name__ == "__main__":
     work_cell_num = 14
     batch_size = 4
     agent_reward = 0
-    max_steps = 500
+    max_steps = 100
     total_step = init_step
     epoch_step = 0
     memory = PPOMemory(batch_size, work_cell_num, function_num, 4, 2, device)
@@ -58,9 +53,9 @@ if __name__ == "__main__":
     # 初始状态
     # raw = torch.tensor([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
     # 加载之前的
-    # agent.load_model()
+    agent.load_model("last_model.pth")
     obs_states, edge_index, reward, dones = env.get_obs()
-    print(obs_states)
+    # print(obs_states)
     # 添加计算图
     writer.add_graph(
         agent.network, input_to_model=[obs_states, edge_index], verbose=False
@@ -73,6 +68,7 @@ if __name__ == "__main__":
         with torch.no_grad():
             raw, log_prob = agent.get_action(obs_states, edge_index)
             value = agent.get_value(obs_states, edge_index)
+        # 这个raw少了
         env.update_all(raw.cpu())
         obs_states, edge_index, reward, dones = env.get_obs()
         agent_reward += reward
@@ -95,7 +91,7 @@ if __name__ == "__main__":
                 writer = csv.writer(csvfile)
                 writer.writerow([total_step, agent_reward, loss])
             epoch_step = 0
-            agent.network.save_model("model_" + str(total_step) + ".pth")
+            agent.save_model("model_" + str(total_step) + ".pth")
             # print(env.center_list[2].product_num)
             env.reset()
             agent_reward = 0
@@ -106,7 +102,7 @@ if __name__ == "__main__":
         #     obs_states, edge_index, reward, dones = env.get_obs()
 
     # 神经网络要输出每个工作站的工作，功能和传输与否
-
+    agent.save_model("last_model.pth")
     # 可视化
     node_states = nx.get_node_attributes(graph, "state")
     node_function = nx.get_node_attributes(graph, "function")

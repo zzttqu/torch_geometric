@@ -51,14 +51,14 @@ class GNNNet(nn.Module):
         x = torch.tanh(self.lin3(x))
         return x, value
 
-    def save_model(self):
+    def save_model(self, name):
         """
         保存模型
         """
-        torch.save(self.state_dict(), "./model/model.pth")
+        torch.save(self.state_dict(), name)
 
-    def load_model(self):
+    def load_model(self, name):
         """
         加载模型
         """
-        self.load_state_dict(torch.load("./model/model.pth"))
+        self.load_state_dict(torch.load(name))

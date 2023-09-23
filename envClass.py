@@ -6,10 +6,6 @@ from matplotlib import pyplot as plt
 import torch
 from typing import List
 
-from torch.distributions import Categorical
-from torch_geometric.data import Data
-from GNNNet import GNNNet
-
 graph = nx.Graph()
 plt.rcParams["font.sans-serif"] = ["SimHei"]  # 显示中文标签
 plt.rcParams["axes.unicode_minus"] = False
@@ -27,7 +23,7 @@ def select_functions(start, end, num_selections):
     # 如果还需要额外选取，就继续随机选取，确保每个数字都被选取至少一次
     if remaining_selections > 0:
         additional_selections = np.random.choice(numbers, size=remaining_selections)
-        np.concatenate((numbers, additional_selections))
+        numbers = np.concatenate((numbers, additional_selections))
     np.random.shuffle(numbers)
 
     return numbers
@@ -221,8 +217,9 @@ class EnvRun:
         self.edge_index = None
         self.work_cell_num = work_cell_num
         self.work_cell_state_num = 4
-        # 会生产几种类型
         self.function_num = function_num
+        # 会生产几种类型
+        self.function_list = select_functions(0, function_num - 1, self.work_cell_num)
         self.work_cell_list: List[WorkCell] = []
         for i in range(work_cell_num):
             self.work_cell_list.append(
@@ -231,7 +228,7 @@ class EnvRun:
                 # np.random.randint(0, function_num)
                 # TODO 需要修改为random
                 WorkCell(
-                    function_id=select_functions(0, function_num, self.work_cell_num),
+                    function_id=self.function_list[i],
                     speed=6,
                     position=[i, 0],
                     materials=10,
@@ -390,51 +387,51 @@ class EnvRun:
             center.product_num = 0
 
 
-if __name__ == "__main__":
-    np.set_printoptions(precision=3, suppress=True)
-    torch.set_printoptions(precision=3, sci_mode=False)
-    function_num = 3
-    work_cell_num = 6
-    env = EnvRun(
-        1,
-        work_cell_num=work_cell_num,
-        function_num=function_num,
-        device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
-    )
-    graph = env.build_edge()
-    work_function = env.get_work_cell_functions()
-    weight = torch.tensor([1] * work_cell_num, dtype=torch.float)
-    random_function = [row[0] for row in work_function]
-    # 设置任务计算生产
-    env.update_all(torch.tensor([0, 1, 2, 3, 4, 5, 1, 1, 1, 1, 1, 1]))
-    # 神经网络要输出每个工作站的工作，功能和传输比率
-    # 迁移物料,2是正常接收，其他是不接收
-    env.update_centers(weight)
+# if __name__ == "__main__":
+#     np.set_printoptions(precision=3, suppress=True)
+#     torch.set_printoptions(precision=3, sci_mode=False)
+#     function_num = 3
+#     work_cell_num = 6
+#     env = EnvRun(
+#         1,
+#         work_cell_num=work_cell_num,
+#         function_num=function_num,
+#         device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
+#     )
+#     graph = env.build_edge()
+#     work_function = env.get_work_cell_functions()
+#     weight = torch.tensor([1] * work_cell_num, dtype=torch.float)
+#     random_function = [row[0] for row in work_function]
+#     # 设置任务计算生产
+#     env.update_all(torch.tensor([0, 1, 2, 3, 4, 5, 1, 1, 1, 1, 1, 1]))
+#     # 神经网络要输出每个工作站的工作，功能和传输比率
+#     # 迁移物料,2是正常接收，其他是不接收
+#     env.update_centers(weight)
 
-    # print(obs_state)
+#     # print(obs_state)
 
-    # 可视化
-    node_states = nx.get_node_attributes(graph, "state")
-    node_function = nx.get_node_attributes(graph, "function")
-    nodes = nx.nodes(graph)
-    edges = nx.edges(graph)
-    node_labels = {}
-    edge_labels = {}
-    for node in nodes:
-        # 这里只用\n就可以换行了
-        node_labels[
-            node
-        ] = f"{node}节点：\n 状态：{node_states[node]} \n 功能：{node_function[node]}"
+#     # 可视化
+#     node_states = nx.get_node_attributes(graph, "state")
+#     node_function = nx.get_node_attributes(graph, "function")
+#     nodes = nx.nodes(graph)
+#     edges = nx.edges(graph)
+#     node_labels = {}
+#     edge_labels = {}
+#     for node in nodes:
+#         # 这里只用\n就可以换行了
+#         node_labels[
+#             node
+#         ] = f"{node}节点：\n 状态：{node_states[node]} \n 功能：{node_function[node]}"
 
-    # print(node_labels)
-    pos = nx.spring_layout(graph)
-    nx.draw_networkx_nodes(graph, pos)
-    nx.draw_networkx_labels(graph, pos, node_labels)
-    # nx.draw_networkx_edges(graph, pos, connectionstyle="arc3,rad=0.2")
-    nx.draw_networkx_edges(graph, pos)
+#     # print(node_labels)
+#     pos = nx.spring_layout(graph)
+#     nx.draw_networkx_nodes(graph, pos)
+#     nx.draw_networkx_labels(graph, pos, node_labels)
+#     # nx.draw_networkx_edges(graph, pos, connectionstyle="arc3,rad=0.2")
+#     nx.draw_networkx_edges(graph, pos)
 
-    device_state, device_edge, device_reward, done = env.get_obs()
+#     device_state, device_edge, device_reward, done = env.get_obs()
 
-    # print(obs_state)
+#     # print(obs_state)
 
-    plt.show()
+#     plt.show()

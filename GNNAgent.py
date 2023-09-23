@@ -1,3 +1,4 @@
+import os
 from torch.distributions import Categorical
 from torch.utils.data import BatchSampler, SubsetRandomSampler
 
@@ -61,7 +62,7 @@ class Agent:
         self.gae_lambda = gae_lambda
         self.n_epochs = n_epochs
         self.network = (
-            GNNNet(node_num=6, state_dim=4, action_dim=2)
+            GNNNet(node_num=work_cell_num, state_dim=4, action_dim=2)
             .double()
             .to(device=self.device)
         )
@@ -93,8 +94,16 @@ class Agent:
 
         return raw, all_log_probs.sum(0)
 
-    def load_model(self):
-        self.network.load_model()
+    def load_model(self, name):
+        # 如果没有文件需要跳过
+        name = f"./model/{name}"
+        if not os.path.exists(name):
+            return
+        self.network.load_model(name)
+
+    def save_model(self, name):
+        name = f"./model/{name}"
+        self.network.save_model(name)
 
     def learn(self, ppo_memory: PPOMemory, last_node_state, last_done, edge_index):
         (
