@@ -29,19 +29,18 @@ if __name__ == "__main__":
     torch.set_printoptions(precision=3, sci_mode=False)
     function_num = 6
     work_cell_num = 14
-    batch_size = 4
+    batch_size = 16
     agent_reward = 0
     max_steps = 100
     total_step = init_step
     epoch_step = 0
-    memory = PPOMemory(batch_size, work_cell_num, function_num, 4, 2, device)
+
     env = EnvRun(work_cell_num=work_cell_num, function_num=function_num, device=device)
     agent = Agent(
         work_cell_num,
         function_num,
         batch_size=batch_size,
-        n_epochs=32,
-        mini_batch_size=4,
+        n_epochs=64,
     )
     # 如果不可视化节点就不用取返回值graph
     # 加入tensorboard
@@ -55,13 +54,17 @@ if __name__ == "__main__":
     # 加载之前的
     agent.load_model("last_model.pth")
     obs_states, edge_index, reward, dones = env.get_obs()
+    memory = PPOMemory(
+        batch_size, work_cell_num, function_num, edge_index.shape[1], 4, 2, device
+    )
     # print(obs_states)
     # 添加计算图
-    writer.add_graph(
-        agent.network, input_to_model=[obs_states, edge_index], verbose=False
-    )
+    # writer.add_graph(
+    #    agent.network, input_to_model=[obs_states, edge_index], verbose=False
+    # )
     # 添加
     while total_step < init_step + max_steps:
+        loss = 0
         total_step += 1
         epoch_step += 1
         agent.network.eval()
@@ -72,7 +75,12 @@ if __name__ == "__main__":
         env.update_all(raw.cpu())
         obs_states, edge_index, reward, dones = env.get_obs()
         agent_reward += reward
-        memory.remember(obs_states, value, agent_reward, dones, raw, log_prob)
+        if (epoch_step >= 200) and (dones != 1):
+            dones = 1
+            agent_reward -= 10
+        memory.remember(
+            obs_states, edge_index, value, agent_reward, dones, raw, log_prob
+        )
         # 如果记忆数量等于batch_size就学习
         if memory.count == batch_size:
             agent.network.train()
@@ -88,8 +96,8 @@ if __name__ == "__main__":
             print(agent_reward)
             writer.add_scalar("reward", agent_reward, total_step)
             with open("./log.csv", "a", newline="") as csvfile:
-                writer = csv.writer(csvfile)
-                writer.writerow([total_step, agent_reward, loss])
+                csv_writer = csv.writer(csvfile)
+                csv_writer.writerow([total_step, agent_reward, loss.item()])
             epoch_step = 0
             agent.save_model("model_" + str(total_step) + ".pth")
             # print(env.center_list[2].product_num)

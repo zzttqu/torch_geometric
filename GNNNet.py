@@ -7,8 +7,9 @@ from torch_geometric.nn import (
 )
 import torch
 from torch import nn
-from torch_geometric.data import Data
 import torch.nn.functional as F
+from torch_geometric.data import Data, Batch
+from torch_geometric.loader import DataLoader
 
 
 class GNNNet(nn.Module):
@@ -27,21 +28,21 @@ class GNNNet(nn.Module):
         # self.bn1 = nn.BatchNorm1d(128)
         # self.bn2 = nn.BatchNorm1d(64)
 
-    def forward(self, x, edge_index):
+    def forward(self, data):
         """
-        前向传播
+        前向传播，data可以是batch，也可以是data，两种格式
         """
-        # x, edge_index, batch = data.x, data.edge_index, data.batch
+        x, edge_index, batch = data.x, data.edge_index, data.batch
         # x = self.embedding(x)
         # x = x.squeeze(1)
         # print(x, edge_index, edge_attr)
         # print(x.dtype)
         x = F.relu(self.conv1(x, edge_index))
         # print(x.dtype)
-        x, edge_index, _, batch, _, _ = self.pool1(x, edge_index)
+        x, edge_index, _, batch, _, _ = self.pool1(x, edge_index, batch=batch)
         x1 = global_mean_pool(x, None)
         x = F.relu(self.conv2(x, edge_index))
-        x, edge_index, _, batch, _, _ = self.pool2(x, edge_index)
+        x, edge_index, _, batch, _, _ = self.pool2(x, edge_index, batch=batch)
         x2 = global_mean_pool(x, None)
         x = x1 + x2
         x = self.lin1(x)

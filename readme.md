@@ -18,3 +18,5 @@
 * 每个加工单元之多存放一个step的生产产品
 * 所有加工产品在加工step完成后都会运输到集散点
 * 集散点可以存储产品并按权重发送到下一个程序
+* 安装图神经网络优化包
+* pip install torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-2.0.0+cu117.html

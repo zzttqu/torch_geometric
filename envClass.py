@@ -354,7 +354,7 @@ class EnvRun:
         # reward += self.center_list[-1].product_num * 0.1
         # 构造边和节点
         done = 0
-        if self.center_list[-1].product_num > 50:
+        if self.center_list[-1].product_num > 100:
             reward += 10
             done = 1
         device_state = obs_states.to(self.device)
