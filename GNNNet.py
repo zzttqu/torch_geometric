@@ -36,16 +36,13 @@ class GNNNet(nn.Module):
         x, edge_index, batch = data.x, data.edge_index, data.batch
         # x = self.embedding(x)
         # x = x.squeeze(1)
-        # print(x, edge_index, edge_attr)
-        # print(x.dtype)
         x = self.relu(self.conv1(x, edge_index))
-        # print(x.dtype)
         x, edge_index, _, batch, _, _ = self.pool1(x, edge_index, batch=batch)
-        x1 = global_mean_pool(x, None)
+        # x1 = global_mean_pool(x, None)
         x = self.relu(self.conv2(x, edge_index))
         x, edge_index, _, batch, _, _ = self.pool2(x, edge_index, batch=batch)
-        x2 = global_mean_pool(x, None)
-        x = x1 + x2
+        x = global_mean_pool(x, batch)
+        # x = x1 + x2
         x = self.lin1(x)
         x = self.lin2(x)
         # 两个输出

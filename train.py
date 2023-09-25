@@ -6,6 +6,7 @@ from GNNAgent import Agent, PPOMemory
 from envClass import EnvRun, select_functions
 from torch.utils.tensorboard import SummaryWriter
 import csv
+from datetime import datetime
 
 if __name__ == "__main__":
     # # 写入一个csv文件
@@ -31,17 +32,18 @@ if __name__ == "__main__":
     work_cell_num = 14
     batch_size = 64
     agent_reward = 0
-    max_steps = 500
+    max_steps = 5000
     total_step = init_step
     epoch_step = 0
     episode_num = 0
+    learn_num = 0
 
     env = EnvRun(work_cell_num=work_cell_num, function_num=function_num, device=device)
     agent = Agent(
         work_cell_num,
         function_num,
         batch_size=batch_size,
-        n_epochs=32,
+        n_epochs=64,
     )
     # 如果不可视化节点就不用取返回值graph
     # 加入tensorboard
@@ -58,6 +60,9 @@ if __name__ == "__main__":
     memory = PPOMemory(
         batch_size, work_cell_num, function_num, edge_index.shape[1], 4, 2, device
     )
+    init_time = datetime.now()
+    print(f"模型加载完成，环境初始化完成，当前时间{init_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    now_time = datetime.now()
     # print(obs_states)
     # 添加计算图
     # writer.add_graph(
@@ -71,6 +76,7 @@ if __name__ == "__main__":
         with torch.no_grad():
             raw, log_prob = agent.get_action(obs_states, edge_index)
             value = agent.get_value(obs_states, edge_index)
+        # print(value)
         # 这个raw少了
         env.update_all(raw.cpu())
         obs_states, edge_index, reward, dones = env.get_obs()
@@ -78,11 +84,13 @@ if __name__ == "__main__":
         if (epoch_step >= 64) and (dones != 1):
             dones = 1
             agent_reward -= 5
+
         memory.remember(
             obs_states, edge_index, value, agent_reward, dones, raw, log_prob
         )
         # 如果记忆数量等于batch_size就学习
         if memory.count == batch_size:
+            learn_num += 1
             agent.network.train()
             agent.learn(
                 memory,
@@ -91,11 +99,13 @@ if __name__ == "__main__":
                 edge_index=edge_index,
                 writer=writer,
             )
+            learn_time = (datetime.now() - now_time).seconds
+            print(f"第{learn_num}次学习，学习用时：{learn_time}秒")
+            now_time = datetime.now()
             # writer.add_scalar("loss", loss, total_step)
         if dones == 1:
-            print("=======")
+            print("=================")
             episode_num += 1
-            print(env.center_list[-1].product_num)
             print(f"总步数：{total_step}，本次循环步数为：{epoch_step}，奖励为{agent_reward:.3f}")
             writer.add_scalar("reward", agent_reward, total_step)
             writer.add_scalars(
@@ -108,7 +118,7 @@ if __name__ == "__main__":
             )
             with open("./log.csv", "a", newline="") as csvfile:
                 csv_writer = csv.writer(csvfile)
-                csv_writer.writerow([total_step, f'{agent_reward:.3f}'])
+                csv_writer.writerow([total_step, f"{agent_reward:.3f}"])
             epoch_step = 0
             env.reset()
             agent_reward = 0
