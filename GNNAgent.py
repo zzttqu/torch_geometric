@@ -21,12 +21,12 @@ class PPOMemory:
         device,
     ):
         self.node_states = torch.zeros(
-            (batch_size, node_num + center_num, state_dim), dtype=torch.float64
+            (batch_size, node_num + center_num, state_dim)
         ).to(device)
         self.edge_index = torch.zeros(
             (batch_size, 2, edge_shape), dtype=torch.int64
         ).to(device)
-        self.values = torch.zeros(batch_size, dtype=torch.float64).to(device)
+        self.values = torch.zeros(batch_size).to(device)
         self.rewards = torch.zeros(batch_size).to(device)
         self.dones = torch.zeros(batch_size).to(device)
         self.total_actions = torch.zeros((batch_size, node_num * action_dim)).to(device)
@@ -83,7 +83,6 @@ class Agent:
         self.n_epochs = n_epochs
         self.network = (
             GNNNet(node_num=work_cell_num, state_dim=4, action_dim=2)
-            .double()
             .to(device=self.device)
         )
         self.clip = clip

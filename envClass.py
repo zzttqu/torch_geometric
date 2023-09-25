@@ -221,12 +221,12 @@ class EnvRun:
         # 会生产几种类型
         self.function_list = select_functions(0, function_num - 1, self.work_cell_num)
         self.work_cell_list: List[WorkCell] = []
+        # 初始化工作单元
         for i in range(work_cell_num):
             self.work_cell_list.append(
                 # 随机function或者规定
                 # i // (self.work_cell_num // self.function_num)
                 # np.random.randint(0, function_num)
-                # TODO 需要修改为random
                 WorkCell(
                     function_id=self.function_list[i],
                     speed=6,
@@ -234,11 +234,12 @@ class EnvRun:
                     materials=10,
                 )
             )
-        # 集散中心
+        # 初始化集散中心
         self.center_list: List[TransitCenter] = []
         for i in range(function_num):
             self.center_list.append(TransitCenter(i))
-        self.products = np.zeros(function_num)
+        self.step_products = np.zeros(function_num)
+        self.total_products = np.zeros(function_num)
         self.function_group = self.get_function_group()
 
     def build_edge(self):
@@ -273,7 +274,7 @@ class EnvRun:
 
     def update_centers(self, workcell_get_material):
         # workcell_get_material = torch.tensor([1, 1, 1, 1, 1, 1], dtype=torch.float)
-        #  处理边数据
+        #  计算有同一功能有几个节点要接收
         collect = torch.zeros(self.work_cell_num)
         for indices in self.function_group:
             if workcell_get_material[indices].sum() != 0:
@@ -295,13 +296,13 @@ class EnvRun:
         #     self.edge_weight[index] = flatt[i]
         products = np.zeros(self.function_num)
         for work_cell in self.work_cell_list:
-            # 取出所有物品，然后清空
+            # 取出所有物品，放入center中
             self.center_list[work_cell.function[0]].putin_product(work_cell.function[3])
-            products[work_cell.function[0]] += (
-                work_cell.function[3] + self.products[work_cell.function[0]]
-            )
+            # 当前步全部的product数量
+            products[work_cell.function[0]] += work_cell.function[3]
+
             work_cell.transport(2, 0)
-        # 根据边权重传递物料
+        # 根据是否接收物料的这个动作空间传递原料
         for work_cell in self.work_cell_list:
             # 如果为原料处理单元，function_id为0
             if work_cell.function[0] == 0:
@@ -324,6 +325,8 @@ class EnvRun:
                 # self.center_list[work_cell.function[0] - 1].moveout_product(
                 #     int(products[work_cell.function[0] - 1] * collect))
                 # work_cell.transport(3, int(products[work_cell.function[0] - 1] * collect))
+        self.step_products = products
+        self.total_products += self.step_products
 
     # def update_work_cell(self, workcell_id, workcell_action, workcell_function=0):
     #     for _id, action, work_cell in zip(workcell_id, workcell_action, self.work_cell_list):
@@ -341,8 +344,7 @@ class EnvRun:
 
     def get_obs(self):
         obs_states = torch.zeros(
-            (self.work_cell_num + self.function_num, self.work_cell_state_num),
-            dtype=torch.float64,
+            (self.work_cell_num + self.function_num, self.work_cell_state_num)
         )
         for work_cell in self.work_cell_list:
             obs_states[work_cell.cell_id] = work_cell.get_state()
@@ -351,7 +353,7 @@ class EnvRun:
         # 额定扣血
         reward = -0.1
         # 生产一个有奖励
-        reward += self.center_list[-1].product_num * 0.03
+        reward += self.step_products[-1] * 0.01
         # 构造边和节点
         done = 0
         if self.center_list[-1].product_num > 50:
@@ -381,6 +383,7 @@ class EnvRun:
         return grouped_indices
 
     def reset(self):
+        self.total_products = np.zeros(self.function_num)
         for worker in self.work_cell_list:
             worker.reset_state()
         for center in self.center_list:

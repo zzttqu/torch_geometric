@@ -18,7 +18,7 @@ if __name__ == "__main__":
     if data.ndim <= 1:
         init_step = 0
     else:
-        init_step = data[-1][0]
+        init_step = int(data[-1][0])
     # 设置显示
     # print(select_functions(0, 6, 14))
     # raise SystemExit
@@ -31,9 +31,10 @@ if __name__ == "__main__":
     work_cell_num = 14
     batch_size = 64
     agent_reward = 0
-    max_steps = 10000
+    max_steps = 500
     total_step = init_step
     epoch_step = 0
+    episode_num = 0
 
     env = EnvRun(work_cell_num=work_cell_num, function_num=function_num, device=device)
     agent = Agent(
@@ -93,8 +94,18 @@ if __name__ == "__main__":
             # writer.add_scalar("loss", loss, total_step)
         if dones == 1:
             print("=======")
-            print(agent_reward)
+            episode_num += 1
+            print(env.center_list[-1].product_num)
+            print(f"总步数：{total_step}，本次循环步数为：{epoch_step}，奖励为{agent_reward}")
             writer.add_scalar("reward", agent_reward, total_step)
+            writer.add_scalars(
+                "products",
+                {
+                    f"产品{i}": env.total_products[i]
+                    for i in range(1, env.total_products.shape[0])
+                },
+                episode_num,
+            )
             with open("./log.csv", "a", newline="") as csvfile:
                 csv_writer = csv.writer(csvfile)
                 csv_writer.writerow([total_step, agent_reward])
