@@ -29,9 +29,9 @@ if __name__ == "__main__":
     torch.set_printoptions(precision=3, sci_mode=False)
     function_num = 6
     work_cell_num = 14
-    batch_size = 16
+    batch_size = 64
     agent_reward = 0
-    max_steps = 100
+    max_steps = 10000
     total_step = init_step
     epoch_step = 0
 
@@ -40,7 +40,7 @@ if __name__ == "__main__":
         work_cell_num,
         function_num,
         batch_size=batch_size,
-        n_epochs=64,
+        n_epochs=32,
     )
     # 如果不可视化节点就不用取返回值graph
     # 加入tensorboard
@@ -64,7 +64,6 @@ if __name__ == "__main__":
     # )
     # 添加
     while total_step < init_step + max_steps:
-        loss = 0
         total_step += 1
         epoch_step += 1
         agent.network.eval()
@@ -75,42 +74,41 @@ if __name__ == "__main__":
         env.update_all(raw.cpu())
         obs_states, edge_index, reward, dones = env.get_obs()
         agent_reward += reward
-        if (epoch_step >= 200) and (dones != 1):
+        if (epoch_step >= 64) and (dones != 1):
             dones = 1
-            agent_reward -= 10
+            agent_reward -= 5
         memory.remember(
             obs_states, edge_index, value, agent_reward, dones, raw, log_prob
         )
         # 如果记忆数量等于batch_size就学习
         if memory.count == batch_size:
             agent.network.train()
-            loss = agent.learn(
+            agent.learn(
                 memory,
                 last_node_state=obs_states,
                 last_done=dones,
                 edge_index=edge_index,
+                writer=writer,
             )
-            writer.add_scalar("loss", loss, total_step)
+            # writer.add_scalar("loss", loss, total_step)
         if dones == 1:
             print("=======")
             print(agent_reward)
             writer.add_scalar("reward", agent_reward, total_step)
             with open("./log.csv", "a", newline="") as csvfile:
                 csv_writer = csv.writer(csvfile)
-                csv_writer.writerow([total_step, agent_reward, loss.item()])
+                csv_writer.writerow([total_step, agent_reward])
             epoch_step = 0
-            agent.save_model("model_" + str(total_step) + ".pth")
-            # print(env.center_list[2].product_num)
             env.reset()
             agent_reward = 0
-        # if step % 50 == 0:
-        #     # print(agent_reward, obs_states, raw)
-        #     agent_reward = 0
-        #     env.reset()
-        #     obs_states, edge_index, reward, dones = env.get_obs()
+        if total_step % 500 == 0:
+            agent.save_model("model_" + str(total_step) + ".pth")
 
     # 神经网络要输出每个工作站的工作，功能和传输与否
     agent.save_model("last_model.pth")
+    with open("./log.csv", "a", newline="") as csvfile:
+        csv_writer = csv.writer(csvfile)
+        csv_writer.writerow([total_step, agent_reward])
     # 可视化
     node_states = nx.get_node_attributes(graph, "state")
     node_function = nx.get_node_attributes(graph, "function")

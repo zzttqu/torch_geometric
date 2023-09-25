@@ -7,7 +7,7 @@ from GNNNet import GNNNet
 import torch
 import torch.nn.functional as F
 from torch_geometric.data import Data
-
+from torch.utils.tensorboard import SummaryWriter
 
 class PPOMemory:
     def __init__(
@@ -98,8 +98,12 @@ class Agent:
         return value
 
     def get_batch_values(self, batches):
-        _, value = self.network(batches)
-        return value
+        all_values = []
+        for data in batches:
+            _, value = self.network(data)
+            all_values.append(value)
+        all_values = torch.cat(all_values, dim=0)
+        return all_values
 
     def get_action(self, state: torch.Tensor, edge_index: torch.Tensor, raw=None):
         state = state.squeeze()
@@ -144,7 +148,9 @@ class Agent:
         name = f"./model/{name}"
         self.network.save_model(name)
 
-    def learn(self, ppo_memory: PPOMemory, last_node_state, last_done, edge_index):
+    def learn(
+        self, ppo_memory: PPOMemory, last_node_state, last_done, edge_index, writer:SummaryWriter
+    ):
         (
             batches,
             values,
@@ -192,15 +198,13 @@ class Agent:
                 new_log_prob = self.get_batch_actions(
                     Batch.index_select(batches, index), total_actions[index]
                 )
-                raise SystemExit
                 ratios = torch.exp(new_log_prob - flat_probs[index]).sum(1)
                 surr1 = ratios * flat_advantages[index]
                 surr2 = torch.clamp(ratios, 1 - self.clip, 1 + self.clip)
                 actor_loss: torch.Tensor = -torch.min(surr1, surr2)
-                new_value = self.get_batch_values(Batch.from_data_list(batches[index]))
+                new_value = self.get_batch_values(batches[index])
                 critic_loss = F.mse_loss(flat_returns[index], new_value.view(-1))
                 total_loss: torch.Tensor = actor_loss.mean() + 0.5 * critic_loss
                 self.optimizer.zero_grad()
                 total_loss.backward()
                 self.optimizer.step()
-        return total_loss
