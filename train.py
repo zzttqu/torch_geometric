@@ -96,7 +96,7 @@ if __name__ == "__main__":
             print("=======")
             episode_num += 1
             print(env.center_list[-1].product_num)
-            print(f"总步数：{total_step}，本次循环步数为：{epoch_step}，奖励为{agent_reward}")
+            print(f"总步数：{total_step}，本次循环步数为：{epoch_step}，奖励为{agent_reward:.3f}")
             writer.add_scalar("reward", agent_reward, total_step)
             writer.add_scalars(
                 "products",
@@ -108,7 +108,7 @@ if __name__ == "__main__":
             )
             with open("./log.csv", "a", newline="") as csvfile:
                 csv_writer = csv.writer(csvfile)
-                csv_writer.writerow([total_step, agent_reward])
+                csv_writer.writerow([total_step, f'{agent_reward:.3f}'])
             epoch_step = 0
             env.reset()
             agent_reward = 0
