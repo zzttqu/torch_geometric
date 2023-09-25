@@ -351,7 +351,7 @@ class EnvRun:
         # 额定扣血
         reward = -0.1
         # 生产一个有奖励
-        # reward += self.center_list[-1].product_num * 0.1
+        reward += self.center_list[-1].product_num * 0.03
         # 构造边和节点
         done = 0
         if self.center_list[-1].product_num > 50:
