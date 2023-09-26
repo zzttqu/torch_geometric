@@ -67,7 +67,10 @@ class WorkCell:
         # 需要有当前这个工作单元每个功能的备件，每个功能生产效率
         self.cell_id = WorkCell.next_id
         WorkCell.next_id += 1
-        self.function = np.array([function_id, speed, materials, products], dtype=int)
+        self.function = function_id
+        self.speed = speed
+        self.materials = materials
+        self.products = products
         self.position = np.array(position)
         self.health = 100
         self.working = False
@@ -81,11 +84,11 @@ class WorkCell:
     def transport(self, action, num):
         # 转移生产产品
         if action == 2:
-            self.function[3] = 0
+            self.products = 0
 
         # 或者接收原材料
         elif action == 3:
-            self.function[2] += num
+            self.materials += num
 
     def work(self, action):
         # 工作/继续工作
@@ -93,8 +96,8 @@ class WorkCell:
             if self.working:
                 pass
             else:
-                self.set_work(self.function[0])
-                self.working = self.function[0]
+                self.set_work(self.function)
+                self.working = self.function
             self.idle_time = 0
         # 停止工作
         elif action == 0:
@@ -106,8 +109,8 @@ class WorkCell:
         if self.state == StateCode.workcell_working:
             # 工作中
             # 2是生产库存数量，0是生产速度,1是原料数量
-            self.function[3] += self.function[1]
-            self.function[2] -= self.function[1]
+            self.products += self.speed
+            self.materials -= self.speed
             # self.health -= 0.1
         if self.state == StateCode.workcell_ready:
             self.idle_time += 1
@@ -118,12 +121,12 @@ class WorkCell:
         #     self.working = None
         #     self.state = StateCode.workcell_low_health
         # 缺少原料
-        if self.function[2] < self.function[1]:
+        if self.materials < self.speed:
             self.state = StateCode.workcell_low_material
             self.working = None
         # 不缺货就变为ready状态
         elif (
-            self.function[2] >= self.function[1]
+            self.materials >= self.speed
             and self.state == StateCode.workcell_low_material
         ):
             self.state = StateCode.workcell_ready
@@ -133,25 +136,25 @@ class WorkCell:
 
     def reset_state(self):
         self.state = StateCode.workcell_ready
-        self.function[2] = self.function[1]
-        self.function[3] = 0
+        self.materials = self.speed
+        self.products = 0
         self.working = None
 
     # 状态空间
     def get_state(self):
         if self.state == StateCode.workcell_working:
             return torch.tensor(
-                [self.state.value, self.working, self.function[1], self.function[2]]
+                [self.state.value, self.working, self.speed, self.products]
             )
 
         else:
             return torch.tensor(
-                [self.state.value, self.function[0], self.function[1], self.function[2]]
+                [self.state.value, self.function, self.speed, self.products]
             )
 
     # 动作空间
     def get_function(self):
-        return self.function[0]
+        return self.function
 
 
 class AGVCell:
@@ -231,7 +234,7 @@ class EnvRun:
                     function_id=self.function_list[i],
                     speed=6,
                     position=[i, 0],
-                    materials=10,
+                    materials=6,
                 )
             )
         # 初始化集散中心
@@ -249,7 +252,7 @@ class EnvRun:
         index = 0
         for worker in self.work_cell_list:
             graph.add_node(
-                worker.cell_id, state=worker.state.value, function=worker.function[0]
+                worker.cell_id, state=worker.state.value, function=worker.function
             )
             index += 1
         for center in self.center_list:
@@ -260,7 +263,7 @@ class EnvRun:
 
         for work_cell in self.work_cell_list:
             for center in self.center_list:
-                cell1_id = work_cell.function[0]
+                cell1_id = work_cell.function
                 product_id = center.product_id
                 # 边信息
                 # 从生产到中转
@@ -297,34 +300,30 @@ class EnvRun:
         products = np.zeros(self.function_num)
         for work_cell in self.work_cell_list:
             # 取出所有物品，放入center中
-            self.center_list[work_cell.function[0]].putin_product(work_cell.function[3])
+            self.center_list[work_cell.function].putin_product(work_cell.products)
             # 当前步全部的product数量
-            products[work_cell.function[0]] += work_cell.function[3]
+            products[work_cell.function] += work_cell.products
 
             work_cell.transport(2, 0)
         # 根据是否接收物料的这个动作空间传递原料
         for work_cell in self.work_cell_list:
             # 如果为原料处理单元，function_id为0
-            if work_cell.function[0] == 0:
-                work_cell.transport(3, work_cell.function[1])
+            if work_cell.function == 0:
+                work_cell.transport(3, work_cell.speed)
             else:
-                self.center_list[work_cell.function[0] - 1].moveout_product(
-                    int(
-                        products[work_cell.function[0] - 1] * collect[work_cell.cell_id]
-                    )
+                self.center_list[work_cell.function - 1].moveout_product(
+                    int(products[work_cell.function - 1] * collect[work_cell.cell_id])
                 )
                 work_cell.transport(
                     3,
-                    int(
-                        products[work_cell.function[0] - 1] * collect[work_cell.cell_id]
-                    ),
+                    int(products[work_cell.function - 1] * collect[work_cell.cell_id]),
                 )
                 # # 看看当前id在flat里边排第几个，然后把对应权重进行计算
                 # collect = flatt[torch.where(work_cell.cell_id == flat_id)[0].item()]
                 # # int会导致有盈余，但是至少不会发生没办法转移的情况
-                # self.center_list[work_cell.function[0] - 1].moveout_product(
-                #     int(products[work_cell.function[0] - 1] * collect))
-                # work_cell.transport(3, int(products[work_cell.function[0] - 1] * collect))
+                # self.center_list[work_cell.function - 1].moveout_product(
+                #     int(products[work_cell.function - 1] * collect))
+                # work_cell.transport(3, int(products[work_cell.function - 1] * collect))
         self.step_products = products
         self.total_products += self.step_products
 
@@ -384,6 +383,7 @@ class EnvRun:
 
     def reset(self):
         self.total_products = np.zeros(self.function_num)
+        self.step_products = np.zeros(self.function_num)
         for worker in self.work_cell_list:
             worker.reset_state()
         for center in self.center_list:

@@ -14,9 +14,12 @@ if __name__ == "__main__":
     #     writer = csv.writer(csvfile)
     #     writer.writerow([0, 0, 0])
     # 读取用np读，写入用csv写
-    data = np.genfromtxt("./log.csv", delimiter=",", skip_header=1)
+    try:
+        data = np.genfromtxt("./log.csv", delimiter=",", skip_header=1)
+    except:
+        data = 0
     # 检测nparray有几个维度
-    if data.ndim <= 1:
+    if data == 0:
         init_step = 0
     else:
         init_step = int(data[-1][0])
@@ -150,4 +153,4 @@ if __name__ == "__main__":
     # nx.draw_networkx_edges(graph, pos, connectionstyle="arc3,rad=0.2")
     nx.draw_networkx_edges(graph, pos)
 
-    plt.show()
+    # plt.show()
