@@ -9,6 +9,7 @@ import torch.nn.functional as F
 from torch_geometric.data import Data
 from torch.utils.tensorboard import SummaryWriter
 
+
 class PPOMemory:
     def __init__(
         self,
@@ -81,9 +82,8 @@ class Agent:
         self.batch_size = batch_size
         self.gae_lambda = gae_lambda
         self.n_epochs = n_epochs
-        self.network = (
-            GNNNet(node_num=work_cell_num, state_dim=4, action_dim=2)
-            .to(device=self.device)
+        self.network = GNNNet(node_num=work_cell_num, state_dim=4, action_dim=2).to(
+            device=self.device
         )
         self.clip = clip
         self.optimizer = torch.optim.Adam(self.network.parameters(), lr=lr, eps=1e-5)
@@ -110,8 +110,10 @@ class Agent:
         """ 如果不是学习状态就只能构造一下data """
         data = Data(x=state, edge_index=edge_index)
         logits, _ = self.network(data)
+        # 前work_cell_num是
+        # print(logits[0 : self.work_cell_num].shape)
         # 第一项是功能动作，第二项是是否接受上一级运输
-        logits = logits.reshape((-1, 2))
+        logits = logits.view((-1, 2))
         action_material_dist = Categorical(logits=logits)
         # 前半段是动作，后半段是接受动作
         if raw is None:
@@ -148,7 +150,12 @@ class Agent:
         self.network.save_model(name)
 
     def learn(
-        self, ppo_memory: PPOMemory, last_node_state, last_done, edge_index, writer:SummaryWriter
+        self,
+        ppo_memory: PPOMemory,
+        last_node_state,
+        last_done,
+        edge_index,
+        writer: SummaryWriter,
     ):
         (
             batches,

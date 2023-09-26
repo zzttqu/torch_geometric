@@ -29,10 +29,10 @@ if __name__ == "__main__":
     np.set_printoptions(precision=3, suppress=True)
     torch.set_printoptions(precision=3, sci_mode=False)
     function_num = 6
-    work_cell_num = 14
-    batch_size = 64
+    work_cell_num = 15
+    batch_size = 128
     agent_reward = 0
-    max_steps = 5000
+    max_steps = 500
     total_step = init_step
     epoch_step = 0
     episode_num = 0
@@ -43,7 +43,7 @@ if __name__ == "__main__":
         work_cell_num,
         function_num,
         batch_size=batch_size,
-        n_epochs=64,
+        n_epochs=32,
     )
     # 如果不可视化节点就不用取返回值graph
     # 加入tensorboard

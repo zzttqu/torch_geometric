@@ -272,7 +272,7 @@ class EnvRun:
         self.edge_index = torch.tensor(np.array(graph.edges()), dtype=torch.int64).T
         return graph
 
-    def update_centers(self, workcell_get_material):
+    def deliver_centers_material(self, workcell_get_material):
         # workcell_get_material = torch.tensor([1, 1, 1, 1, 1, 1], dtype=torch.float)
         #  计算有同一功能有几个节点要接收
         collect = torch.zeros(self.work_cell_num)
@@ -337,10 +337,11 @@ class EnvRun:
             work_cell.work(action)
 
     def update_all(self, raw: torch.Tensor):
-        centers = raw[self.work_cell_num :]
-        work_cells = raw[: self.work_cell_num]
-        self.update_all_work_cell(work_cells)
-        self.update_centers(centers)
+        # 这里需要注意是raw顺序是一个节点，两个动作，不能这样拆分
+        work_cells = raw.view((-1, 2))
+        print(raw[:, 0])
+        self.update_all_work_cell(work_cells[:, 0])
+        self.deliver_centers_material(work_cells[:, 1])
 
     def get_obs(self):
         obs_states = torch.zeros(

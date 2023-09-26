@@ -24,7 +24,7 @@ class GNNNet(nn.Module):
         self.relu = nn.LeakyReLU()
         self.lin1 = nn.Linear(128, 128)
         self.lin2 = nn.Linear(128, 64)
-        self.lin3 = nn.Linear(64, action_dim * node_num * action_choice)
+        self.lin3 = nn.Linear(64, action_dim * action_choice)
         self.linV = nn.Linear(64, 1)
         # self.bn1 = nn.BatchNorm1d(128)
         # self.bn2 = nn.BatchNorm1d(64)
@@ -37,11 +37,11 @@ class GNNNet(nn.Module):
         # x = self.embedding(x)
         # x = x.squeeze(1)
         x = self.relu(self.conv1(x, edge_index))
-        x, edge_index, _, batch, _, _ = self.pool1(x, edge_index, batch=batch)
+        # x, edge_index, _, batch, _, _ = self.pool1(x, edge_index)
         # x1 = global_mean_pool(x, None)
         x = self.relu(self.conv2(x, edge_index))
-        x, edge_index, _, batch, _, _ = self.pool2(x, edge_index, batch=batch)
-        x = global_mean_pool(x, batch)
+        # x, edge_index, _, batch, _, _ = self.pool2(x, edge_index)
+        # x = global_mean_pool(x, batch)
         # x = x1 + x2
         x = self.lin1(x)
         x = self.lin2(x)
@@ -60,4 +60,10 @@ class GNNNet(nn.Module):
         """
         加载模型
         """
-        self.load_state_dict(torch.load(name))
+        pretrained_model = torch.load(name)
+        pretrained_model = {
+            key: value
+            for key, value in pretrained_model.items()
+            if (key in self.state_dict() and "lin3" not in key)
+        }
+        self.load_state_dict(pretrained_model, strict=False)

@@ -20,3 +20,5 @@
 * 集散点可以存储产品并按权重发送到下一个程序
 * 安装图神经网络优化包
 * pip install torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-2.0.0+cu117.html
+# 模型问题
+* 图神经网络的输出是每个节点的信息，所以最后的线性层也改成每个节点就好了，不用细分了
