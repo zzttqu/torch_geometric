@@ -353,9 +353,10 @@ class EnvRun:
         reward = -0.5
         # 生产一个有奖励
         reward += self.step_products[-1] * 0.1
+        self.step_products[-1] = 0
         # 构造边和节点
         done = 0
-        if self.center_list[-1].product_num > 50:
+        if self.total_products[-1] > 50:
             reward += 10
             done = 1
         device_state = obs_states.to(self.device)

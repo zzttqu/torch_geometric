@@ -86,7 +86,7 @@ class Agent:
             device=self.device
         )
         self.clip = clip
-        self.optimizer = torch.optim.Adam(self.network.parameters(), lr=lr, eps=1e-5)
+        self.optimizer = torch.optim.AdamW(self.network.parameters(), lr=lr, eps=1e-5)
 
     def get_value(self, state: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
         """如果不是学习状态就只能构造一下data"""

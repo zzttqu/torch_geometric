@@ -35,8 +35,8 @@ if __name__ == "__main__":
     work_cell_num = 15
     batch_size = 64
     agent_reward = 0
-    max_steps = 1000
-    max_episode_step = 32
+    max_steps = 2000
+    max_episode_step = 128
     total_step = init_step
     epoch_step = 0
     episode_num = 0
@@ -132,7 +132,7 @@ if __name__ == "__main__":
     # 神经网络要输出每个工作站的工作，功能和传输与否
     agent.save_model("last_model.pth")
     total_time = (datetime.now() - init_time).seconds // 60
-    print(f"总计用时：{total_time}，运行{total_step}步，学习{learn_num}次")
+    print(f"总计用时：{total_time}分钟，运行{total_step}步，学习{learn_num}次")
 
     # 可视化
     node_states = nx.get_node_attributes(graph, "state")
