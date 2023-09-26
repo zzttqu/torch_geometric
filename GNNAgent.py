@@ -124,7 +124,7 @@ class Agent:
 
         return raw, all_log_probs.sum(0)
 
-    def get_batch_actions(self, batches: Batch, raw):
+    def get_batch_actions_probs(self, batches: Batch, raw):
         all_logits = []
         for data in batches:
             logits, _ = self.network(data)
@@ -201,7 +201,7 @@ class Agent:
             for index in BatchSampler(
                 SubsetRandomSampler(range(self.batch_size)), 16, False
             ):
-                new_log_prob = self.get_batch_actions(
+                new_log_prob = self.get_batch_actions_probs(
                     Batch.index_select(batches, index), total_actions[index]
                 )
                 ratios = torch.exp(new_log_prob - flat_probs[index]).sum(1)

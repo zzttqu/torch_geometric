@@ -337,9 +337,8 @@ class EnvRun:
             work_cell.work(action)
 
     def update_all(self, raw: torch.Tensor):
-        # 这里需要注意是raw顺序是一个节点，两个动作，不能这样拆分
+        # 这里需要注意是raw顺序是一个节点，两个动作，不能这样拆分，需要重新折叠
         work_cells = raw.view((-1, 2))
-        print(raw[:, 0])
         self.update_all_work_cell(work_cells[:, 0])
         self.deliver_centers_material(work_cells[:, 1])
 
