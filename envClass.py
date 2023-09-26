@@ -351,9 +351,9 @@ class EnvRun:
         for center in self.center_list:
             obs_states[center.cell_id] = center.get_state()
         # 额定扣血
-        reward = -0.1
+        reward = -0.5
         # 生产一个有奖励
-        reward += self.step_products[-1] * 0.01
+        reward += self.step_products[-1] * 0.1
         # 构造边和节点
         done = 0
         if self.center_list[-1].product_num > 50:

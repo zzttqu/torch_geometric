@@ -30,9 +30,10 @@ if __name__ == "__main__":
     torch.set_printoptions(precision=3, sci_mode=False)
     function_num = 6
     work_cell_num = 15
-    batch_size = 128
+    batch_size = 64
     agent_reward = 0
-    max_steps = 500
+    max_steps = 1000
+    max_episode_step = 32
     total_step = init_step
     epoch_step = 0
     episode_num = 0
@@ -80,7 +81,7 @@ if __name__ == "__main__":
         env.update_all(raw.cpu())
         obs_states, edge_index, reward, dones = env.get_obs()
         agent_reward += reward
-        if (epoch_step >= 64) and (dones != 1):
+        if (epoch_step >= max_episode_step) and (dones != 1):
             dones = 1
             agent_reward -= 5
 
@@ -113,7 +114,7 @@ if __name__ == "__main__":
                     f"产品{i}": env.total_products[i]
                     for i in range(1, env.total_products.shape[0])
                 },
-                episode_num,
+                total_step,
             )
             with open("./log.csv", "a", newline="") as csvfile:
                 csv_writer = csv.writer(csvfile)
@@ -126,9 +127,9 @@ if __name__ == "__main__":
 
     # 神经网络要输出每个工作站的工作，功能和传输与否
     agent.save_model("last_model.pth")
-    with open("./log.csv", "a", newline="") as csvfile:
-        csv_writer = csv.writer(csvfile)
-        csv_writer.writerow([total_step, agent_reward])
+    total_time = (datetime.now() - init_time).seconds // 60
+    print(f"总计用时：{total_time}，运行{total_step}步，学习{learn_num}次")
+
     # 可视化
     node_states = nx.get_node_attributes(graph, "state")
     node_function = nx.get_node_attributes(graph, "function")

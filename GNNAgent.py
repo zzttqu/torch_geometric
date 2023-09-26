@@ -133,7 +133,7 @@ class Agent:
             logits = logits[:][0 : self.work_cell_num]
             # print(logits.shape,111)
             # 第一项是功能动作，第二项是是否接受上一级运输
-            logits = logits.reshape((-1, 2))
+            logits = logits.view((-1, 2))
             all_logits.append(logits)
         all_logits = torch.cat(all_logits, dim=0)
         action_material_dist = Categorical(logits=logits)
@@ -169,10 +169,10 @@ class Agent:
             log_probs,
         ) = ppo_memory.generate_batches()
         # flat_states = batches.reshape(-1, batches.shape[-1])
-        flat_actions = total_actions.reshape(-1, total_actions.shape[-1])
-        flat_probs = log_probs.reshape(-1, log_probs.shape[-1])
+        flat_actions = total_actions.view(-1, total_actions.shape[-1])
+        flat_probs = log_probs.view(-1, log_probs.shape[-1])
         with torch.no_grad():
-            last_value = self.get_value(last_node_state, edge_index).reshape(1, -1)
+            last_value = self.get_value(last_node_state, edge_index).view(1, -1)
             advantages = torch.zeros_like(rewards).to(self.device)
             for t in reversed(range(self.batch_size)):
                 last_gae_lam = 0
@@ -197,8 +197,8 @@ class Agent:
             advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
             # 这个是value的期望值
             returns = advantages + values
-        flat_advantages = advantages.reshape(-1)
-        flat_returns = returns.reshape(-1)
+        flat_advantages = advantages.view(-1)
+        flat_returns = returns.view(-1)
         for _ in range(self.n_epochs):
             # 这里是设置minibatch，也就是送入图神经网络的大小
             for index in BatchSampler(
@@ -216,4 +216,5 @@ class Agent:
                 total_loss: torch.Tensor = actor_loss.mean() + 0.5 * critic_loss
                 self.optimizer.zero_grad()
                 total_loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.network.parameters(), 0.5)
                 self.optimizer.step()
