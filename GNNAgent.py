@@ -101,7 +101,7 @@ class Agent:
         for data in batches:
             _, value = self.network(data)
             all_values.append(value)
-        all_values = torch.cat(all_values, dim=0)
+        all_values = torch.stack(all_values)
         return all_values
 
     def get_action(self, state: torch.Tensor, edge_index: torch.Tensor, raw=None):
@@ -113,6 +113,8 @@ class Agent:
         # 前work_cell_num是
         # print(logits[0 : self.work_cell_num].shape)
         # 第一项是功能动作，第二项是是否接受上一级运输
+        # 目前不需要对center进行动作，所以暂时不要后边的内容
+        logits = logits[0 : self.work_cell_num]
         logits = logits.view((-1, 2))
         action_material_dist = Categorical(logits=logits)
         # 前半段是动作，后半段是接受动作
@@ -128,6 +130,7 @@ class Agent:
         all_logits = []
         for data in batches:
             logits, _ = self.network(data)
+            logits = logits[:][0 : self.work_cell_num]
             # print(logits.shape,111)
             # 第一项是功能动作，第二项是是否接受上一级运输
             logits = logits.reshape((-1, 2))

@@ -76,7 +76,6 @@ if __name__ == "__main__":
         with torch.no_grad():
             raw, log_prob = agent.get_action(obs_states, edge_index)
             value = agent.get_value(obs_states, edge_index)
-        # print(value)
         # 这个raw少了
         env.update_all(raw.cpu())
         obs_states, edge_index, reward, dones = env.get_obs()

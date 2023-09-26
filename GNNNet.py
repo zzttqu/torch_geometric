@@ -46,7 +46,7 @@ class GNNNet(nn.Module):
         x = self.lin1(x)
         x = self.lin2(x)
         # 两个输出
-        value = self.linV(x)
+        value = self.linV(x).mean()
         x = torch.tanh(self.lin3(x))
         return x, value
 
