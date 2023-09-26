@@ -19,7 +19,7 @@ if __name__ == "__main__":
     except:
         data = 0
     # 检测nparray有几个维度
-    if data == 0:
+    if data.ndim <= 1:
         init_step = 0
     else:
         init_step = int(data[-1][0])
