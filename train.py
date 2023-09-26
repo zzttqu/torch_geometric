@@ -104,6 +104,7 @@ if __name__ == "__main__":
             )
             learn_time = (datetime.now() - now_time).seconds
             print(f"第{learn_num}次学习，学习用时：{learn_time}秒")
+            agent.save_model("last_model.pth")
             now_time = datetime.now()
             # writer.add_scalar("loss", loss, total_step)
         if dones == 1:
