@@ -4,6 +4,8 @@ from torch_geometric.nn import (
     TopKPooling,
     global_mean_pool,
     GATConv,
+    GATv2Conv,
+    GraphSAGE
     
 )
 import torch
@@ -18,9 +20,9 @@ class GNNNet(nn.Module):
         super(GNNNet, self).__init__()
         # 将节点映射为一个四维向量
         # self.embedding = nn.Embedding(num_embeddings=1000, embedding_dim=state_dim)
-        self.conv1 = GATConv(state_dim, 128)
+        self.conv1 = GATv2Conv(state_dim, 128)
         self.pool1 = TopKPooling(128, ratio=0.8)
-        self.conv2 = GATConv(128, 128)
+        self.conv2 = GATv2Conv(128, 128)
         self.pool2 = TopKPooling(128, ratio=0.8)
         self.lerelu = nn.LeakyReLU()
         self.relu = nn.ReLU()

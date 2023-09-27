@@ -194,7 +194,8 @@ class Agent:
                         + self.gamma * self.gae_lambda * next_nonterminal * last_gae_lam
                     )
                     advantages[t] = last_gae_lam
-            advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
+            # 规范化
+            # advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
             # 这个是value的期望值
             returns = advantages + values
         flat_advantages = advantages.view(-1)
@@ -217,6 +218,7 @@ class Agent:
                 total_loss: torch.Tensor = actor_loss.mean() + 0.5 * critic_loss
                 self.optimizer.zero_grad()
                 total_loss.backward()
-                torch.nn.utils.clip_grad_norm_(self.network.parameters(), 0.5)
+                # 裁减
+                torch.nn.utils.clip_grad_norm_(self.network.parameters(), 10)
                 self.optimizer.step()
         return total_loss

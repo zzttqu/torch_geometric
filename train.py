@@ -31,8 +31,10 @@ if __name__ == "__main__":
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     np.set_printoptions(precision=3, suppress=True)
     torch.set_printoptions(precision=3, sci_mode=False)
+    # 神奇trick
+    torch.manual_seed(3407)
     function_num = 6
-    work_cell_num = 24
+    work_cell_num = 16
     batch_size = 64
 
     total_step = init_step
