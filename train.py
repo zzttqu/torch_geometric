@@ -34,15 +34,22 @@ if __name__ == "__main__":
     function_num = 6
     work_cell_num = 15
     batch_size = 64
-    agent_reward = 0
-    max_steps = 2000
-    max_episode_step = 128
+
     total_step = init_step
-    epoch_step = 0
+    max_steps = 2000
+    episode_step_max = 256
+    product_goal = 500
+
     episode_num = 0
     learn_num = 0
 
-    env = EnvRun(work_cell_num=work_cell_num, function_num=function_num, device=device)
+    env = EnvRun(
+        work_cell_num=work_cell_num,
+        function_num=function_num,
+        device=device,
+        episode_step_max=episode_step_max,
+        product_goal=product_goal,
+    )
     agent = Agent(
         work_cell_num,
         function_num,
@@ -60,7 +67,7 @@ if __name__ == "__main__":
     # raw = torch.tensor([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
     # 加载之前的
     agent.load_model("last_model.pth")
-    obs_states, edge_index, reward, dones = env.get_obs()
+    obs_states, edge_index, reward, dones, _ = env.get_obs()
     memory = PPOMemory(
         batch_size, work_cell_num, function_num, edge_index.shape[1], 4, 2, device
     )
@@ -75,27 +82,28 @@ if __name__ == "__main__":
     # 添加
     while total_step < init_step + max_steps:
         total_step += 1
-        epoch_step += 1
         agent.network.eval()
         with torch.no_grad():
             raw, log_prob = agent.get_action(obs_states, edge_index)
             value = agent.get_value(obs_states, edge_index)
         # 这个raw少了
         env.update_all(raw.cpu())
-        obs_states, edge_index, reward, dones = env.get_obs()
-        agent_reward += reward
-        if (epoch_step >= max_episode_step) and (dones != 1):
-            dones = 1
-            agent_reward -= 5
-
-        memory.remember(
-            obs_states, edge_index, value, agent_reward, dones, raw, log_prob
+        obs_states, edge_index, reward, dones, episode_step = env.get_obs()
+        writer.add_scalars(
+            "step/products",
+            {
+                f"产品{i}": env.total_products[i]
+                for i in range(1, env.total_products.shape[0])
+            },
+            total_step,
         )
+        writer.add_scalar("step/reward", reward, total_step)
+        memory.remember(obs_states, edge_index, value, reward, dones, raw, log_prob)
         # 如果记忆数量等于batch_size就学习
         if memory.count == batch_size:
             learn_num += 1
             agent.network.train()
-            agent.learn(
+            loss = agent.learn(
                 memory,
                 last_node_state=obs_states,
                 last_done=dones,
@@ -106,26 +114,15 @@ if __name__ == "__main__":
             print(f"第{learn_num}次学习，学习用时：{learn_time}秒")
             agent.save_model("last_model.pth")
             now_time = datetime.now()
-            # writer.add_scalar("loss", loss, total_step)
+            writer.add_scalar("loss", loss, total_step)
         if dones == 1:
             print("=================")
-            episode_num += 1
-            print(f"总步数：{total_step}，本次循环步数为：{epoch_step}，奖励为{agent_reward:.3f}")
-            writer.add_scalar("reward", agent_reward, total_step)
-            writer.add_scalars(
-                "products",
-                {
-                    f"产品{i}": env.total_products[i]
-                    for i in range(1, env.total_products.shape[0])
-                },
-                total_step,
-            )
+            print(f"总步数：{total_step}，本次循环步数为：{episode_step}，奖励为{ reward:.3f}")
+            writer.add_scalar("reward", reward, total_step)
             with open("./log.csv", "a", newline="") as csvfile:
                 csv_writer = csv.writer(csvfile)
-                csv_writer.writerow([total_step, f"{agent_reward:.3f}"])
-            epoch_step = 0
+                csv_writer.writerow([total_step, f"{reward:.3f}"])
             env.reset()
-            agent_reward = 0
         if total_step % 500 == 0:
             agent.save_model("model_" + str(total_step) + ".pth")
 

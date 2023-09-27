@@ -17,9 +17,9 @@ class GNNNet(nn.Module):
         super(GNNNet, self).__init__()
         # 将节点映射为一个四维向量
         # self.embedding = nn.Embedding(num_embeddings=1000, embedding_dim=state_dim)
-        self.conv1 = GCNConv(state_dim, 128)
+        self.conv1 = SAGEConv(state_dim, 128)
         self.pool1 = TopKPooling(128, ratio=0.8)
-        self.conv2 = GCNConv(128, 128)
+        self.conv2 = SAGEConv(128, 128)
         self.pool2 = TopKPooling(128, ratio=0.8)
         self.lerelu = nn.LeakyReLU()
         self.relu = nn.ReLU()

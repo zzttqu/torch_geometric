@@ -199,6 +199,7 @@ class Agent:
             returns = advantages + values
         flat_advantages = advantages.view(-1)
         flat_returns = returns.view(-1)
+        total_loss = torch.tensor(0.0)
         for _ in range(self.n_epochs):
             # 这里是设置minibatch，也就是送入图神经网络的大小
             for index in BatchSampler(
@@ -218,3 +219,4 @@ class Agent:
                 total_loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.network.parameters(), 0.5)
                 self.optimizer.step()
+        return total_loss

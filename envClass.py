@@ -215,7 +215,14 @@ class TransitCenter:
 
 
 class EnvRun:
-    def __init__(self, work_cell_num, function_num, device):
+    def __init__(
+        self,
+        work_cell_num,
+        function_num,
+        device,
+        episode_step_max=256,
+        product_goal=500,
+    ):
         self.device = device
         self.edge_index = None
         self.work_cell_num = work_cell_num
@@ -244,6 +251,13 @@ class EnvRun:
         self.step_products = np.zeros(function_num)
         self.total_products = np.zeros(function_num)
         self.function_group = self.get_function_group()
+        # 奖励和完成与否
+        self.reward = 0
+        self.done = 0
+        self.product_goal = product_goal
+        # 一次循环前的step数量
+        self.episode_step = 0
+        self.episode_step_max = episode_step_max
 
     def build_edge(self):
         # 理论上来说边建立好后就不会变化了
@@ -341,6 +355,22 @@ class EnvRun:
         self.update_all_work_cell(work_cells[:, 0])
         self.deliver_centers_material(work_cells[:, 1])
 
+        # 额定扣血
+        self.reward -= -0.1
+        # 生产一个有奖励
+        self.reward += self.step_products[-1] * 0.1
+        self.step_products = np.zeros(self.function_num)
+        self.episode_step += 1
+        self.done = 0
+        # 超过步数
+        if self.episode_step > self.episode_step_max:
+            self.reward -= 10
+            self.done = 1
+        # 完成任务目标
+        if self.total_products[-1] > self.product_goal:
+            self.reward += 10
+            self.done = 1
+
     def get_obs(self):
         obs_states = torch.zeros(
             (self.work_cell_num + self.function_num, self.work_cell_state_num)
@@ -349,21 +379,11 @@ class EnvRun:
             obs_states[work_cell.cell_id] = work_cell.get_state()
         for center in self.center_list:
             obs_states[center.cell_id] = center.get_state()
-        # 额定扣血
-        reward = -0.5
-        # 生产一个有奖励
-        reward += self.step_products[-1] * 0.1
-        self.step_products[-1] = 0
-        # 构造边和节点
-        done = 0
-        if self.total_products[-1] > 50:
-            reward += 10
-            done = 1
+
         device_state = obs_states.to(self.device)
         device_edge = self.edge_index.to(self.device)
-        device_reward = reward
 
-        return device_state, device_edge, device_reward, done
+        return device_state, device_edge, self.reward, self.done, self.episode_step
 
     def get_work_cell_functions(self):
         work_station_functions = np.zeros((self.work_cell_num, 1), dtype=int)
@@ -385,6 +405,9 @@ class EnvRun:
     def reset(self):
         self.total_products = np.zeros(self.function_num)
         self.step_products = np.zeros(self.function_num)
+        self.reward = 0
+        self.done = 0
+        self.episode_step = 0
         for worker in self.work_cell_list:
             worker.reset_state()
         for center in self.center_list:
