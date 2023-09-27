@@ -312,6 +312,7 @@ class EnvRun:
         # for i, index in enumerate(edge_weight_index):
         #     self.edge_weight[index] = flatt[i]
         products = np.zeros(self.function_num)
+        # 处理产品
         for work_cell in self.work_cell_list:
             # 取出所有物品，放入center中
             self.center_list[work_cell.function].putin_product(work_cell.products)
@@ -319,6 +320,8 @@ class EnvRun:
             products[work_cell.function] += work_cell.products
 
             work_cell.transport(2, 0)
+        self.step_products = products
+        self.total_products += self.step_products
         # 根据是否接收物料的这个动作空间传递原料
         for work_cell in self.work_cell_list:
             # 如果为原料处理单元，function_id为0
@@ -338,8 +341,6 @@ class EnvRun:
                 # self.center_list[work_cell.function - 1].moveout_product(
                 #     int(products[work_cell.function - 1] * collect))
                 # work_cell.transport(3, int(products[work_cell.function - 1] * collect))
-        self.step_products = products
-        self.total_products += self.step_products
 
     # def update_work_cell(self, workcell_id, workcell_action, workcell_function=0):
     #     for _id, action, work_cell in zip(workcell_id, workcell_action, self.work_cell_list):
@@ -359,7 +360,6 @@ class EnvRun:
         self.reward -= -0.1
         # 生产一个有奖励
         self.reward += self.step_products[-1] * 0.1
-        self.step_products = np.zeros(self.function_num)
         self.episode_step += 1
         self.done = 0
         # 超过步数
