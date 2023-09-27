@@ -357,9 +357,9 @@ class EnvRun:
         self.deliver_centers_material(work_cells[:, 1])
 
         # 额定扣血
-        self.reward -= -0.1
+        self.reward += -0.05
         # 生产一个有奖励
-        self.reward += self.step_products[-1] * 0.1
+        self.reward += self.step_products[-1] * 0.01
         self.episode_step += 1
         self.done = 0
         # 超过步数

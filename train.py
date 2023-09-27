@@ -32,13 +32,13 @@ if __name__ == "__main__":
     np.set_printoptions(precision=3, suppress=True)
     torch.set_printoptions(precision=3, sci_mode=False)
     function_num = 6
-    work_cell_num = 15
+    work_cell_num = 24
     batch_size = 64
 
     total_step = init_step
-    max_steps = 2000
+    max_steps = 1000
     episode_step_max = 256
-    product_goal = 500
+    product_goal = 200
 
     episode_num = 0
     learn_num = 0
