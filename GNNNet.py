@@ -4,9 +4,13 @@ from torch_geometric.nn import (
     TopKPooling,
     global_mean_pool,
     GATConv,
+    # 骨干网络
     GATv2Conv,
-    GraphSAGE
-    
+    GraphSAGE,
+    # embedding，增强泛化性
+    MetaPath2Vec,
+    # 转为异构图
+    to_hetero
 )
 import torch
 from torch import nn

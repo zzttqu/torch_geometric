@@ -9,7 +9,7 @@ logs/
 .vscode/
 model/
 .idea/
-test.*
+
 # Distribution / packaging
 .Python
 build/

@@ -39,7 +39,7 @@ if __name__ == "__main__":
 
     total_step = init_step
     max_steps = 1000
-    episode_step_max = 256
+    episode_step_max = 128
     product_goal = 200
 
     episode_num = 0
@@ -60,11 +60,11 @@ if __name__ == "__main__":
     )
     # 如果不可视化节点就不用取返回值graph
     # 加入tensorboard
-    writer = SummaryWriter(log_dir="logs")
+    writer = SummaryWriter(log_dir="logs/train")
     graph = env.build_edge()
     work_function = env.get_work_cell_functions()
-    weight = torch.tensor([1] * work_cell_num, dtype=torch.float).squeeze()
-    random_function = torch.tensor([row[0] for row in work_function]).squeeze()
+    # weight = torch.tensor([1] * work_cell_num, dtype=torch.float).squeeze()
+    # random_function = torch.tensor([row[0] for row in work_function]).squeeze()
     # 初始状态
     # raw = torch.tensor([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
     # 加载之前的
