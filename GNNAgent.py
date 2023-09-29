@@ -219,6 +219,6 @@ class Agent:
                 self.optimizer.zero_grad()
                 total_loss.backward()
                 # 裁减
-                torch.nn.utils.clip_grad_norm_(self.network.parameters(), 10)
+                # torch.nn.utils.clip_grad_norm_(self.network.parameters(), 10)
                 self.optimizer.step()
         return total_loss

@@ -8,14 +8,14 @@ from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
 
 if __name__ == "__main__":
-    function_num = 6
-    work_cell_num = 16
+    function_num = 12
+    work_cell_num = 100
     batch_size = 64
 
     total_step = 0
-    max_steps = 1000
-    episode_step_max = 256
-    product_goal = 200
+    max_steps = 500
+    episode_step_max = 100
+    product_goal = 500
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     env = EnvRun(
         work_cell_num=work_cell_num,

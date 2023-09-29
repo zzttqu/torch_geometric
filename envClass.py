@@ -363,12 +363,12 @@ class EnvRun:
             self.reward += -0.05
         # 生产一个有奖励
         else:
-            self.reward += self.step_products[-1] * 0.01
+            self.reward += self.step_products[-1] * 0.005
         self.episode_step += 1
         self.done = 0
         # 超过步数
         if self.episode_step > self.episode_step_max:
-            self.reward -= 10
+            # self.reward -= 10
             self.done = 1
         # 完成任务目标
         if self.total_products[-1] > self.product_goal:

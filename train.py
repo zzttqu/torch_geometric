@@ -33,14 +33,14 @@ if __name__ == "__main__":
     torch.set_printoptions(precision=3, sci_mode=False)
     # 神奇trick
     torch.manual_seed(3407)
-    function_num = 6
-    work_cell_num = 16
+    function_num = 24
+    work_cell_num = 150
     batch_size = 64
 
     total_step = init_step
     max_steps = 1000
     episode_step_max = 128
-    product_goal = 200
+    product_goal = 100
 
     episode_num = 0
     learn_num = 0

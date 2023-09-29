@@ -22,3 +22,5 @@
 * pip install torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-2.0.0+cu117.html
 # 模型问题
 * 图神经网络的输出是每个节点的信息，所以最后的线性层也改成每个节点就好了，不用细分了
+* 输出层能不能跟随要求改变节点数量就好了
+* 目前只能跑目标100产品左右的，需要在较短步数内完成，要不然会崩掉摆烂

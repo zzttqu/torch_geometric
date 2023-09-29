@@ -1,8 +1,10 @@
 from torch_geometric.nn import (
     GCNConv,
     SAGEConv,
+    # 池化，减少节点数量
     TopKPooling,
-    global_mean_pool,
+    # 聚合层
+    SoftmaxAggregation,
     GATConv,
     # 骨干网络
     GATv2Conv,
@@ -10,7 +12,7 @@ from torch_geometric.nn import (
     # embedding，增强泛化性
     MetaPath2Vec,
     # 转为异构图
-    to_hetero
+    to_hetero,
 )
 import torch
 from torch import nn
@@ -24,14 +26,14 @@ class GNNNet(nn.Module):
         super(GNNNet, self).__init__()
         # 将节点映射为一个四维向量
         # self.embedding = nn.Embedding(num_embeddings=1000, embedding_dim=state_dim)
-        self.conv1 = GATv2Conv(state_dim, 128)
-        self.pool1 = TopKPooling(128, ratio=0.8)
-        self.conv2 = GATv2Conv(128, 128)
+        self.conv1 = GATv2Conv(state_dim, 64)
+        self.conv2 = GATv2Conv(64, 128)
         self.pool2 = TopKPooling(128, ratio=0.8)
+        self.agg1 = SoftmaxAggregation(learn=True)
         self.lerelu = nn.LeakyReLU()
         self.relu = nn.ReLU()
-        self.lin1 = nn.Linear(128, 128)
-        self.lin2 = nn.Linear(128, 64)
+        self.lin1 = nn.Linear(128, 64)
+        self.lin2 = nn.Linear(64, 64)
         self.lin3 = nn.Linear(64, action_dim * action_choice)
         self.linV = nn.Linear(64, 1)
 
