@@ -1,7 +1,7 @@
 import os
 from torch.distributions import Categorical
 from torch.utils.data import BatchSampler, SubsetRandomSampler
-from torch_geometric.data import Data, Batch,HeteroData
+from torch_geometric.data import Data, Batch, HeteroData
 from torch_geometric.loader import DataLoader
 from GNNNet import GNNNet
 import torch
@@ -14,43 +14,73 @@ class PPOMemory:
     def __init__(
         self,
         batch_size,
-        node_num,
-        center_num,
-        edge_shape,
+        node_dic: dict,
+        edge_dic,
         state_dim,
         action_dim,
         device,
     ):
-        self.node_states = torch.zeros(
-            (batch_size, node_num + center_num, state_dim)
-        ).to(device)
-        self.edge_index = torch.zeros(
-            (batch_size, 2, edge_shape), dtype=torch.int64
-        ).to(device)
+        self.node_states = {}
+        self.total_actions = {}
+        self.edge_indexs = {}
+        self.log_probs = {}
+        for key, value in node_dic.items():
+            self.node_states[key] = torch.zeros((batch_size, value, state_dim)).to(
+                device
+            )
+            self.total_actions[key] = torch.zeros((batch_size, value * action_dim)).to(
+                device
+            )
+            self.log_probs[key] = torch.zeros((batch_size, value * action_dim)).to(
+                device
+            )
+        for key, value in edge_dic.items():
+            self.edge_indexs[key] = torch.zeros((batch_size, 2, value)).to(device)
         self.values = torch.zeros(batch_size).to(device)
         self.rewards = torch.zeros(batch_size).to(device)
         self.dones = torch.zeros(batch_size).to(device)
-        self.total_actions = torch.zeros((batch_size, node_num * action_dim)).to(device)
-        self.log_probs = torch.zeros((batch_size, node_num * action_dim)).to(device)
         self.count = 0
 
     def remember(
-        self, node_state, edge_index, value, reward, done, total_action, log_probs
+        self,
+        node_state: dict,
+        edge_index: dict,
+        value: torch.Tensor,
+        reward: torch.Tensor,
+        done: int,
+        total_action: dict,
+        log_probs: dict,
     ):
-        self.node_states[self.count] = node_state
-        self.edge_index[self.count] = edge_index
+        for key, value in node_state.items():
+            self.node_states[key][self.count] = value
+        for key, value in total_action.items():
+            self.total_actions[key][self.count] = value
+        for key, value in log_probs.items():
+            self.log_probs[key][self.count] = value
+        for key, value in edge_index.items():
+            self.edge_indexs[key][self.count] = value
         self.values[self.count] = value
         self.rewards[self.count] = reward
         self.dones[self.count] = done
-        self.total_actions[self.count] = total_action
-        self.log_probs[self.count] = log_probs
+        
         self.count += 1
 
     def generate_batches(self):
         data_list = []
+        hetero_data = HeteroData()
+        # 节点信息
+        for key in self.node_states.keys:
+            hetero_data[key].x = self.node_states[key]
+        # 边信息
+        for key in self.edge_indexs.keys:
+            node1, node2 = key.split("to")
+            hetero_data[node1, key, node2].edge_index = self.edge_indexs[key]
+        print(hetero_data)
+
         for i in range(self.count):
             data_list.append(Data(x=self.node_states[i], edge_index=self.edge_index[i]))
         batch = Batch.from_data_list(data_list)
+
         dataloader = DataLoader(data_list, batch_size=1, shuffle=False)
         self.count = 0
         return (

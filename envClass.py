@@ -4,11 +4,12 @@ import networkx as nx
 from matplotlib import pyplot as plt
 import torch
 from typing import List
+from TransitCenter import TransitCenter
+from WorkCell import WorkCell
 
 graph = nx.Graph()
 plt.rcParams["font.sans-serif"] = ["SimHei"]  # 显示中文标签
 plt.rcParams["axes.unicode_minus"] = False
-
 
 
 def select_functions(start, end, num_selections):
@@ -57,104 +58,6 @@ class StateCode(Enum):
     AGVCell_overload = 4
 
 
-class WorkCell:
-    next_id = 0
-
-    def __init__(self, function_id, speed, position, materials=0, products=0):
-        super().__init__()
-        # 需要有当前这个工作单元每个功能的备件，每个功能生产效率
-        self.cell_id = WorkCell.next_id
-        WorkCell.next_id += 1
-        self.function = function_id
-        self.speed = speed
-        self.materials = materials
-        self.products = products
-        self.position = np.array(position)
-        self.health = 100
-        self.working = False
-        self.idle_time = 0
-        self.state = StateCode.workcell_ready
-
-    def set_work(self, function):
-        self.working = function
-        self.state = StateCode.workcell_working
-
-    def transport(self, action, num):
-        # 转移生产产品
-        if action == 2:
-            self.products = 0
-
-        # 或者接收原材料
-        elif action == 3:
-            self.materials += num
-
-    def work(self, action):
-        # 工作/继续工作
-        if action == 1:
-            if self.working:
-                pass
-            else:
-                self.set_work(self.function)
-                self.working = self.function
-            self.idle_time = 0
-        # 停止工作
-        elif action == 0:
-            # self.working = None
-            self.working = None
-            self.state = StateCode.workcell_ready
-        # 检查当前状态
-        self.state_check()
-        if self.state == StateCode.workcell_working:
-            # 工作中
-            # 2是生产库存数量，0是生产速度,1是原料数量
-            self.products += self.speed
-            self.materials -= self.speed
-            # self.health -= 0.1
-        if self.state == StateCode.workcell_ready:
-            self.idle_time += 1
-
-    def state_check(self):
-        # 低健康度
-        # if self.health < 50:
-        #     self.working = None
-        #     self.state = StateCode.workcell_low_health
-        # 缺少原料
-        if self.materials < self.speed:
-            self.state = StateCode.workcell_low_material
-            self.working = None
-        # 不缺货就变为ready状态
-        elif (
-            self.materials >= self.speed
-            and self.state == StateCode.workcell_low_material
-        ):
-            self.state = StateCode.workcell_ready
-        # 爆仓了
-        if self.working is None:
-            return
-
-    def reset_state(self):
-        self.state = StateCode.workcell_ready
-        self.materials = self.speed
-        self.products = 0
-        self.working = None
-
-    # 状态空间
-    def get_state(self):
-        if self.state == StateCode.workcell_working:
-            return torch.tensor(
-                [self.state.value, self.working, self.speed, self.products]
-            )
-
-        else:
-            return torch.tensor(
-                [self.state.value, self.function, self.speed, self.products]
-            )
-
-    # 动作空间
-    def get_function(self):
-        return self.function
-
-
 class AGVCell:
     def __init__(self, speed, capacity):
         self.speed = speed
@@ -192,26 +95,6 @@ class AGVCell:
             return StateCode.AGVCell_busy
 
 
-class TransitCenter:
-    def __init__(self, product_id):
-        self.cell_id = WorkCell.next_id
-        WorkCell.next_id += 1
-        self.product_id = product_id
-        self.state = StateCode.workcell_working
-        self.product_num = 0
-
-    def putin_product(self, num):
-        self.product_num += num
-        return self.product_num
-
-    def moveout_product(self, num):
-        self.product_num -= num
-        return self.product_num
-
-    def get_state(self):
-        return torch.tensor((self.state.value, self.product_id, 10, self.product_num))
-
-
 class EnvRun:
     def __init__(
         self,
@@ -222,10 +105,12 @@ class EnvRun:
         product_goal=500,
     ):
         self.device = device
-        self.edge_index = None
+        self.edge_index = []
         self.work_cell_num = work_cell_num
         self.work_cell_state_num = 4
         self.function_num = function_num
+        self.center_num = function_num
+        self.center_state_num = 3
         # 会生产几种类型
         self.function_list = select_functions(0, function_num - 1, self.work_cell_num)
         self.work_cell_list: List[WorkCell] = []
@@ -246,6 +131,7 @@ class EnvRun:
         self.center_list: List[TransitCenter] = []
         for i in range(function_num):
             self.center_list.append(TransitCenter(i))
+        # 产品数量
         self.step_products = np.zeros(function_num)
         self.total_products = np.zeros(function_num)
         self.function_group = self.get_function_group()
@@ -275,16 +161,20 @@ class EnvRun:
 
         for work_cell in self.work_cell_list:
             for center in self.center_list:
-                cell1_id = work_cell.function
+                cell_fun_id = work_cell.function
                 product_id = center.product_id
                 # 边信息
                 # 从生产到中转
-                if cell1_id == product_id:
+                if cell_fun_id == product_id:
+                    self.edge_index.append([work_cell.cell_id, center.cell_id])
                     graph.add_edge(work_cell.cell_id, center.cell_id)
                 # 从中转到下一步
-                if product_id == cell1_id - 1:
+                if product_id == cell_fun_id - 1:
+                    self.edge_index.append([center.cell_id, work_cell.cell_id])
                     graph.add_edge(center.cell_id, work_cell.cell_id)
-        self.edge_index = torch.tensor(np.array(graph.edges()), dtype=torch.int64).T
+        self.edge_index = np.array(self.edge_index)
+        self.edge_index = torch.tensor(self.edge_index, dtype=torch.int64).T
+        # self.edge_index = torch.tensor(np.array(graph.edges()), dtype=torch.int64).T
         return graph
 
     def deliver_centers_material(self, workcell_get_material):
@@ -374,15 +264,21 @@ class EnvRun:
             self.done = 1
 
     def get_obs(self):
-        obs_states = torch.zeros(
-            (self.work_cell_num + self.function_num, self.work_cell_state_num)
+        work_cell_states = torch.zeros(
+            (self.work_cell_num, self.work_cell_state_num)
+        ).to(self.device)
+        center_states = torch.zeros((self.center_num, self.center_state_num)).to(
+            self.device
         )
         for work_cell in self.work_cell_list:
-            obs_states[work_cell.cell_id] = work_cell.get_state()
+            work_cell_states[work_cell.cell_id] = work_cell.get_state()
         for center in self.center_list:
-            obs_states[center.cell_id] = center.get_state()
+            center_states[center.cell_id] = center.get_state()
 
-        device_state = obs_states.to(self.device)
+        obs_states = {
+            "work_cell": work_cell_states,
+            "center": center_states,
+        }
         device_edge = self.edge_index.to(self.device)
 
         return device_state, device_edge, self.reward, self.done, self.episode_step

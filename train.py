@@ -71,8 +71,14 @@ if __name__ == "__main__":
     agent.load_model("last_model.pth")
     obs_states, edge_index, reward, dones, _ = env.get_obs()
     memory = PPOMemory(
-        batch_size, work_cell_num, function_num, edge_index.shape[1], 4, 2, device
+        batch_size,
+        {"work_cell": work_cell_num, "center": function_num},
+        {"work_cell_to_center": edge_index.shape[1]},
+        4,
+        2,
+        device,
     )
+    
     init_time = datetime.now()
     print(f"模型加载完成，环境初始化完成，当前时间{init_time.strftime('%Y-%m-%d %H:%M:%S')}")
     now_time = datetime.now()
