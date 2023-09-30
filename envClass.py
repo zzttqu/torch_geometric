@@ -4,6 +4,21 @@ import networkx as nx
 from matplotlib import pyplot as plt
 import torch
 from typing import List
+
+
+class StateCode(Enum):
+    workcell_ready = 0
+    workcell_working = 1
+    workcell_low_material = 2
+    workcell_low_product = 3
+    # workcell_finish = 4
+    AGVCell_ready = 0
+    AGVCell_start = 1
+    AGVCell_busy = 2
+    AGVCell_low_battery = 3
+    AGVCell_overload = 4
+
+
 from TransitCenter import TransitCenter
 from WorkCell import WorkCell
 
@@ -43,19 +58,6 @@ def edge_weight_init(raw_array):
     for value, ratio in normalized_value.items():
         normalized_array = np.where(normalized_array == value, ratio, normalized_array)
     return torch.tensor(normalized_array)
-
-
-class StateCode(Enum):
-    workcell_ready = 0
-    workcell_working = 1
-    workcell_low_material = 2
-    workcell_low_product = 3
-    # workcell_finish = 4
-    AGVCell_ready = 0
-    AGVCell_start = 1
-    AGVCell_busy = 2
-    AGVCell_low_battery = 3
-    AGVCell_overload = 4
 
 
 class AGVCell:
@@ -173,7 +175,11 @@ class EnvRun:
                     self.edge_index.append([center.cell_id, work_cell.cell_id])
                     graph.add_edge(center.cell_id, work_cell.cell_id)
         self.edge_index = np.array(self.edge_index)
-        self.edge_index = torch.tensor(self.edge_index, dtype=torch.int64).T
+        self.edge_index = torch.tensor(self.edge_index, dtype=torch.int64).T.to(
+            self.device
+        )
+        self.edge_index = {"work_cell_to_center": self.edge_index}
+
         # self.edge_index = torch.tensor(np.array(graph.edges()), dtype=torch.int64).T
         return graph
 
@@ -270,6 +276,7 @@ class EnvRun:
         center_states = torch.zeros((self.center_num, self.center_state_num)).to(
             self.device
         )
+
         for work_cell in self.work_cell_list:
             work_cell_states[work_cell.cell_id] = work_cell.get_state()
         for center in self.center_list:
@@ -279,9 +286,8 @@ class EnvRun:
             "work_cell": work_cell_states,
             "center": center_states,
         }
-        device_edge = self.edge_index.to(self.device)
 
-        return device_state, device_edge, self.reward, self.done, self.episode_step
+        return obs_states, self.edge_index, self.reward, self.done, self.episode_step
 
     def get_work_cell_functions(self):
         work_station_functions = np.zeros((self.work_cell_num, 1), dtype=int)

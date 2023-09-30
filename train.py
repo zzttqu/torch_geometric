@@ -3,6 +3,7 @@ import networkx as nx
 from matplotlib import pyplot as plt
 import torch
 from GNNAgent import Agent, PPOMemory
+from torch_geometric.data import Data, Batch, HeteroData
 from envClass import EnvRun, select_functions
 from torch.utils.tensorboard import SummaryWriter
 import csv
@@ -33,8 +34,8 @@ if __name__ == "__main__":
     torch.set_printoptions(precision=3, sci_mode=False)
     # 神奇trick
     torch.manual_seed(3407)
-    function_num = 24
-    work_cell_num = 150
+    function_num = 3
+    work_cell_num = 12
     batch_size = 64
 
     total_step = init_step
@@ -52,12 +53,6 @@ if __name__ == "__main__":
         episode_step_max=episode_step_max,
         product_goal=product_goal,
     )
-    agent = Agent(
-        work_cell_num,
-        function_num,
-        batch_size=batch_size,
-        n_epochs=32,
-    )
     # 如果不可视化节点就不用取返回值graph
     # 加入tensorboard
     writer = SummaryWriter(log_dir="logs/train")
@@ -68,17 +63,32 @@ if __name__ == "__main__":
     # 初始状态
     # raw = torch.tensor([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
     # 加载之前的
-    agent.load_model("last_model.pth")
+
     obs_states, edge_index, reward, dones, _ = env.get_obs()
+    hetero_data = HeteroData()
+    # 节点信息
+    for key, value in obs_states.items():
+        hetero_data[key].x = value
+        # 边信息
+    for key, value in edge_index.items():
+        node1, node2 = key.split("_to_")
+        hetero_data[node1, key, node2].edge_index = value
+    agent = Agent(
+        work_cell_num,
+        function_num,
+        batch_size=batch_size,
+        n_epochs=32,
+        init_data=hetero_data,
+    )
+    agent.load_model("last_model.pth")
     memory = PPOMemory(
         batch_size,
         {"work_cell": work_cell_num, "center": function_num},
-        {"work_cell_to_center": edge_index.shape[1]},
+        {"work_cell_to_center": edge_index["work_cell_to_center"].shape[1]},
         4,
         2,
         device,
     )
-    
     init_time = datetime.now()
     print(f"模型加载完成，环境初始化完成，当前时间{init_time.strftime('%Y-%m-%d %H:%M:%S')}")
     now_time = datetime.now()

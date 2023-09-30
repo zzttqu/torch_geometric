@@ -3,10 +3,11 @@ from torch.distributions import Categorical
 from torch.utils.data import BatchSampler, SubsetRandomSampler
 from torch_geometric.data import Data, Batch, HeteroData
 from torch_geometric.loader import DataLoader
+from torch_geometric.nn import to_hetero, MetaPath2Vec
 from GNNNet import GNNNet
 import torch
 import torch.nn.functional as F
-from torch_geometric.data import Data
+import torch_geometric.transforms as T
 from torch.utils.tensorboard import SummaryWriter
 
 
@@ -62,7 +63,7 @@ class PPOMemory:
         self.values[self.count] = value
         self.rewards[self.count] = reward
         self.dones[self.count] = done
-        
+
         self.count += 1
 
     def generate_batches(self):
@@ -73,9 +74,8 @@ class PPOMemory:
             hetero_data[key].x = self.node_states[key]
         # 边信息
         for key in self.edge_indexs.keys:
-            node1, node2 = key.split("to")
+            node1, node2 = key.split("_to_")
             hetero_data[node1, key, node2].edge_index = self.edge_indexs[key]
-        print(hetero_data)
 
         for i in range(self.count):
             data_list.append(Data(x=self.node_states[i], edge_index=self.edge_index[i]))
@@ -100,6 +100,7 @@ class Agent:
         center_num,
         batch_size,
         n_epochs,
+        init_data: HeteroData = None,
         clip=0.2,
         lr=3e-4,
         gamma=0.99,
@@ -112,18 +113,36 @@ class Agent:
         self.batch_size = batch_size
         self.gae_lambda = gae_lambda
         self.n_epochs = n_epochs
-        self.network = GNNNet(node_num=work_cell_num, state_dim=4, action_dim=2).to(
-            device=self.device
-        )
+
+        self.network = GNNNet(action_dim=2, meta=init_data.metadata()).to(self.device)
         self.clip = clip
         self.optimizer = torch.optim.Adam(self.network.parameters(), lr=lr, eps=1e-5)
+        if init_data is not None:
+            # TODO 需要添加加载训练过的模型的代码和训练embedding代码
+            self.embedding = MetaPath2Vec(
+                edge_index_dict=init_data,
+                embedding_dim=20,
+                walk_length=3,
+                context_size=2,
+                metapath=meta,
+            )
+            # 相当于变了一个模型，还得todevice
+            self.network = to_hetero(
+                self.network, (T.ToUndirected()(init_data)).metadata(), aggr="sum"
+            ).to(self.device)
 
-    def get_value(self, state: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
+    def get_value(self, state: dict, edge_index: dict) -> torch.Tensor:
         """如果不是学习状态就只能构造一下data"""
-        state = state.squeeze()
-        edge_index = edge_index.squeeze()
-        data = Data(x=state, edge_index=edge_index)
-        _, value = self.network(data)
+        hetero_data = HeteroData()
+        # 节点信息
+        for key, value in state.items():
+            hetero_data[key].x = value
+        # 边信息
+        for key, value in edge_index.items():
+            node1, node2 = key.split("_to_")
+            hetero_data[node1, key, node2].edge_index = value
+        # data = Data(x=state, edge_index=edge_index)
+        _, value = self.network(T.ToUndirected()(hetero_data))
         return value
 
     def get_batch_values(self, batches):
@@ -134,12 +153,22 @@ class Agent:
         all_values = torch.stack(all_values)
         return all_values
 
-    def get_action(self, state: torch.Tensor, edge_index: torch.Tensor, raw=None):
-        state = state.squeeze()
-        edge_index = edge_index.squeeze()
+    def get_action(self, state: dict, edge_index: dict, raw=None):
+        hetero_data = HeteroData()
+        # 节点信息
+        for key, value in state.items():
+            hetero_data[key].x = value
+        # 边信息
+        for key, value in edge_index.items():
+            node1, node2 = key.split("_to_")
+            hetero_data[node1, key, node2].edge_index = value
+        hetero_data = T.ToUndirected()(hetero_data)
+
         """ 如果不是学习状态就只能构造一下data """
-        data = Data(x=state, edge_index=edge_index)
-        logits, _ = self.network(data)
+        # data = Data(x=state, edge_index=edge_index)
+        logits, _ = self.network(state, edge_index)
+        print(logits)
+        raise SystemExit
         # 前work_cell_num是
         # print(logits[0 : self.work_cell_num].shape)
         # 第一项是功能动作，第二项是是否接受上一级运输
