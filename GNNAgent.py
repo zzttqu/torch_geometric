@@ -1,7 +1,7 @@
 import os
 from torch.distributions import Categorical
 from torch.utils.data import BatchSampler, SubsetRandomSampler
-from torch_geometric.data import Data, Batch
+from torch_geometric.data import Data, Batch,HeteroData
 from torch_geometric.loader import DataLoader
 from GNNNet import GNNNet
 import torch

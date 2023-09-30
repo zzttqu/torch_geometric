@@ -1,4 +1,3 @@
-import random
 from enum import Enum
 import numpy as np
 import networkx as nx
@@ -10,7 +9,6 @@ graph = nx.Graph()
 plt.rcParams["font.sans-serif"] = ["SimHei"]  # 显示中文标签
 plt.rcParams["axes.unicode_minus"] = False
 
-import random
 
 
 def select_functions(start, end, num_selections):
