@@ -73,6 +73,9 @@ if __name__ == "__main__":
     for key, value in edge_index.items():
         node1, node2 = key.split("_to_")
         hetero_data[node1, key, node2].edge_index = value
+    #meta = hetero_data.metadata()
+    #print(hetero_data.edge_index_dict, meta[1])
+    #raise SystemExit
     agent = Agent(
         work_cell_num,
         function_num,
@@ -80,6 +83,7 @@ if __name__ == "__main__":
         n_epochs=32,
         init_data=hetero_data,
     )
+
     agent.load_model("last_model.pth")
     memory = PPOMemory(
         batch_size,

@@ -8,7 +8,6 @@ from GNNNet import GNNNet
 import torch
 import torch.nn.functional as F
 import torch_geometric.transforms as T
-from torch.utils.tensorboard import SummaryWriter
 
 
 class PPOMemory:
@@ -100,7 +99,7 @@ class Agent:
         center_num,
         batch_size,
         n_epochs,
-        init_data: HeteroData = None,
+        init_data: HeteroData,
         clip=0.2,
         lr=3e-4,
         gamma=0.99,
@@ -114,22 +113,34 @@ class Agent:
         self.gae_lambda = gae_lambda
         self.n_epochs = n_epochs
 
-        self.network = GNNNet(action_dim=2, meta=init_data.metadata()).to(self.device)
+        self.network = GNNNet(action_dim=2)
         self.clip = clip
+
+        self.metadata = init_data.metadata()
+        self.undirect_data = init_data
+        # 如果为异质图
+        assert init_data is not None, "init_data is None"
+
+        # TODO 需要添加加载训练过的模型的代码和训练embedding代码
+        self.update_heterodata(init_data)
+        self.embedding = MetaPath2Vec(
+            edge_index_dict=self.undirect_data.edge_index_dict,
+            embedding_dim=20,
+            walk_length=3,
+            context_size=2,
+            metapath=self.metadata[1],
+        )
+        # 相当于变了一个模型，还得todevice
+        self.network = to_hetero(self.network, self.metadata, aggr="sum").to(
+            self.device
+        )
         self.optimizer = torch.optim.Adam(self.network.parameters(), lr=lr, eps=1e-5)
-        if init_data is not None:
-            # TODO 需要添加加载训练过的模型的代码和训练embedding代码
-            self.embedding = MetaPath2Vec(
-                edge_index_dict=init_data,
-                embedding_dim=20,
-                walk_length=3,
-                context_size=2,
-                metapath=meta,
-            )
-            # 相当于变了一个模型，还得todevice
-            self.network = to_hetero(
-                self.network, (T.ToUndirected()(init_data)).metadata(), aggr="sum"
-            ).to(self.device)
+
+    def update_heterodata(self, data: HeteroData):
+        """更新heterodata"""
+        self.undirect_data = T.ToUndirected()(data)
+        # metadata函数第一个返回值是节点列表，第二个返回值是边列表
+        self.metadata = self.undirect_data.metadata()
 
     def get_value(self, state: dict, edge_index: dict) -> torch.Tensor:
         """如果不是学习状态就只能构造一下data"""
@@ -162,6 +173,8 @@ class Agent:
         for key, value in edge_index.items():
             node1, node2 = key.split("_to_")
             hetero_data[node1, key, node2].edge_index = value
+        # embedding只能一次处理一个类型的节点
+        self.embedding('work_cell')
         hetero_data = T.ToUndirected()(hetero_data)
 
         """ 如果不是学习状态就只能构造一下data """
@@ -217,7 +230,6 @@ class Agent:
         last_node_state,
         last_done,
         edge_index,
-        writer: SummaryWriter,
     ):
         (
             batches,

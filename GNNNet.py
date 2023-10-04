@@ -23,17 +23,18 @@ from torch_geometric.data import Data, Batch, HeteroData
 from torch_geometric.loader import DataLoader
 import torch_geometric.transforms as T
 
-embedding = MetaPath2Vec(
+
+"""embedding = MetaPath2Vec(
     edge_index_dict=edge_dic,
     embedding_dim=20,
     walk_length=3,
     context_size=2,
     metapath=meta,
 )
-embedding.state_dict
+embedding.state_dict"""
 
 class GNNNet(nn.Module):
-    def __init__(self, edge_dic: dict, action_dim: int, meta, action_choice=2):
+    def __init__(self, action_dim: int, action_choice=2):
         super(GNNNet, self).__init__()
         # 将节点映射为一个四维向量
 
@@ -52,13 +53,13 @@ class GNNNet(nn.Module):
         # self.bn1 = nn.BatchNorm1d(128)
         # self.bn2 = nn.BatchNorm1d(64)
 
-    def forward(self, x: dict, edge_index):
+    def forward(self, x, edge_index):
         """
         前向传播
         """
         # x = self.embedding(x)
         # x = x.squeeze(1)
-        x = self.embedding(x)
+        #x = self.embedding(x)
         x = self.conv1(x, edge_index).relu()
 
         # x, edge_index, _, batch, _, _ = self.pool1(x, edge_index)
