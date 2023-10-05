@@ -1,3 +1,4 @@
+from typing import Dict
 from torch_geometric.nn import (
     GCNConv,
     SAGEConv,
@@ -5,12 +6,15 @@ from torch_geometric.nn import (
     TopKPooling,
     # 聚合层
     SoftmaxAggregation,
-    GATConv,
     # 骨干网络
+    GATConv,
     GATv2Conv,
     GraphSAGE,
     Linear,
-    # embedding，增强泛化性
+    HANConv,
+    HeteroLinear,
+    HeteroDictLinear,
+    # embedding，增强泛化性，只是在节点没有信息的时候可以用
     MetaPath2Vec,
     # 转为异构图
     to_hetero,
@@ -32,6 +36,12 @@ import torch_geometric.transforms as T
     metapath=meta,
 )
 embedding.state_dict"""
+# dataset = OGB_MAG(root="./data")
+# data = dataset[0]
+# print(data.num_node_features)
+
+# raise SystemExit
+
 
 class GNNNet(nn.Module):
     def __init__(self, action_dim: int, action_choice=2):
@@ -59,7 +69,7 @@ class GNNNet(nn.Module):
         """
         # x = self.embedding(x)
         # x = x.squeeze(1)
-        #x = self.embedding(x)
+        # x = self.embedding(x)
         x = self.conv1(x, edge_index).relu()
 
         # x, edge_index, _, batch, _, _ = self.pool1(x, edge_index)
@@ -75,6 +85,80 @@ class GNNNet(nn.Module):
         value = self.linV(x).mean()
         x = torch.tanh(self.lin11(x))
         return x, value
+
+    def save_model(self, name):
+        """
+        保存模型
+        """
+        torch.save(self.state_dict(), name)
+
+    def load_model(self, name):
+        """
+        加载模型
+        """
+        pretrained_model = torch.load(name)
+        pretrained_model = {
+            key: value
+            for key, value in pretrained_model.items()
+            if (key in self.state_dict() and "lin3" not in key)
+        }
+        self.load_state_dict(pretrained_model, strict=False)
+
+
+class HGTNet(nn.Module):
+    def __init__(
+        self,
+        action_dim: int,
+        data: HeteroData,
+        hidden_channels=16,
+        num_layers=2,
+        action_choice=2,
+    ):
+        super().__init__()
+        # 将节点映射为一个四维向量
+        self.encoders = torch.nn.ModuleDict()
+        # 对所有节点进行分别编码，统一特征数，提高泛用性
+        for node_type in data.node_types:
+            self.encoders[node_type] = Linear(-1, hidden_channels)
+
+        self.conv_list = torch.nn.ModuleList()
+        for _ in range(num_layers):
+            conv = HANConv(hidden_channels, hidden_channels, data.metadata(), heads=2)
+            self.conv_list.append(conv)
+
+        self.linOut = HeteroDictLinear(
+            hidden_channels, action_dim * action_choice, data.metadata()[0]
+        )
+        self.linV = nn.Linear(hidden_channels, 1)
+
+        # self.bn1 = nn.BatchNorm1d(128)
+        # self.bn2 = nn.BatchNorm1d(64)
+
+    def forward(self, x_dict: dict, edge_index_dict):
+        """
+        前向传播
+        """
+        # 根据node type分别传播
+        x_dict = {
+            node_type: self.encoders[node_type](x).relu_()
+            for node_type, x in x_dict.items()
+        }
+        # print(x_dict["center"])
+        # print(x_dict["work_cell"])
+        # print(edge_index_dict)
+        for conv in self.conv_list:
+            x_dict = conv(x_dict, edge_index_dict)
+        # 两个输出，一个需要连接所有节点的特征然后输出一个value
+        full_x = torch.cat([x for x in x_dict.values()], dim=0)
+
+        value = self.linV(full_x).mean()
+        # 另一个需要根据每个节点用异质图线性层输出成一个dict
+        # dict无法直接用tanh激活，还需要for
+        action_dict: Dict[str, torch.Tensor] = self.linOut(x_dict)
+        for action in action_dict.values():
+            assert isinstance(action, torch.Tensor)
+            torch.tanh_(action)
+        return action_dict, value
 
     def save_model(self, name):
         """

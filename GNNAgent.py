@@ -4,10 +4,12 @@ from torch.utils.data import BatchSampler, SubsetRandomSampler
 from torch_geometric.data import Data, Batch, HeteroData
 from torch_geometric.loader import DataLoader
 from torch_geometric.nn import to_hetero, MetaPath2Vec
-from GNNNet import GNNNet
+from GNNNet import GNNNet, HGTNet
 import torch
 import torch.nn.functional as F
 import torch_geometric.transforms as T
+
+#T.Constant()
 
 
 class PPOMemory:
@@ -67,17 +69,17 @@ class PPOMemory:
 
     def generate_batches(self):
         data_list = []
-        hetero_data = HeteroData()
-        # 节点信息
-        for key in self.node_states.keys:
-            hetero_data[key].x = self.node_states[key]
-        # 边信息
-        for key in self.edge_indexs.keys:
-            node1, node2 = key.split("_to_")
-            hetero_data[node1, key, node2].edge_index = self.edge_indexs[key]
-
         for i in range(self.count):
-            data_list.append(Data(x=self.node_states[i], edge_index=self.edge_index[i]))
+            hetero_data = HeteroData()
+            # 节点信息
+            for key in self.node_states.keys:
+                hetero_data[key].x = self.node_states[key][i]
+            # 边信息
+            for key in self.edge_indexs.keys:
+                node1, node2 = key.split("_to_")
+                hetero_data[node1, key, node2].edge_index = self.edge_indexs[key][i]
+            data_list.append(hetero_data)
+            # data_list.append(Data(x=self.node_states[i], edge_index=self.edge_index[i]))
         batch = Batch.from_data_list(data_list)
 
         dataloader = DataLoader(data_list, batch_size=1, shuffle=False)
@@ -113,7 +115,6 @@ class Agent:
         self.gae_lambda = gae_lambda
         self.n_epochs = n_epochs
 
-        self.network = GNNNet(action_dim=2)
         self.clip = clip
 
         self.metadata = init_data.metadata()
@@ -123,17 +124,21 @@ class Agent:
 
         # TODO 需要添加加载训练过的模型的代码和训练embedding代码
         self.update_heterodata(init_data)
-        self.embedding = MetaPath2Vec(
+        self.network = HGTNet(
+            2,
+            self.undirect_data,
+        ).to(self.device)
+        """self.embedding = MetaPath2Vec(
             edge_index_dict=self.undirect_data.edge_index_dict,
-            embedding_dim=20,
-            walk_length=3,
-            context_size=2,
+            embedding_dim=10,
+            walk_length=1,
+            context_size=1,
             metapath=self.metadata[1],
-        )
-        # 相当于变了一个模型，还得todevice
-        self.network = to_hetero(self.network, self.metadata, aggr="sum").to(
+        )"""
+        # 使用to_hetro相当于变了一个模型，还得todevice
+        """self.network = to_hetero(self.network, self.metadata, aggr="sum").to(
             self.device
-        )
+        )"""
         self.optimizer = torch.optim.Adam(self.network.parameters(), lr=lr, eps=1e-5)
 
     def update_heterodata(self, data: HeteroData):
@@ -141,6 +146,12 @@ class Agent:
         self.undirect_data = T.ToUndirected()(data)
         # metadata函数第一个返回值是节点列表，第二个返回值是边列表
         self.metadata = self.undirect_data.metadata()
+
+    """def get_embedding(self, data: HeteroData):
+        for node_type in self.metadata[0]:
+            print(data[node_type])
+            print(self.embedding(node_type).size())
+        raise SystemExit"""
 
     def get_value(self, state: dict, edge_index: dict) -> torch.Tensor:
         """如果不是学习状态就只能构造一下data"""
@@ -173,13 +184,12 @@ class Agent:
         for key, value in edge_index.items():
             node1, node2 = key.split("_to_")
             hetero_data[node1, key, node2].edge_index = value
-        # embedding只能一次处理一个类型的节点
-        self.embedding('work_cell')
+
         hetero_data = T.ToUndirected()(hetero_data)
 
         """ 如果不是学习状态就只能构造一下data """
-        # data = Data(x=state, edge_index=edge_index)
-        logits, _ = self.network(state, edge_index)
+
+        logits, _ = self.network(hetero_data.x_dict, hetero_data.edge_index_dict)
         print(logits)
         raise SystemExit
         # 前work_cell_num是
@@ -242,8 +252,9 @@ class Agent:
         # flat_states = batches.reshape(-1, batches.shape[-1])
         flat_actions = total_actions.view(-1, total_actions.shape[-1])
         flat_probs = log_probs.view(-1, log_probs.shape[-1])
+        # 计算GAE
         with torch.no_grad():
-            last_value = self.get_value(last_node_state, edge_index).view(1, -1)
+            last_value = self.get_value(last_node_state, edge_index)
             advantages = torch.zeros_like(rewards).to(self.device)
             for t in reversed(range(self.batch_size)):
                 last_gae_lam = 0

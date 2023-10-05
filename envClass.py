@@ -3,7 +3,7 @@ import numpy as np
 import networkx as nx
 from matplotlib import pyplot as plt
 import torch
-from typing import List
+from typing import List, Dict, Tuple
 
 
 class StateCode(Enum):
@@ -107,7 +107,10 @@ class EnvRun:
         product_goal=500,
     ):
         self.device = device
-        self.edge_index = []
+        self.edge_index: Dict[str, List] = {
+            "work_cell_to_center": [],
+            "center_to_work_cell": [],
+        }
         self.work_cell_num = work_cell_num
         self.work_cell_state_num = 4
         self.function_num = function_num
@@ -168,18 +171,21 @@ class EnvRun:
                 # 边信息
                 # 从生产到中转
                 if cell_fun_id == product_id:
-                    self.edge_index.append([work_cell.cell_id, center.cell_id])
+                    self.edge_index["work_cell_to_center"].append(
+                        [work_cell.cell_id, center.cell_id]
+                    )
                     graph.add_edge(work_cell.cell_id, center.cell_id)
                 # 从中转到下一步
                 if product_id == cell_fun_id - 1:
-                    self.edge_index.append([center.cell_id, work_cell.cell_id])
+                    self.edge_index["center_to_work_cell"].append(
+                        [center.cell_id, work_cell.cell_id]
+                    )
                     graph.add_edge(center.cell_id, work_cell.cell_id)
-        self.edge_index = np.array(self.edge_index)
-        self.edge_index = torch.tensor(self.edge_index, dtype=torch.int64).T.to(
-            self.device
-        )
-        self.edge_index = {"work_cell_to_center": self.edge_index}
-
+        for key, value in self.edge_index.items():
+            value = np.array(value)
+            self.edge_index[key] = torch.tensor(value, dtype=torch.int64).T.to(
+                self.device
+            )
         # self.edge_index = torch.tensor(np.array(graph.edges()), dtype=torch.int64).T
         return graph
 
