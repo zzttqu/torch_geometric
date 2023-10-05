@@ -37,7 +37,9 @@ class PPOMemory:
                 device
             )
         for key, value in edge_dic.items():
-            self.edge_indexs[key] = torch.zeros((batch_size, 2, value)).to(device)
+            self.edge_indexs[key] = torch.zeros(
+                (batch_size, 2, value), dtype=torch.int64
+            ).to(device)
         self.values = torch.zeros(batch_size).to(device)
         self.rewards = torch.zeros(batch_size).to(device)
         self.dones = torch.zeros(batch_size).to(device)
@@ -67,21 +69,30 @@ class PPOMemory:
 
         self.count += 1
 
-    def generate_batches(self):
+    def generate_batches(
+        self,
+    ) -> (
+        Batch,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        Dict[str, torch.Tensor],
+        Dict[str, torch.Tensor],
+    ):
         data_list = []
         for i in range(self.count):
             hetero_data = HeteroData()
             # 节点信息
-            for key in self.node_states.keys:
-                hetero_data[key].x = self.node_states[key][i]
+            for key, _value in self.node_states.items():
+                hetero_data[key].x = _value[i]
             # 边信息
-            for key in self.edge_indexs.keys:
-                hetero_data[key].edge_index = self.edge_indexs[key][i]
+            for key, _value in self.edge_indexs.items():
+                hetero_data[key].edge_index = _value[i]
             data_list.append(hetero_data)
             # data_list.append(Data(x=self.node_states[i], edge_index=self.edge_index[i]))
         batch = Batch.from_data_list(data_list)
 
-        dataloader = DataLoader(data_list, batch_size=1, shuffle=False)
+        # dataloader = DataLoader(data_list, batch_size=1, shuffle=False)
         self.count = 0
         return (
             batch,
@@ -227,7 +238,6 @@ class Agent:
         action_material_dist = Categorical(logits=logits)
         action = action_dic["work_cell"][index]
         all_log_probs = torch.stack([action_material_dist.log_prob(action)])
-
         return all_log_probs.sum(0)
 
     def load_model(self, name):
@@ -296,13 +306,15 @@ class Agent:
             for index in BatchSampler(
                 SubsetRandomSampler(range(self.batch_size)), mini_batch_size, False
             ):
-                mini_batch = Batch.index_select(batch, index)
+                assert isinstance(batch, Batch)
+                mini_batch = batch.index_select(index)
                 new_log_prob = self.get_batch_actions_probs(
                     index,
                     mini_batch,
                     total_actions,
                 )
-                ratios = torch.exp(new_log_prob - log_probs[index]).sum(1)
+                # TODO 这里感觉应该链接起来变成一个
+                ratios = torch.exp(new_log_prob - log_probs["work_cell"][index]).sum(1)
                 surr1 = ratios * flat_advantages[index]
                 surr2 = torch.clamp(ratios, 1 - self.clip, 1 + self.clip)
                 actor_loss: torch.Tensor = -torch.min(surr1, surr2)
