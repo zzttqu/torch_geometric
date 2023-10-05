@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Tuple
 from torch_geometric.nn import (
     GCNConv,
     SAGEConv,
@@ -135,18 +135,26 @@ class HGTNet(nn.Module):
         # self.bn2 = nn.BatchNorm1d(64)
 
     def forward(
-        self, x_dict: Dict[str, torch.Tensor], edge_index_dict: Dict[str, torch.Tensor]
+        self,
+        x_dict: Dict[str, torch.Tensor],
+        edge_index_dict: Dict[str, torch.Tensor],
     ) -> (Dict[str, torch.Tensor], torch.Tensor):
         """
         前向传播
         """
-        # 根据node type分别传播
+        norm_edge_index_dict = {}
+        for key, _value in edge_index_dict.items():
+            node1, node2 = key.split("_to_")
+            norm_edge_index_dict[f"{node1}", f"{key}", f"{node2}"] = _value
+
+        # 根据node type分别传播 
         x_dict = {
             node_type: self.encoders[node_type](x).relu_()
             for node_type, x in x_dict.items()
         }
+
         for conv in self.conv_list:
-            x_dict = conv(x_dict, edge_index_dict)
+            x_dict = conv(x_dict, norm_edge_index_dict)
         # 两个输出，一个需要连接所有节点的特征然后输出一个value
         full_x = torch.cat([x for x in x_dict.values()], dim=0)
 

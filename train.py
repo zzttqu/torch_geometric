@@ -9,6 +9,32 @@ from torch.utils.tensorboard import SummaryWriter
 import csv
 from datetime import datetime
 
+
+def show():
+    # 可视化
+    node_states = nx.get_node_attributes(graph, "state")
+    node_function = nx.get_node_attributes(graph, "function")
+    nodes = nx.nodes(graph)
+    edges = nx.edges(graph)
+    node_labels = {}
+    edge_labels = {}
+    pos = {}
+    for node in nodes:
+        # 这里只用\n就可以换行了
+        node_labels[
+            node
+        ] = f"{node}节点：\n 状态：{node_states[node]} \n 功能：{node_function[node]}"
+        pos[node] = (node_function, node)
+
+    # print(node_labels)
+    pos = nx.spring_layout(graph)
+    nx.draw_networkx_nodes(graph, pos)
+    nx.draw_networkx_labels(graph, pos, node_labels)
+    # nx.draw_networkx_edges(graph, pos, connectionstyle="arc3,rad=0.2")
+    nx.draw_networkx_edges(graph, pos)
+    plt.show()
+
+
 if __name__ == "__main__":
     # # 写入一个csv文件
     # with open("./log.csv", "a", newline="") as csvfile:
@@ -67,11 +93,12 @@ if __name__ == "__main__":
     obs_states, edge_index, reward, dones, _ = env.get_obs()
     hetero_data = HeteroData()
     # 节点信息
-    for key, value in obs_states.items():
-        hetero_data[key].x = value
+    for key, _value in obs_states.items():
+        hetero_data[key].x = _value
         # 边信息
-    for key, value in edge_index.items():
-        hetero_data[key].edge_index = value
+    for key, _value in edge_index.items():
+        node1, node2 = key.split("_to_")
+        hetero_data[f"{node1}", f"{key}", f"{node2}"].edge_index = _value
     meta = hetero_data.metadata()
     agent = Agent(
         work_cell_num,
@@ -84,13 +111,6 @@ if __name__ == "__main__":
     agent.load_model("last_model.pth")
     memory = PPOMemory(
         batch_size,
-        {"work_cell": [work_cell_num, 4], "center": [function_num, 3]},
-        {
-            edge_name: edge_shape.shape[1]
-            for edge_name, edge_shape in edge_index.items()
-        },
-        4,
-        2,
         device,
     )
     init_time = datetime.now()
@@ -98,20 +118,25 @@ if __name__ == "__main__":
     now_time = datetime.now()
     # print(obs_states)
     # 添加计算图
-    # writer.add_graph(
-    #    agent.network, input_to_model=[obs_states, edge_index], verbose=False
-    # )
+    agent.network(obs_states, edge_index)
+    writer.add_graph(
+        agent.network, input_to_model=[obs_states, edge_index], verbose=False,use_strict_trace=False
+    )
     # 添加
+    show()
     while total_step < init_step + max_steps:
         total_step += 1
         agent.network.eval()
         with torch.no_grad():
             raw, log_prob = agent.get_action(obs_states, edge_index)
             value = agent.get_value(obs_states, edge_index)
-        # 这个raw少了
+        # 这个raw因为是字典，这里变了之后会影响get action中的raw
         for key, _value in raw.items():
             raw[key] = _value.cpu()
         env.update_all(raw)
+        # 所以需要搬回cuda中
+        for key, _value in raw.items():
+            raw[key] = _value.to(device)
         obs_states, edge_index, reward, dones, episode_step = env.get_obs()
         writer.add_scalars(
             "step/products",
@@ -153,25 +178,3 @@ if __name__ == "__main__":
     agent.save_model("last_model.pth")
     total_time = (datetime.now() - init_time).seconds // 60
     print(f"总计用时：{total_time}分钟，运行{total_step}步，学习{learn_num}次")
-
-    # 可视化
-    node_states = nx.get_node_attributes(graph, "state")
-    node_function = nx.get_node_attributes(graph, "function")
-    nodes = nx.nodes(graph)
-    edges = nx.edges(graph)
-    node_labels = {}
-    edge_labels = {}
-    for node in nodes:
-        # 这里只用\n就可以换行了
-        node_labels[
-            node
-        ] = f"{node}节点：\n 状态：{node_states[node]} \n 功能：{node_function[node]}"
-
-    # print(node_labels)
-    pos = nx.spring_layout(graph)
-    nx.draw_networkx_nodes(graph, pos)
-    nx.draw_networkx_labels(graph, pos, node_labels)
-    # nx.draw_networkx_edges(graph, pos, connectionstyle="arc3,rad=0.2")
-    nx.draw_networkx_edges(graph, pos)
-
-    # plt.show()

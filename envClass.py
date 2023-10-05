@@ -107,15 +107,11 @@ class EnvRun:
         product_goal=500,
     ):
         self.device = device
-        self.edge_index: Dict[Tuple[str, str, str], Union[List, torch.Tensor]] = {}
+        self.edge_index: Dict[str, Union[List, torch.Tensor]] = {}
         # 构建字典的index
         node_type_list = ["work_cell", "center", "work_cell"]
         for i in range(2):
-            self.edge_index[
-                f"{node_type_list[i]}",
-                f"{node_type_list[i]}_to_{node_type_list[i+1]}",
-                f"{node_type_list[i+1]}",
-            ] = []
+            self.edge_index[f"{node_type_list[i]}_to_{node_type_list[i+1]}"] = []
         self.work_cell_num = work_cell_num
         self.work_cell_state_num = 4
         self.function_num = function_num
@@ -158,17 +154,21 @@ class EnvRun:
         graph = nx.DiGraph()
         # node_id = np.zeros((self.work_cell_num + self.function_num), dtype=int)
         index = 0
+        # 可视化节点添加
         for worker in self.work_cell_list:
             graph.add_node(
                 worker.cell_id, state=worker.state.value, function=worker.function
             )
             index += 1
         for center in self.center_list:
+            # 可视化节点需要id不能重复的
             graph.add_node(
-                center.cell_id, state=center.state.value, function=center.product_id
+                center.cell_id + self.work_cell_num,
+                state=center.state.value,
+                function=center.product_id,
             )
             index += 1
-
+        # 生成边
         for work_cell in self.work_cell_list:
             for center in self.center_list:
                 cell_fun_id = work_cell.function
@@ -176,16 +176,22 @@ class EnvRun:
                 # 边信息
                 # 从生产到中转
                 if cell_fun_id == product_id:
-                    self.edge_index[
-                        "work_cell", "work_cell_to_center", "center"
-                    ].append([work_cell.cell_id, center.cell_id])
-                    graph.add_edge(work_cell.cell_id, center.cell_id)
+                    self.edge_index["work_cell_to_center"].append(
+                        [work_cell.cell_id, center.cell_id]
+                    )
+                    # 可视化节点需要id不能重复的
+                    graph.add_edge(
+                        work_cell.cell_id, center.cell_id + self.work_cell_num
+                    )
                 # 从中转到下一步
                 if product_id == cell_fun_id - 1:
-                    self.edge_index[
-                        "center", "center_to_work_cell", "work_cell"
-                    ].append([center.cell_id, work_cell.cell_id])
-                    graph.add_edge(center.cell_id, work_cell.cell_id)
+                    self.edge_index["center_to_work_cell"].append(
+                        [center.cell_id, work_cell.cell_id]
+                    )
+                    # 可视化节点需要id不能重复的
+                    graph.add_edge(
+                        center.cell_id + self.work_cell_num, work_cell.cell_id
+                    )
         for key, value in self.edge_index.items():
             value = np.array(value)
             self.edge_index[key] = torch.tensor(value, dtype=torch.int64).T.to(
@@ -277,7 +283,7 @@ class EnvRun:
             self.done = 1
         # 完成任务目标
         if self.total_products[-1] > self.product_goal:
-            self.reward += 10
+            self.reward += 5
             self.done = 1
 
     def get_obs(self):
