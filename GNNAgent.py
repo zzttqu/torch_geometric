@@ -1,25 +1,25 @@
 import os
+from typing import Dict, List, Tuple
 from torch.distributions import Categorical
 from torch.utils.data import BatchSampler, SubsetRandomSampler
 from torch_geometric.data import Data, Batch, HeteroData
 from torch_geometric.loader import DataLoader
-from torch_geometric.nn import to_hetero, MetaPath2Vec
 from GNNNet import GNNNet, HGTNet
 import torch
 import torch.nn.functional as F
 import torch_geometric.transforms as T
 
-#T.Constant()
+# T.Constant()
 
 
 class PPOMemory:
     def __init__(
         self,
-        batch_size,
-        node_dic: dict,
-        edge_dic,
-        state_dim,
-        action_dim,
+        batch_size: int,
+        node_dic: Dict[str, List[int]],
+        edge_dic: Dict[str, int],
+        state_dim: int,
+        action_dim: int,
         device,
     ):
         self.node_states = {}
@@ -27,13 +27,13 @@ class PPOMemory:
         self.edge_indexs = {}
         self.log_probs = {}
         for key, value in node_dic.items():
-            self.node_states[key] = torch.zeros((batch_size, value, state_dim)).to(
+            self.node_states[key] = torch.zeros((batch_size, value[0], value[1])).to(
                 device
             )
-            self.total_actions[key] = torch.zeros((batch_size, value * action_dim)).to(
-                device
-            )
-            self.log_probs[key] = torch.zeros((batch_size, value * action_dim)).to(
+            self.total_actions[key] = torch.zeros(
+                (batch_size, value[0] * action_dim)
+            ).to(device)
+            self.log_probs[key] = torch.zeros((batch_size, value[0] * action_dim)).to(
                 device
             )
         for key, value in edge_dic.items():
@@ -45,22 +45,22 @@ class PPOMemory:
 
     def remember(
         self,
-        node_state: dict,
-        edge_index: dict,
+        node_state: Dict[str, torch.Tensor],
+        edge_index: Dict[Tuple[str, str, str], torch.Tensor],
         value: torch.Tensor,
         reward: torch.Tensor,
         done: int,
-        total_action: dict,
-        log_probs: dict,
+        total_action: Dict[str, torch.Tensor],
+        log_probs: Dict[str, torch.Tensor],
     ):
-        for key, value in node_state.items():
-            self.node_states[key][self.count] = value
-        for key, value in total_action.items():
-            self.total_actions[key][self.count] = value
-        for key, value in log_probs.items():
-            self.log_probs[key][self.count] = value
-        for key, value in edge_index.items():
-            self.edge_indexs[key][self.count] = value
+        for key, _value in node_state.items():
+            self.node_states[key][self.count] = _value
+        for key, _value in total_action.items():
+            self.total_actions[key][self.count] = _value
+        for key, _value in log_probs.items():
+            self.log_probs[key][self.count] = _value
+        for key, _value in edge_index.items():
+            self.edge_indexs[key][self.count] = _value
         self.values[self.count] = value
         self.rewards[self.count] = reward
         self.dones[self.count] = done
@@ -76,8 +76,7 @@ class PPOMemory:
                 hetero_data[key].x = self.node_states[key][i]
             # 边信息
             for key in self.edge_indexs.keys:
-                node1, node2 = key.split("_to_")
-                hetero_data[node1, key, node2].edge_index = self.edge_indexs[key][i]
+                hetero_data[key].edge_index = self.edge_indexs[key][i]
             data_list.append(hetero_data)
             # data_list.append(Data(x=self.node_states[i], edge_index=self.edge_index[i]))
         batch = Batch.from_data_list(data_list)
@@ -143,7 +142,8 @@ class Agent:
 
     def update_heterodata(self, data: HeteroData):
         """更新heterodata"""
-        self.undirect_data = T.ToUndirected()(data)
+        # TODO 暂时去掉无向边
+        # self.undirect_data = T.ToUndirected()(data)
         # metadata函数第一个返回值是节点列表，第二个返回值是边列表
         self.metadata = self.undirect_data.metadata()
 
@@ -153,73 +153,80 @@ class Agent:
             print(self.embedding(node_type).size())
         raise SystemExit"""
 
-    def get_value(self, state: dict, edge_index: dict) -> torch.Tensor:
-        """如果不是学习状态就只能构造一下data"""
-        hetero_data = HeteroData()
+    def get_value(
+        self,
+        state: Dict[str, torch.Tensor],
+        edge_index: Dict[Tuple[str, str, str], torch.Tensor],
+    ) -> torch.Tensor:
+        """如果不是学习状态就只能构造一下data
+        不用构造了，因为需要的就是网络要的
+         hetero_data = HeteroData()
         # 节点信息
         for key, value in state.items():
             hetero_data[key].x = value
         # 边信息
         for key, value in edge_index.items():
             node1, node2 = key.split("_to_")
-            hetero_data[node1, key, node2].edge_index = value
-        # data = Data(x=state, edge_index=edge_index)
-        _, value = self.network(T.ToUndirected()(hetero_data))
+            hetero_data[node1, key, node2].edge_index = value"""
+        _, value = self.network(state, edge_index)
         return value
 
-    def get_batch_values(self, batches):
-        all_values = []
-        for data in batches:
-            _, value = self.network(data)
-            all_values.append(value)
-        all_values = torch.stack(all_values)
-        return all_values
-
-    def get_action(self, state: dict, edge_index: dict, raw=None):
-        hetero_data = HeteroData()
+    def get_action(
+        self,
+        state: Dict[str, torch.Tensor],
+        edge_index: Dict[Tuple[str, str, str], torch.Tensor],
+        raw=None,
+    ) -> (torch.Tensor, torch.Tensor):
+        """hetero_data = HeteroData()
         # 节点信息
         for key, value in state.items():
             hetero_data[key].x = value
         # 边信息
         for key, value in edge_index.items():
             node1, node2 = key.split("_to_")
-            hetero_data[node1, key, node2].edge_index = value
+            hetero_data[node1, key, node2].edge_index = value"""
+        # TODO 暂时去掉无向边
+        # hetero_data = T.ToUndirected()(hetero_data)
 
-        hetero_data = T.ToUndirected()(hetero_data)
+        logits, _ = self.network(state, edge_index)
+        # TODO 这里是写死了，只用workcell
+        workcell_logits = logits["work_cell"]
 
-        """ 如果不是学习状态就只能构造一下data """
-
-        logits, _ = self.network(hetero_data.x_dict, hetero_data.edge_index_dict)
-        print(logits)
-        raise SystemExit
-        # 前work_cell_num是
-        # print(logits[0 : self.work_cell_num].shape)
         # 第一项是功能动作，第二项是是否接受上一级运输
         # 目前不需要对center进行动作，所以暂时不要后边的内容
-        logits = logits[0 : self.work_cell_num]
-        logits = logits.view((-1, 2))
-        action_material_dist = Categorical(logits=logits)
+        workcell_logits = workcell_logits.view((-1, 2))
+        action_material_dist = Categorical(logits=workcell_logits)
         # 前半段是动作，后半段是接受动作
         if raw is None:
             raw = action_material_dist.sample()
         # materials = raw[self.work_cell_num :]
         # actions = raw[: self.work_cell_num]
         all_log_probs = torch.stack([action_material_dist.log_prob(raw)])
+        # TODO 这里之后可以修改增加扩展性
+        return {"work_cell": raw}, {"work_cell": all_log_probs.sum(0)}
 
-        return raw, all_log_probs.sum(0)
+    def get_batch_values(self, batches: Batch):
+        all_values = []
+        for data in batches:
+            _, value = self.network(data.x_dict, data.edge_index_dict)
+            all_values.append(value)
+        all_values = torch.stack(all_values)
+        return all_values
 
-    def get_batch_actions_probs(self, batches: Batch, raw):
+    def get_batch_actions_probs(self, index, batches: Batch, action_dic):
         all_logits = []
         for data in batches:
-            logits, _ = self.network(data)
-            logits = logits[:][0 : self.work_cell_num]
+            logits, _ = self.network(data.x_dict, data.edge_index_dict)
+            # TODO 这里之后可以修改增加扩展性
+            logits = logits["work_cell"]
             # print(logits.shape,111)
             # 第一项是功能动作，第二项是是否接受上一级运输
             logits = logits.view((-1, 2))
             all_logits.append(logits)
         all_logits = torch.cat(all_logits, dim=0)
         action_material_dist = Categorical(logits=logits)
-        all_log_probs = torch.stack([action_material_dist.log_prob(raw)])
+        action = action_dic["work_cell"][index]
+        all_log_probs = torch.stack([action_material_dist.log_prob(action)])
 
         return all_log_probs.sum(0)
 
@@ -240,9 +247,10 @@ class Agent:
         last_node_state,
         last_done,
         edge_index,
+        mini_batch_size=16,
     ):
         (
-            batches,
+            batch,
             values,
             rewards,
             dones,
@@ -250,8 +258,8 @@ class Agent:
             log_probs,
         ) = ppo_memory.generate_batches()
         # flat_states = batches.reshape(-1, batches.shape[-1])
-        flat_actions = total_actions.view(-1, total_actions.shape[-1])
-        flat_probs = log_probs.view(-1, log_probs.shape[-1])
+        # flat_actions = total_actions.view(-1, total_actions.shape[-1])
+        # flat_probs = log_probs.view(-1, log_probs.shape[-1])
         # 计算GAE
         with torch.no_grad():
             last_value = self.get_value(last_node_state, edge_index)
@@ -286,16 +294,19 @@ class Agent:
         for _ in range(self.n_epochs):
             # 这里是设置minibatch，也就是送入图神经网络的大小
             for index in BatchSampler(
-                SubsetRandomSampler(range(self.batch_size)), 16, False
+                SubsetRandomSampler(range(self.batch_size)), mini_batch_size, False
             ):
+                mini_batch = Batch.index_select(batch, index)
                 new_log_prob = self.get_batch_actions_probs(
-                    Batch.index_select(batches, index), total_actions[index]
+                    index,
+                    mini_batch,
+                    total_actions,
                 )
-                ratios = torch.exp(new_log_prob - flat_probs[index]).sum(1)
+                ratios = torch.exp(new_log_prob - log_probs[index]).sum(1)
                 surr1 = ratios * flat_advantages[index]
                 surr2 = torch.clamp(ratios, 1 - self.clip, 1 + self.clip)
                 actor_loss: torch.Tensor = -torch.min(surr1, surr2)
-                new_value = self.get_batch_values(batches[index])
+                new_value = self.get_batch_values(mini_batch)
                 critic_loss = F.mse_loss(flat_returns[index], new_value.view(-1))
                 total_loss: torch.Tensor = actor_loss.mean() + 0.5 * critic_loss
                 self.optimizer.zero_grad()

@@ -134,7 +134,9 @@ class HGTNet(nn.Module):
         # self.bn1 = nn.BatchNorm1d(128)
         # self.bn2 = nn.BatchNorm1d(64)
 
-    def forward(self, x_dict: dict, edge_index_dict):
+    def forward(
+        self, x_dict: Dict[str, torch.Tensor], edge_index_dict: Dict[str, torch.Tensor]
+    ) -> (Dict[str, torch.Tensor], torch.Tensor):
         """
         前向传播
         """
@@ -143,9 +145,6 @@ class HGTNet(nn.Module):
             node_type: self.encoders[node_type](x).relu_()
             for node_type, x in x_dict.items()
         }
-        # print(x_dict["center"])
-        # print(x_dict["work_cell"])
-        # print(edge_index_dict)
         for conv in self.conv_list:
             x_dict = conv(x_dict, edge_index_dict)
         # 两个输出，一个需要连接所有节点的特征然后输出一个value

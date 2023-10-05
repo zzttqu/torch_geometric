@@ -3,7 +3,7 @@ import numpy as np
 import networkx as nx
 from matplotlib import pyplot as plt
 import torch
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Union
 
 
 class StateCode(Enum):
@@ -107,10 +107,15 @@ class EnvRun:
         product_goal=500,
     ):
         self.device = device
-        self.edge_index: Dict[str, List] = {
-            "work_cell_to_center": [],
-            "center_to_work_cell": [],
-        }
+        self.edge_index: Dict[Tuple[str, str, str], Union[List, torch.Tensor]] = {}
+        # 构建字典的index
+        node_type_list = ["work_cell", "center", "work_cell"]
+        for i in range(2):
+            self.edge_index[
+                f"{node_type_list[i]}",
+                f"{node_type_list[i]}_to_{node_type_list[i+1]}",
+                f"{node_type_list[i+1]}",
+            ] = []
         self.work_cell_num = work_cell_num
         self.work_cell_state_num = 4
         self.function_num = function_num
@@ -171,15 +176,15 @@ class EnvRun:
                 # 边信息
                 # 从生产到中转
                 if cell_fun_id == product_id:
-                    self.edge_index["work_cell_to_center"].append(
-                        [work_cell.cell_id, center.cell_id]
-                    )
+                    self.edge_index[
+                        "work_cell", "work_cell_to_center", "center"
+                    ].append([work_cell.cell_id, center.cell_id])
                     graph.add_edge(work_cell.cell_id, center.cell_id)
                 # 从中转到下一步
                 if product_id == cell_fun_id - 1:
-                    self.edge_index["center_to_work_cell"].append(
-                        [center.cell_id, work_cell.cell_id]
-                    )
+                    self.edge_index[
+                        "center", "center_to_work_cell", "work_cell"
+                    ].append([center.cell_id, work_cell.cell_id])
                     graph.add_edge(center.cell_id, work_cell.cell_id)
         for key, value in self.edge_index.items():
             value = np.array(value)
@@ -250,9 +255,9 @@ class EnvRun:
         for action, work_cell in zip(workcell_action, self.work_cell_list):
             work_cell.work(action)
 
-    def update_all(self, raw: torch.Tensor):
+    def update_all(self, raw: Dict[str, torch.Tensor]):
         # 这里需要注意是raw顺序是一个节点，两个动作，不能这样拆分，需要重新折叠
-        work_cells = raw.view((-1, 2))
+        work_cells = raw["work_cell"].view((-1, 2))
         self.update_all_work_cell(work_cells[:, 0])
         self.deliver_centers_material(work_cells[:, 1])
 
@@ -288,7 +293,7 @@ class EnvRun:
         for center in self.center_list:
             center_states[center.cell_id] = center.get_state()
 
-        obs_states = {
+        obs_states: Dict[str, torch.Tensor] = {
             "work_cell": work_cell_states,
             "center": center_states,
         }

@@ -71,11 +71,8 @@ if __name__ == "__main__":
         hetero_data[key].x = value
         # 边信息
     for key, value in edge_index.items():
-        node1, node2 = key.split("_to_")
-        hetero_data[node1, key, node2].edge_index = value
-    #meta = hetero_data.metadata()
-    #print(hetero_data.edge_index_dict, meta[1])
-    #raise SystemExit
+        hetero_data[key].edge_index = value
+    meta = hetero_data.metadata()
     agent = Agent(
         work_cell_num,
         function_num,
@@ -87,8 +84,11 @@ if __name__ == "__main__":
     agent.load_model("last_model.pth")
     memory = PPOMemory(
         batch_size,
-        {"work_cell": work_cell_num, "center": function_num},
-        {"work_cell_to_center": edge_index["work_cell_to_center"].shape[1]},
+        {"work_cell": [work_cell_num, 4], "center": [function_num, 3]},
+        {
+            edge_name: edge_shape.shape[1]
+            for edge_name, edge_shape in edge_index.items()
+        },
         4,
         2,
         device,
@@ -109,7 +109,9 @@ if __name__ == "__main__":
             raw, log_prob = agent.get_action(obs_states, edge_index)
             value = agent.get_value(obs_states, edge_index)
         # 这个raw少了
-        env.update_all(raw.cpu())
+        for key, _value in raw.items():
+            raw[key] = _value.cpu()
+        env.update_all(raw)
         obs_states, edge_index, reward, dones, episode_step = env.get_obs()
         writer.add_scalars(
             "step/products",
@@ -130,7 +132,6 @@ if __name__ == "__main__":
                 last_node_state=obs_states,
                 last_done=dones,
                 edge_index=edge_index,
-                writer=writer,
             )
             learn_time = (datetime.now() - now_time).seconds
             print(f"第{learn_num}次学习，学习用时：{learn_time}秒")
