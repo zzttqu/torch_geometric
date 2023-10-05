@@ -60,14 +60,14 @@ if __name__ == "__main__":
     torch.set_printoptions(precision=3, sci_mode=False)
     # 神奇trick
     torch.manual_seed(3407)
-    function_num = 3
-    work_cell_num = 12
+    function_num = 6
+    work_cell_num = 30
     batch_size = 64
 
     total_step = init_step
     max_steps = 1000
     episode_step_max = 128
-    product_goal = 100
+    product_goal = 200
 
     episode_num = 0
     learn_num = 0
@@ -99,12 +99,11 @@ if __name__ == "__main__":
     for key, _value in edge_index.items():
         node1, node2 = key.split("_to_")
         hetero_data[f"{node1}", f"{key}", f"{node2}"].edge_index = _value
-    meta = hetero_data.metadata()
     agent = Agent(
         work_cell_num,
         function_num,
         batch_size=batch_size,
-        n_epochs=32,
+        n_epochs=16,
         init_data=hetero_data,
     )
 
@@ -120,7 +119,10 @@ if __name__ == "__main__":
     # 添加计算图
     agent.network(obs_states, edge_index)
     writer.add_graph(
-        agent.network, input_to_model=[obs_states, edge_index], verbose=False,use_strict_trace=False
+        agent.network,
+        input_to_model=[obs_states, edge_index],
+        verbose=False,
+        use_strict_trace=False,
     )
     # 添加
     show()
@@ -177,4 +179,7 @@ if __name__ == "__main__":
     # 神经网络要输出每个工作站的工作，功能和传输与否
     agent.save_model("last_model.pth")
     total_time = (datetime.now() - init_time).seconds // 60
+    with open("./log.csv", "a", newline="") as csvfile:
+        csv_writer = csv.writer(csvfile)
+        csv_writer.writerow([total_step, f"{reward:.3f}"])
     print(f"总计用时：{total_time}分钟，运行{total_step}步，学习{learn_num}次")

@@ -6,6 +6,7 @@ from GNNAgent import Agent, PPOMemory
 from envClass import EnvRun
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
+from torch_geometric.data import Data, Batch, HeteroData
 
 if __name__ == "__main__":
     function_num = 12
@@ -24,11 +25,22 @@ if __name__ == "__main__":
         episode_step_max=episode_step_max,
         product_goal=product_goal,
     )
+    obs_states, edge_index, reward, dones, _ = env.get_obs()
+    hetero_data = HeteroData()
+    # 节点信息
+    for key, _value in obs_states.items():
+        hetero_data[key].x = _value
+        # 边信息
+    for key, _value in edge_index.items():
+        node1, node2 = key.split("_to_")
+        hetero_data[f"{node1}", f"{key}", f"{node2}"].edge_index = _value
+    meta = hetero_data.metadata()
     agent = Agent(
         work_cell_num,
         function_num,
         batch_size=batch_size,
         n_epochs=32,
+        init_data=hetero_data,
     )
     graph = env.build_edge()
     writer = SummaryWriter(log_dir="logs/test")
@@ -45,8 +57,13 @@ if __name__ == "__main__":
         with torch.no_grad():
             raw, log_prob = agent.get_action(obs_states, edge_index)
             value = agent.get_value(obs_states, edge_index)
-        # 这个raw少了
-        env.update_all(raw.cpu())
+        # 这个raw因为是字典，这里变了之后会影响get action中的raw
+        for key, _value in raw.items():
+            raw[key] = _value.cpu()
+        env.update_all(raw)
+        # 所以需要搬回cuda中
+        for key, _value in raw.items():
+            raw[key] = _value.to(device)
         obs_states, edge_index, reward, dones, episode_step = env.get_obs()
         writer.add_scalars(
             "step/products",

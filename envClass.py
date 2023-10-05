@@ -270,11 +270,14 @@ class EnvRun:
         # 额定扣血
         # self.reward += -0.05
         # 不生产就扣血
-        if self.step_products[-1] < 1:
-            self.reward += -0.05
+        # if self.step_products[-1] < 1:
+        #   self.reward += -0.05
         # 生产一个有奖励
-        else:
-            self.reward += self.step_products[-1] * 0.005
+
+        for i, prod_num in enumerate(self.step_products):
+            if prod_num < 6:
+                self.reward -= 0.05
+            self.reward += prod_num * 0.005 * i
         self.episode_step += 1
         self.done = 0
         # 超过步数

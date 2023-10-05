@@ -110,7 +110,7 @@ class HGTNet(nn.Module):
         self,
         action_dim: int,
         data: HeteroData,
-        hidden_channels=16,
+        hidden_channels=64,
         num_layers=2,
         action_choice=2,
     ):
