@@ -133,6 +133,13 @@ class EnvRun:
                     materials=6,
                 )
             )
+        # 各级别生产能力
+        self.product_capacity = [0 for _ in range(self.function_num)]
+        for i in range(self.function_num):
+            for work_cell in self.work_cell_list:
+                if work_cell.function == i:
+                    self.product_capacity[i] += work_cell.speed
+
         # 初始化集散中心
         self.center_list: List[TransitCenter] = []
         for i in range(function_num):
@@ -201,15 +208,14 @@ class EnvRun:
         return graph
 
     def deliver_centers_material(self, workcell_get_material):
-        # workcell_get_material = torch.tensor([1, 1, 1, 1, 1, 1], dtype=torch.float)
         #  计算有同一功能有几个节点要接收
-        collect = torch.zeros(self.work_cell_num)
+        collect = np.zeros(self.work_cell_num)
         for indices in self.function_group:
             if workcell_get_material[indices].sum() != 0:
                 softmax_value = 1 / (workcell_get_material[indices].sum())
             else:
                 softmax_value = 0
-            collect[indices] = softmax_value * workcell_get_material[indices].float()
+            collect[indices] = softmax_value * workcell_get_material[indices]
             # print(f"总共有{workcell_get_material[indices]}")
             # print(f"softmax_value{softmax_value}")
             # print(indices)
@@ -261,23 +267,38 @@ class EnvRun:
         for action, work_cell in zip(workcell_action, self.work_cell_list):
             work_cell.work(action)
 
-    def update_all(self, raw: Dict[str, torch.Tensor]):
+    def update_all(self, all_action: torch.Tensor):
         # 这里需要注意是raw顺序是一个节点，两个动作，不能这样拆分，需要重新折叠
-        work_cells = raw["work_cell"].view((-1, 2))
-        self.update_all_work_cell(work_cells[:, 0])
-        self.deliver_centers_material(work_cells[:, 1])
+        # 要先折叠，再切片
+        all_action_fold = all_action.view((-1, 2))
+        work_cell_action_slice = all_action_fold[: self.work_cell_num].numpy()
+        self.update_all_work_cell(work_cell_action_slice[:, 0])
+        self.deliver_centers_material(work_cell_action_slice[:, 1])
 
         # 额定扣血
-        # self.reward += -0.05
-        # 不生产就扣血
-        # if self.step_products[-1] < 1:
-        #   self.reward += -0.05
-        # 生产一个有奖励
+        stable_reward = (
+            -0.05
+            * self.work_cell_num
+            / self.function_num
+            * max(self.episode_step / self.episode_step_max, 1 / 2)
+        )
 
+        # 生产有奖励，根据产品级别加分
+        products_reward = 0
         for i, prod_num in enumerate(self.step_products):
-            if prod_num < 6:
-                self.reward -= 0.05
-            self.reward += prod_num * 0.005 * i
+            # 生产数量/该产品生产单元数量*生产产品类别/总产品类别
+            products_reward += (
+                0.005
+                * max(prod_num, 0.1)
+                / self.product_capacity[i]
+                * (i + 1)
+                / self.function_num
+            )
+        # 最终产物奖励，要保证这个产物奖励小于扣血
+        goal_reward = max(self.total_products[-1], 0.1) / self.product_goal * 0.1
+        self.reward += stable_reward
+        self.reward += goal_reward
+        self.reward += products_reward
         self.episode_step += 1
         self.done = 0
         # 超过步数

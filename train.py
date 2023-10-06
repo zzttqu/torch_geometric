@@ -68,6 +68,7 @@ if __name__ == "__main__":
     max_steps = 1000
     episode_step_max = 128
     product_goal = 200
+    n_epochs = 16
 
     episode_num = 0
     learn_num = 0
@@ -103,7 +104,7 @@ if __name__ == "__main__":
         work_cell_num,
         function_num,
         batch_size=batch_size,
-        n_epochs=16,
+        n_epochs=n_epochs,
         init_data=hetero_data,
     )
 
@@ -125,7 +126,7 @@ if __name__ == "__main__":
         use_strict_trace=False,
     )
     # 添加
-    show()
+    # show()
     while total_step < init_step + max_steps:
         total_step += 1
         agent.network.eval()
@@ -133,12 +134,15 @@ if __name__ == "__main__":
             raw, log_prob = agent.get_action(obs_states, edge_index)
             value = agent.get_value(obs_states, edge_index)
         # 这个raw因为是字典，这里变了之后会影响get action中的raw
-        for key, _value in raw.items():
-            raw[key] = _value.cpu()
-        env.update_all(raw)
+        # 后来还是改为了直接的tensor
+        # for key, _value in raw.items():
+        #    raw[key] = _value.cpu()
+        assert isinstance(raw, torch.Tensor), "raw 不是tensor"
+        assert raw.device != "cpu", "raw 不在cpu中"
+        env.update_all(raw.cpu())
         # 所以需要搬回cuda中
-        for key, _value in raw.items():
-            raw[key] = _value.to(device)
+        # for key, _value in raw.items():
+        #    raw[key] = _value.to(device)
         obs_states, edge_index, reward, dones, episode_step = env.get_obs()
         writer.add_scalars(
             "step/products",

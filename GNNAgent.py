@@ -40,21 +40,12 @@ class Agent:
         self.metadata = init_data.metadata()
         self.undirect_data = init_data
         # 如果为异质图
-        assert init_data is not None, "init_data is None"
-
-        # TODO 需要添加加载训练过的模型的代码和训练embedding代码
+        assert init_data is not None, "init_data是异质图必需的"
         self.update_heterodata(init_data)
         self.network = HGTNet(
             2,
             self.undirect_data,
         ).to(self.device)
-        """self.embedding = MetaPath2Vec(
-            edge_index_dict=self.undirect_data.edge_index_dict,
-            embedding_dim=10,
-            walk_length=1,
-            context_size=1,
-            metapath=self.metadata[1],
-        )"""
         # 使用to_hetro相当于变了一个模型，还得todevice
         """self.network = to_hetero(self.network, self.metadata, aggr="sum").to(
             self.device
@@ -63,16 +54,10 @@ class Agent:
 
     def update_heterodata(self, data: HeteroData):
         """更新heterodata"""
-        # TODO 暂时去掉无向边
+        # 去掉无向边
         # self.undirect_data = T.ToUndirected()(data)
         # metadata函数第一个返回值是节点列表，第二个返回值是边列表
         self.metadata = self.undirect_data.metadata()
-
-    """def get_embedding(self, data: HeteroData):
-        for node_type in self.metadata[0]:
-            print(data[node_type])
-            print(self.embedding(node_type).size())
-        raise SystemExit"""
 
     def get_value(
         self,
@@ -86,30 +71,26 @@ class Agent:
         self,
         state: Dict[str, torch.Tensor],
         edge_index: Dict[Tuple[str], torch.Tensor],
-        action: Dict[str, torch.Tensor] = {},
+        all_action: torch.Tensor = None,
     ) -> (Dict[str, torch.Tensor], Dict[str, torch.Tensor]):
-        log_probs = {}
-        # TODO 去掉无向边
         # hetero_data = T.ToUndirected()(hetero_data)
 
         logits, _ = self.network(state, edge_index)
+        # 切割出workcell
+        all_logits = logits
 
-        for key, _value in logits.items():
-            # 第一项是功能动作，第二项是是否接受上一级运输
-            # 目前不需要对center进行动作，所以存储后可以不用
-            _logits = _value.view((-1, 2))
-            _dist = Categorical(logits=_logits)
-            # 判断action是否为空
-            # 这里的2是有2种节点
-            if key not in action:
-                action[key] = _dist.sample()
-            log_probs[key] = torch.stack([_dist.log_prob(action[key])]).sum(0)
-        flat_probs = []
-        # 第一项是workcell第二项是center
-        for value in log_probs.values():
-            flat_probs.append(value)
-        flat_probs = torch.cat(flat_probs, dim=0)
-        return action, flat_probs
+        # 第一项是功能动作，第二项是是否接受上一级运输
+        # 目前不需要对center进行动作，所以存储后可以不用
+        all_logits = all_logits.view((-1, 2))
+        all_dist = Categorical(logits=all_logits)
+        # 判断action是否为空
+        if all_action is None:
+            all_action = all_dist.sample()
+        # 只管采样，不管是哪类节点
+        # 前边是workcell，后边是center
+        log_probs = torch.stack([all_dist.log_prob(all_action)]).sum(0)
+
+        return all_action, log_probs
 
     def get_batch_values(
         self,
@@ -119,7 +100,7 @@ class Agent:
     ):
         all_values = []
         for i in range(mini_batch_size):
-            _, value = self.network(node[i], edge[i])
+            value = self.get_value(node[i], edge[i])
             all_values.append(value)
         all_values = torch.stack(all_values)
         return all_values
@@ -129,11 +110,11 @@ class Agent:
         mini_batch_size,
         node: List[Dict[str, torch.Tensor]],
         edge: List[Dict[Tuple[str], torch.Tensor]],
-        action_dic: List[Dict[str, torch.Tensor]],
+        action_list: List[torch.Tensor],
     ):
         all_log_probs = []
         for i in range(mini_batch_size):
-            action, log_probs = self.get_action(node[i], edge[i], action_dic[i])
+            action, log_probs = self.get_action(node[i], edge[i], action_list[i])
             all_log_probs.append(log_probs)
         log_probs_list = torch.cat(all_log_probs, dim=0).view((mini_batch_size, -1))
         return log_probs_list.sum(0)

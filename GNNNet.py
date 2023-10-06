@@ -125,10 +125,8 @@ class HGTNet(nn.Module):
         for _ in range(num_layers):
             conv = HANConv(hidden_channels, hidden_channels, data.metadata(), heads=2)
             self.conv_list.append(conv)
-
-        self.linOut = HeteroDictLinear(
-            hidden_channels, action_dim * action_choice, data.metadata()[0]
-        )
+        self.lin0 = nn.Linear(hidden_channels, hidden_channels)
+        self.linOut = nn.Linear(hidden_channels, action_dim * action_choice)
         self.linV = nn.Linear(hidden_channels, 1)
 
         # self.bn1 = nn.BatchNorm1d(128)
@@ -147,7 +145,7 @@ class HGTNet(nn.Module):
             node1, node2 = key.split("_to_")
             norm_edge_index_dict[f"{node1}", f"{key}", f"{node2}"] = _value
 
-        # 根据node type分别传播 
+        # 根据node type分别传播
         x_dict = {
             node_type: self.encoders[node_type](x).relu_()
             for node_type, x in x_dict.items()
@@ -157,15 +155,16 @@ class HGTNet(nn.Module):
             x_dict = conv(x_dict, norm_edge_index_dict)
         # 两个输出，一个需要连接所有节点的特征然后输出一个value
         full_x = torch.cat([x for x in x_dict.values()], dim=0)
+        
 
         value = self.linV(full_x).mean()
         # 另一个需要根据每个节点用异质图线性层输出成一个dict
         # dict无法直接用tanh激活，还需要for
-        action_dict: Dict[str, torch.Tensor] = self.linOut(x_dict)
-        for action in action_dict.values():
-            assert isinstance(action, torch.Tensor)
-            torch.tanh_(action)
-        return action_dict, value
+
+        full_x = self.lin0(full_x)
+
+        action = torch.tanh(self.linOut(full_x))
+        return action, value
 
     def save_model(self, name):
         """

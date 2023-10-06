@@ -9,14 +9,14 @@ from datetime import datetime
 from torch_geometric.data import Data, Batch, HeteroData
 
 if __name__ == "__main__":
-    function_num = 12
-    work_cell_num = 100
+    function_num = 6
+    work_cell_num = 40
     batch_size = 64
 
     total_step = 0
     max_steps = 500
     episode_step_max = 100
-    product_goal = 500
+    product_goal = 200
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     env = EnvRun(
         work_cell_num=work_cell_num,
@@ -25,6 +25,7 @@ if __name__ == "__main__":
         episode_step_max=episode_step_max,
         product_goal=product_goal,
     )
+    print(env.product_capacity)
     obs_states, edge_index, reward, dones, _ = env.get_obs()
     hetero_data = HeteroData()
     # 节点信息
@@ -56,14 +57,10 @@ if __name__ == "__main__":
         agent.network.eval()
         with torch.no_grad():
             raw, log_prob = agent.get_action(obs_states, edge_index)
-            value = agent.get_value(obs_states, edge_index)
-        # 这个raw因为是字典，这里变了之后会影响get action中的raw
-        for key, _value in raw.items():
-            raw[key] = _value.cpu()
-        env.update_all(raw)
-        # 所以需要搬回cuda中
-        for key, _value in raw.items():
-            raw[key] = _value.to(device)
+            # value = agent.get_value(obs_states, edge_index)
+        assert isinstance(raw, torch.Tensor), "raw 不是tensor"
+        assert raw.device != "cpu", "raw 不在cpu中"
+        env.update_all(raw.cpu())
         obs_states, edge_index, reward, dones, episode_step = env.get_obs()
         writer.add_scalars(
             "step/products",
