@@ -25,7 +25,7 @@ if __name__ == "__main__":
         episode_step_max=episode_step_max,
         product_goal=product_goal,
     )
-    print(env.product_capacity)
+    
     obs_states, edge_index, reward, dones, _ = env.get_obs()
     hetero_data = HeteroData()
     # 节点信息

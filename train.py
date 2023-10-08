@@ -84,7 +84,6 @@ if __name__ == "__main__":
     # 加入tensorboard
     writer = SummaryWriter(log_dir="logs/train")
     graph = env.build_edge()
-    work_function = env.get_work_cell_functions()
     # weight = torch.tensor([1] * work_cell_num, dtype=torch.float).squeeze()
     # random_function = torch.tensor([row[0] for row in work_function]).squeeze()
     # 初始状态
@@ -92,6 +91,7 @@ if __name__ == "__main__":
     # 加载之前的
 
     obs_states, edge_index, reward, dones, _ = env.get_obs()
+    print(env.product_capacity)
     hetero_data = HeteroData()
     # 节点信息
     for key, _value in obs_states.items():
