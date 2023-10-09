@@ -91,7 +91,7 @@ if __name__ == "__main__":
     # 加载之前的
 
     obs_states, edge_index, reward, dones, _ = env.get_obs()
-    print(env.product_capacity)
+    print(f"加工能力为{env.product_capacity}")
     hetero_data = HeteroData()
     # 节点信息
     for key, _value in obs_states.items():

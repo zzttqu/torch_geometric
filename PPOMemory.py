@@ -13,23 +13,11 @@ class PPOMemory:
         self.total_actions = [{} for _ in range(batch_size)]
         self.edge_indexs = [{} for _ in range(batch_size)]
         self.log_probs = [{} for _ in range(batch_size)]
-        """ for key, value in node_dic.items():
-            self.node_states[key] = torch.zeros((batch_size, value[0], value[1])).to(
-                device
-            )
-            self.total_actions[key] = torch.zeros(
-                (batch_size, value[0] * action_dim)
-            ).to(device)
-            self.log_probs[key] = torch.zeros((batch_size, value[0] * action_dim)).to(
-                device
-            )
-        for key, value in edge_dic.items():
-            self.edge_indexs[key] = torch.zeros(
-                (batch_size, 2, value), dtype=torch.int64
-            ).to(device) """
+
         self.values = torch.zeros(batch_size).to(device)
         self.rewards = torch.zeros(batch_size).to(device)
         self.dones = torch.zeros(batch_size).to(device)
+        self.time_step = torch.zeros(batch_size).to(device)
         self.count = 0
 
     def remember(
@@ -41,6 +29,7 @@ class PPOMemory:
         done: int,
         total_action: Dict[str, torch.Tensor],
         log_probs: Dict[str, torch.Tensor],
+        eposide_step: int,
     ):
         self.node_states[self.count] = node_state
         self.total_actions[self.count] = total_action
@@ -49,6 +38,7 @@ class PPOMemory:
         self.values[self.count] = value
         self.rewards[self.count] = reward
         self.dones[self.count] = done
+        self.time_step[self.count] = eposide_step
         self.count += 1
 
     def generate_batches(

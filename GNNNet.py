@@ -118,9 +118,14 @@ class HGTNet(nn.Module):
         # 将节点映射为一个四维向量
         self.encoders = torch.nn.ModuleDict()
         # 对所有节点进行分别编码，统一特征数，提高泛用性
+        # 还是先embedding再linear
         for node_type in data.node_types:
-            self.encoders[node_type] = Linear(-1, hidden_channels)
-
+            self.encoders[f"{node_type}_embedding"] = nn.Embedding(
+                data.num_node_features[node_type], hidden_channels
+            )
+            self.encoders[f"{node_type}_linear"] = nn.Linear(
+                data.num_node_features[node_type], hidden_channels
+            )
         self.conv_list = torch.nn.ModuleList()
         for _ in range(num_layers):
             conv = HANConv(hidden_channels, hidden_channels, data.metadata(), heads=2)
@@ -147,7 +152,7 @@ class HGTNet(nn.Module):
 
         # 根据node type分别传播
         x_dict = {
-            node_type: self.encoders[node_type](x).relu_()
+            node_type: self.encoders[f"{node_type}_linear"](x).relu_()
             for node_type, x in x_dict.items()
         }
 
@@ -155,7 +160,6 @@ class HGTNet(nn.Module):
             x_dict = conv(x_dict, norm_edge_index_dict)
         # 两个输出，一个需要连接所有节点的特征然后输出一个value
         full_x = torch.cat([x for x in x_dict.values()], dim=0)
-        
 
         value = self.linV(full_x).mean()
         # 另一个需要根据每个节点用异质图线性层输出成一个dict

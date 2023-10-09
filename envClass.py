@@ -314,9 +314,9 @@ class EnvRun:
         work_cell_states = torch.zeros(
             (self.work_cell_num, self.work_cell_state_num)
         ).to(self.device)
-        center_states = torch.zeros((self.center_num, self.center_state_num)).to(
-            self.device
-        )
+        center_states = torch.zeros(
+            (self.center_num, self.center_state_num)
+        ).to(self.device)
 
         for work_cell in self.work_cell_list:
             work_cell_states[work_cell.cell_id] = work_cell.get_state()
