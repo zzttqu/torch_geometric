@@ -11,18 +11,12 @@ class StateCode(Enum):
     workcell_working = 1
     workcell_low_material = 2
     workcell_low_product = 3
-    # workcell_finish = 4
-    AGVCell_ready = 0
-    AGVCell_start = 1
-    AGVCell_busy = 2
-    AGVCell_low_battery = 3
-    AGVCell_overload = 4
+    workcell_function_error = 4
 
 
 from TransitCenter import TransitCenter
 from WorkCell import WorkCell
 
-graph = nx.Graph()
 plt.rcParams["font.sans-serif"] = ["SimHei"]  # 显示中文标签
 plt.rcParams["axes.unicode_minus"] = False
 
@@ -144,6 +138,7 @@ class EnvRun:
         self.center_list: List[TransitCenter] = []
         for i in range(function_num):
             self.center_list.append(TransitCenter(i))
+        # 初始化生产中心
         # 产品数量
         self.step_products = np.zeros(function_num)
         self.total_products = np.zeros(function_num)
@@ -156,25 +151,35 @@ class EnvRun:
         self.episode_step = 0
         self.episode_step_max = episode_step_max
 
-    def build_edge(self):
-        # 理论上来说边建立好后就不会变化了
+    def show_graph(self):
+        # 可视化
         graph = nx.DiGraph()
-        # node_id = np.zeros((self.work_cell_num + self.function_num), dtype=int)
-        index = 0
-        # 可视化节点添加
-        for worker in self.work_cell_list:
-            graph.add_node(
-                worker.cell_id, state=worker.state.value, function=worker.function
-            )
-            index += 1
+        for node in self.work_cell_list:
+            graph.add_node(node.cell_id, working=node.working)
         for center in self.center_list:
-            # 可视化节点需要id不能重复的
             graph.add_node(
-                center.cell_id + self.work_cell_num,
-                state=center.state.value,
-                function=center.product_id,
+                center.cell_id + self.work_cell_num, product=center.product_id
             )
-            index += 1
+        # 生成边
+        for work_cell in self.work_cell_list:
+            for center in self.center_list:
+                cell_fun_id = work_cell.function
+                product_id = center.product_id
+                # 边信息
+                # 从生产到中转
+                if cell_fun_id == product_id:
+                    # 可视化节点需要id不能重复的
+                    graph.add_edge(
+                        work_cell.cell_id, center.cell_id + self.work_cell_num
+                    )
+                # 从中转到下一步
+                if product_id == cell_fun_id - 1:
+                    # 可视化节点需要id不能重复的
+                    graph.add_edge(
+                        center.cell_id + self.work_cell_num, work_cell.cell_id
+                    )
+
+    def build_edge(self):
         # 生成边
         for work_cell in self.work_cell_list:
             for center in self.center_list:
@@ -186,18 +191,10 @@ class EnvRun:
                     self.edge_index["work_cell_to_center"].append(
                         [work_cell.cell_id, center.cell_id]
                     )
-                    # 可视化节点需要id不能重复的
-                    graph.add_edge(
-                        work_cell.cell_id, center.cell_id + self.work_cell_num
-                    )
                 # 从中转到下一步
                 if product_id == cell_fun_id - 1:
                     self.edge_index["center_to_work_cell"].append(
                         [center.cell_id, work_cell.cell_id]
-                    )
-                    # 可视化节点需要id不能重复的
-                    graph.add_edge(
-                        center.cell_id + self.work_cell_num, work_cell.cell_id
                     )
         for key, value in self.edge_index.items():
             value = np.array(value)
@@ -205,7 +202,6 @@ class EnvRun:
                 self.device
             )
         # self.edge_index = torch.tensor(np.array(graph.edges()), dtype=torch.int64).T
-        return graph
 
     def deliver_centers_material(self, workcell_get_material):
         #  计算有同一功能有几个节点要接收
@@ -264,6 +260,8 @@ class EnvRun:
     #         work_cell.work(action)
 
     def update_all_work_cell(self, workcell_action, workcell_function=0):
+        # 先检测workcell是否出现冲突，冲突则报错
+
         for action, work_cell in zip(workcell_action, self.work_cell_list):
             work_cell.work(action)
 
@@ -314,9 +312,9 @@ class EnvRun:
         work_cell_states = torch.zeros(
             (self.work_cell_num, self.work_cell_state_num)
         ).to(self.device)
-        center_states = torch.zeros(
-            (self.center_num, self.center_state_num)
-        ).to(self.device)
+        center_states = torch.zeros((self.center_num, self.center_state_num)).to(
+            self.device
+        )
 
         for work_cell in self.work_cell_list:
             work_cell_states[work_cell.cell_id] = work_cell.get_state()
@@ -357,53 +355,3 @@ class EnvRun:
             worker.reset_state()
         for center in self.center_list:
             center.product_num = 0
-
-
-# if __name__ == "__main__":
-#     np.set_printoptions(precision=3, suppress=True)
-#     torch.set_printoptions(precision=3, sci_mode=False)
-#     function_num = 3
-#     work_cell_num = 6
-#     env = EnvRun(
-#         1,
-#         work_cell_num=work_cell_num,
-#         function_num=function_num,
-#         device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
-#     )
-#     graph = env.build_edge()
-#     work_function = env.get_work_cell_functions()
-#     weight = torch.tensor([1] * work_cell_num, dtype=torch.float)
-#     random_function = [row[0] for row in work_function]
-#     # 设置任务计算生产
-#     env.update_all(torch.tensor([0, 1, 2, 3, 4, 5, 1, 1, 1, 1, 1, 1]))
-#     # 神经网络要输出每个工作站的工作，功能和传输比率
-#     # 迁移物料,2是正常接收，其他是不接收
-#     env.update_centers(weight)
-
-#     # print(obs_state)
-
-#     # 可视化
-#     node_states = nx.get_node_attributes(graph, "state")
-#     node_function = nx.get_node_attributes(graph, "function")
-#     nodes = nx.nodes(graph)
-#     edges = nx.edges(graph)
-#     node_labels = {}
-#     edge_labels = {}
-#     for node in nodes:
-#         # 这里只用\n就可以换行了
-#         node_labels[
-#             node
-#         ] = f"{node}节点：\n 状态：{node_states[node]} \n 功能：{node_function[node]}"
-
-#     # print(node_labels)
-#     pos = nx.spring_layout(graph)
-#     nx.draw_networkx_nodes(graph, pos)
-#     nx.draw_networkx_labels(graph, pos, node_labels)
-#     # nx.draw_networkx_edges(graph, pos, connectionstyle="arc3,rad=0.2")
-#     nx.draw_networkx_edges(graph, pos)
-
-#     device_state, device_edge, device_reward, done = env.get_obs()
-
-#     # print(obs_state)
-
-#     plt.show()

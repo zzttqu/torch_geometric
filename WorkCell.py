@@ -1,4 +1,3 @@
-
 import numpy as np
 import torch
 
@@ -8,10 +7,13 @@ from envClass import StateCode
 class WorkCell:
     next_id = 0
 
-    def __init__(self, function_id, speed, position, materials=0, products=0):
+    def __init__(
+        self, function_id, work_center_id, speed, position, materials=0, products=0
+    ):
         super().__init__()
         # 需要有当前这个工作单元每个功能的备件，每个功能生产效率
         self.cell_id = WorkCell.next_id
+        self.work_center_id = work_center_id
         WorkCell.next_id += 1
         self.function = function_id
         self.speed = speed
@@ -19,13 +21,8 @@ class WorkCell:
         self.products = products
         self.position = np.array(position)
         self.health = 100
-        self.working = False
-        self.idle_time = 0
+        self.working = function_id
         self.state = StateCode.workcell_ready
-
-    def set_work(self, function):
-        self.working = function
-        self.state = StateCode.workcell_working
 
     def transport(self, action, num):
         # 转移生产产品
@@ -42,13 +39,10 @@ class WorkCell:
             if self.working:
                 pass
             else:
-                self.set_work(self.function)
-                self.working = self.function
-            self.idle_time = 0
+                self.state = StateCode.workcell_working
         # 停止工作
         elif action == 0:
             # self.working = None
-            self.working = None
             self.state = StateCode.workcell_ready
         # 检查当前状态
         self.state_check()
@@ -58,8 +52,6 @@ class WorkCell:
             self.products += self.speed
             self.materials -= self.speed
             # self.health -= 0.1
-        if self.state == StateCode.workcell_ready:
-            self.idle_time += 1
 
     def state_check(self):
         # 低健康度
@@ -69,7 +61,7 @@ class WorkCell:
         # 缺少原料
         if self.materials < self.speed:
             self.state = StateCode.workcell_low_material
-            self.working = None
+            self.working = self.function
         # 不缺货就变为ready状态
         elif (
             self.materials >= self.speed
@@ -82,21 +74,21 @@ class WorkCell:
 
     def reset_state(self):
         self.state = StateCode.workcell_ready
+        # 给一个基础的原料
         self.materials = self.speed
         self.products = 0
-        self.working = None
 
     # 状态空间
     def get_state(self):
-        if self.state == StateCode.workcell_working:
-            return torch.tensor(
-                [self.state.value, self.working, self.speed, self.products]
-            )
-
-        else:
-            return torch.tensor(
-                [self.state.value, self.function, self.speed, self.products]
-            )
+        return torch.tensor(
+            [
+                self.work_center_id,
+                self.state.value,
+                self.function,
+                self.speed,
+                self.products,
+            ]
+        )
 
     # 动作空间
     def get_function(self):
