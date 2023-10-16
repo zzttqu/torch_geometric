@@ -117,7 +117,9 @@ class HGTNet(nn.Module):
         super().__init__()
         # 将节点映射为一个四维向量
         self.encoders = torch.nn.ModuleDict()
-        # 对所有节点进行分别编码，统一特征数，提高泛用性
+        
+
+        
         # 还是先embedding再linear
         for node_type in data.node_types:
             self.encoders[f"{node_type}_embedding"] = nn.Embedding(
