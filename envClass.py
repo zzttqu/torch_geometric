@@ -5,6 +5,8 @@ from matplotlib import pyplot as plt
 import torch
 from typing import List, Dict, Tuple, Union
 
+from WorkCenter import WorkCenter
+
 
 class StateCode(Enum):
     workcell_ready = 0
@@ -33,6 +35,8 @@ def select_functions(start, end, num_selections):
         additional_selections = np.random.choice(numbers, size=remaining_selections)
         numbers = np.concatenate((numbers, additional_selections))
     np.random.shuffle(numbers)
+    # 转变为2个功能一组
+    numbers.reshape(2, -1)
 
     return numbers
 
@@ -107,37 +111,37 @@ class EnvRun:
         for i in range(2):
             self.edge_index[f"{node_type_list[i]}_to_{node_type_list[i+1]}"] = []
         self.work_cell_num = work_cell_num
+        self.work_center_list: List[WorkCenter] = []
         self.work_cell_state_num = 4
         self.function_num = function_num
         self.center_num = function_num
         self.center_state_num = 3
         # 会生产几种类型
-        self.function_list = select_functions(0, function_num - 1, self.work_cell_num)
+        self.function_matrix = select_functions(0, function_num - 1, self.work_cell_num)
         self.work_cell_list: List[WorkCell] = []
-        # 初始化工作单元
-        for i in range(work_cell_num):
-            self.work_cell_list.append(
+        self.id_center: np.ndarray = np.zeros(self.center_num)
+        # 初始化工作中心
+        for function_list in self.function_matrix:
+            self.work_center_list.append(
                 # 随机function或者规定
                 # i // (self.work_cell_num // self.function_num)
                 # np.random.randint(0, function_num)
-                WorkCell(
-                    function_id=self.function_list[i],
-                    speed=6,
-                    position=[i, 0],
-                    materials=6,
-                )
+                WorkCenter(function_list)
             )
         # 各级别生产能力
         self.product_capacity = [0 for _ in range(self.function_num)]
+
         for i in range(self.function_num):
-            for work_cell in self.work_cell_list:
-                if work_cell.function == i:
-                    self.product_capacity[i] += work_cell.speed
+            for work_center in self.work_center_list:
+                indices = np.where(work_center.get_function() == i)[0]
+                if indices:
+                    self.product_capacity[i] += work_center.get_cell_speed(indices)
 
         # 初始化集散中心
         self.center_list: List[TransitCenter] = []
         for i in range(function_num):
             self.center_list.append(TransitCenter(i))
+            self.id_center[i] = i
         # 初始化生产中心
         # 产品数量
         self.step_products = np.zeros(function_num)
@@ -155,7 +159,7 @@ class EnvRun:
         # 可视化
         graph = nx.DiGraph()
         for node in self.work_cell_list:
-            graph.add_node(node.cell_id, working=node.working)
+            graph.add_node(node._id, working=node.working)
         for center in self.center_list:
             graph.add_node(
                 center.cell_id + self.work_cell_num, product=center.product_id
@@ -169,17 +173,19 @@ class EnvRun:
                 # 从生产到中转
                 if cell_fun_id == product_id:
                     # 可视化节点需要id不能重复的
-                    graph.add_edge(
-                        work_cell.cell_id, center.cell_id + self.work_cell_num
-                    )
+                    graph.add_edge(work_cell._id, center.cell_id + self.work_cell_num)
                 # 从中转到下一步
                 if product_id == cell_fun_id - 1:
                     # 可视化节点需要id不能重复的
-                    graph.add_edge(
-                        center.cell_id + self.work_cell_num, work_cell.cell_id
-                    )
+                    graph.add_edge(center.cell_id + self.work_cell_num, work_cell._id)
 
     def build_edge(self):
+        aa = []
+        for workcenter in self.work_center_list:
+            aa.append(workcenter.build_edge(id_center=self.id_center))
+        self.edge_index["work_center"] = torch.tensor(
+            np.concatenate(aa, axis=1), dtype=torch.int64, device=self.device
+        )
         # 生成边
         for work_cell in self.work_cell_list:
             for center in self.center_list:
@@ -189,12 +195,12 @@ class EnvRun:
                 # 从生产到中转
                 if cell_fun_id == product_id:
                     self.edge_index["work_cell_to_center"].append(
-                        [work_cell.cell_id, center.cell_id]
+                        [work_cell._id, center.cell_id]
                     )
                 # 从中转到下一步
                 if product_id == cell_fun_id - 1:
                     self.edge_index["center_to_work_cell"].append(
-                        [center.cell_id, work_cell.cell_id]
+                        [center.cell_id, work_cell._id]
                     )
         for key, value in self.edge_index.items():
             value = np.array(value)
@@ -242,11 +248,11 @@ class EnvRun:
                 work_cell.transport(3, work_cell.speed)
             else:
                 self.center_list[work_cell.function - 1].moveout_product(
-                    int(products[work_cell.function - 1] * collect[work_cell.cell_id])
+                    int(products[work_cell.function - 1] * collect[work_cell._id])
                 )
                 work_cell.transport(
                     3,
-                    int(products[work_cell.function - 1] * collect[work_cell.cell_id]),
+                    int(products[work_cell.function - 1] * collect[work_cell._id]),
                 )
                 # # 看看当前id在flat里边排第几个，然后把对应权重进行计算
                 # collect = flatt[torch.where(work_cell.cell_id == flat_id)[0].item()]
@@ -317,7 +323,7 @@ class EnvRun:
         )
 
         for work_cell in self.work_cell_list:
-            work_cell_states[work_cell.cell_id] = work_cell.get_state()
+            work_cell_states[work_cell._id] = work_cell.get_state()
         for center in self.center_list:
             center_states[center.cell_id] = center.get_state()
 

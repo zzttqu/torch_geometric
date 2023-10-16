@@ -7,42 +7,35 @@ from envClass import StateCode
 class WorkCell:
     next_id = 0
 
-    def __init__(
-        self, function_id, work_center_id, speed, position, materials=0, products=0
-    ):
+    def __init__(self, function_id, work_center_id, speed=6, materials=0, products=0):
         super().__init__()
         # 需要有当前这个工作单元每个功能的备件，每个功能生产效率
-        self.cell_id = WorkCell.next_id
+        self._id = WorkCell.next_id
         self.work_center_id = work_center_id
         WorkCell.next_id += 1
         self.function = function_id
         self.speed = speed
         self.materials = materials
         self.products = products
-        self.position = np.array(position)
         self.health = 100
-        self.working = function_id
         self.state = StateCode.workcell_ready
 
-    def transport(self, action, num):
-        # 转移生产产品
-        if action == 2:
-            self.products = 0
-
+    def get_material(self, num):
         # 或者接收原材料
-        elif action == 3:
-            self.materials += num
+        self.materials += num
+
+    def move_product(self):
+        # 转移生产产品
+        current_product = self.products
+        self.products = 0
+        return current_product
 
     def work(self, action):
         # 工作/继续工作
         if action == 1:
-            if self.working:
-                pass
-            else:
-                self.state = StateCode.workcell_working
+            self.state = StateCode.workcell_working
         # 停止工作
         elif action == 0:
-            # self.working = None
             self.state = StateCode.workcell_ready
         # 检查当前状态
         self.state_check()
@@ -56,21 +49,17 @@ class WorkCell:
     def state_check(self):
         # 低健康度
         # if self.health < 50:
-        #     self.working = None
+        #      = None
         #     self.state = StateCode.workcell_low_health
         # 缺少原料
         if self.materials < self.speed:
             self.state = StateCode.workcell_low_material
-            self.working = self.function
         # 不缺货就变为ready状态
         elif (
             self.materials >= self.speed
             and self.state == StateCode.workcell_low_material
         ):
             self.state = StateCode.workcell_ready
-        # 爆仓了
-        if self.working is None:
-            return
 
     def reset_state(self):
         self.state = StateCode.workcell_ready
@@ -90,6 +79,12 @@ class WorkCell:
             ]
         )
 
-    # 动作空间
+    # 功能id
     def get_function(self):
         return self.function
+
+    def get_id(self):
+        return self._id
+
+    def get_speed(self):
+        return self.speed
