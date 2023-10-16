@@ -117,9 +117,7 @@ class HGTNet(nn.Module):
         super().__init__()
         # 将节点映射为一个四维向量
         self.encoders = torch.nn.ModuleDict()
-        
 
-        
         # 还是先embedding再linear
         for node_type in data.node_types:
             self.encoders[f"{node_type}_embedding"] = nn.Embedding(
@@ -135,6 +133,7 @@ class HGTNet(nn.Module):
         self.lin0 = nn.Linear(hidden_channels, hidden_channels)
         self.linOut = nn.Linear(hidden_channels, action_dim * action_choice)
         self.linV = nn.Linear(hidden_channels, 1)
+        self.pool = SoftmaxAggregation(channels=hidden_channels)
 
         # self.bn1 = nn.BatchNorm1d(128)
         # self.bn2 = nn.BatchNorm1d(64)
