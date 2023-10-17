@@ -36,9 +36,8 @@ def select_functions(start, end, num_selections):
         numbers = np.concatenate((numbers, additional_selections))
     np.random.shuffle(numbers)
     # 转变为2个功能一组
-    numbers.reshape(2, -1)
 
-    return numbers
+    return numbers.reshape(-1, 2)
 
 
 def edge_weight_init(raw_array):
@@ -105,36 +104,32 @@ class EnvRun:
         product_goal=500,
     ):
         self.device = device
-        self.edge_index: Dict[str, Union[List, torch.Tensor]] = {}
+        self.edge_index: Dict[str, torch.Tensor] = {}
         # 构建字典的index
         node_type_list = ["work_cell", "center", "work_cell"]
-        for i in range(2):
-            self.edge_index[f"{node_type_list[i]}_to_{node_type_list[i+1]}"] = []
+        # for i in range(2):
+        #     self.edge_index[f"{node_type_list[i]}_to_{node_type_list[i+1]}"] = []
         self.work_cell_num = work_cell_num
         self.work_center_list: List[WorkCenter] = []
         self.work_cell_state_num = 4
         self.function_num = function_num
         self.center_num = function_num
         self.center_state_num = 3
-        # 会生产几种类型
+        # 随机生成一个2*n的矩阵，每列对应一个工作中心F
         self.function_matrix = select_functions(0, function_num - 1, self.work_cell_num)
         self.work_cell_list: List[WorkCell] = []
+        # 生成物流运输中心代号和中心存储物料的对应关系
         self.id_center: np.ndarray = np.zeros(self.center_num)
         # 初始化工作中心
         for function_list in self.function_matrix:
-            self.work_center_list.append(
-                # 随机function或者规定
-                # i // (self.work_cell_num // self.function_num)
-                # np.random.randint(0, function_num)
-                WorkCenter(function_list)
-            )
+            self.work_center_list.append(WorkCenter(function_list))
         # 各级别生产能力
         self.product_capacity = [0 for _ in range(self.function_num)]
 
         for i in range(self.function_num):
             for work_center in self.work_center_list:
                 indices = np.where(work_center.get_function() == i)[0]
-                if indices:
+                if len(indices) > 0:
                     self.product_capacity[i] += work_center.get_cell_speed(indices)
 
         # 初始化集散中心
@@ -180,12 +175,22 @@ class EnvRun:
                     graph.add_edge(center.cell_id + self.work_cell_num, work_cell._id)
 
     def build_edge(self):
-        aa = []
-        for workcenter in self.work_center_list:
-            aa.append(workcenter.build_edge(id_center=self.id_center))
-        self.edge_index["work_center"] = torch.tensor(
-            np.concatenate(aa, axis=1), dtype=torch.int64, device=self.device
+        self.edge_index["work_cell_to_work_cell"] = torch.zeros(
+            (2, 0), dtype=torch.long
         )
+        self.edge_index["work_cell_to_center"] = torch.zeros((2, 0), dtype=torch.long)
+        # 连接在workcenter中生成的边
+        for work_center in self.work_center_list:
+            in_edge, out_edge = work_center.build_edge(id_center=self.id_center)
+            # 需要按列拼接
+            self.edge_index["work_cell_to_work_cell"] = torch.cat(
+                [self.edge_index["work_cell_to_work_cell"], in_edge], dim=1
+            ).to(self.device)
+            self.edge_index["work_cell_to_center"] = torch.cat(
+                [self.edge_index["work_cell_to_center"], out_edge], dim=1
+            ).to(self.device)
+        return self.edge_index
+
         # 生成边
         for work_cell in self.work_cell_list:
             for center in self.center_list:
