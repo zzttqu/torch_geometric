@@ -61,7 +61,7 @@ if __name__ == "__main__":
     # 神奇trick
     torch.manual_seed(3407)
     function_num = 6
-    work_cell_num = 30
+    work_center_num = 10
     batch_size = 64
 
     total_step = init_step
@@ -74,7 +74,8 @@ if __name__ == "__main__":
     learn_num = 0
 
     env = EnvRun(
-        work_cell_num=work_cell_num,
+        work_center_num=work_center_num,
+        fun_per_center=2,
         function_num=function_num,
         device=device,
         episode_step_max=episode_step_max,
@@ -84,10 +85,11 @@ if __name__ == "__main__":
     # 加入tensorboard
     writer = SummaryWriter(log_dir="logs/train")
     edge_index = env.build_edge()
-    raise SystemExit
+
     # 加载之前的
 
     obs_states, edge_index, reward, dones, _ = env.get_obs()
+
     print(f"加工能力为{env.product_capacity}")
     hetero_data = HeteroData()
     # 节点信息
@@ -97,8 +99,10 @@ if __name__ == "__main__":
     for key, _value in edge_index.items():
         node1, node2 = key.split("_to_")
         hetero_data[f"{node1}", f"{key}", f"{node2}"].edge_index = _value
+    print(hetero_data)
+    raise SystemExit
     agent = Agent(
-        work_cell_num,
+        work_center_num,
         function_num,
         batch_size=batch_size,
         n_epochs=n_epochs,

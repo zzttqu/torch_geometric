@@ -23,7 +23,8 @@ plt.rcParams["font.sans-serif"] = ["SimHei"]  # 显示中文标签
 plt.rcParams["axes.unicode_minus"] = False
 
 
-def select_functions(start, end, num_selections):
+def select_functions(start, end, work_center_num, fun_per_center):
+    num_selections = work_center_num * fun_per_center
     # 创建一个包含范围内所有数字的列表
     numbers = np.arange(start, end + 1)
 
@@ -37,7 +38,7 @@ def select_functions(start, end, num_selections):
     np.random.shuffle(numbers)
     # 转变为2个功能一组
 
-    return numbers.reshape(-1, 2)
+    return numbers.reshape(-1, fun_per_center)
 
 
 def edge_weight_init(raw_array):
@@ -57,47 +58,11 @@ def edge_weight_init(raw_array):
     return torch.tensor(normalized_array)
 
 
-class AGVCell:
-    def __init__(self, speed, capacity):
-        self.speed = speed
-        self.capacity = capacity
-        self.health = 100
-        self.battery = 100
-        self.working = False
-        # 运行到指定位置所需时间
-        self.running_time = 0
-        self.location = np.array([1, 2])
-
-    def set_work(self, goal, payload):
-        # 应该允许临时超载
-        if payload > self.capacity:
-            return StateCode.AGVCell_overload
-        distance = np.sum(np.abs(goal - self.location))
-        self.running_time = distance / self.speed
-        # 如果电量不支持抵达就报错
-        if self.running_time > self.battery:
-            return StateCode.AGVCell_low_battery
-        self.working = True
-        return StateCode.AGVCell_start
-
-    def work(self):
-        if self.running_time > self.battery:
-            return StateCode.AGVCell_low_battery
-        self.running_time -= 1
-        self.battery -= 1
-        return StateCode.AGVCell_busy
-
-    def state_check(self):
-        if self.running_time > self.battery:
-            return StateCode.AGVCell_low_battery
-        if self.working:
-            return StateCode.AGVCell_busy
-
-
 class EnvRun:
     def __init__(
         self,
-        work_cell_num,
+        work_center_num,
+        fun_per_center,
         function_num,
         device,
         episode_step_max=256,
@@ -109,17 +74,23 @@ class EnvRun:
         node_type_list = ["work_cell", "center", "work_cell"]
         # for i in range(2):
         #     self.edge_index[f"{node_type_list[i]}_to_{node_type_list[i+1]}"] = []
-        self.work_cell_num = work_cell_num
+        self.work_center_num = work_center_num
+        self.work_cell_num = self.work_center_num * fun_per_center
         self.work_center_list: List[WorkCenter] = []
         self.work_cell_state_num = 4
         self.function_num = function_num
         self.center_num = function_num
         self.center_state_num = 3
         # 随机生成一个2*n的矩阵，每列对应一个工作中心F
-        self.function_matrix = select_functions(0, function_num - 1, self.work_cell_num)
+        self.function_matrix = select_functions(
+            0,
+            function_num - 1,
+            work_center_num,
+            fun_per_center,
+        )
         self.work_cell_list: List[WorkCell] = []
         # 生成物流运输中心代号和中心存储物料的对应关系
-        self.id_center: np.ndarray = np.zeros(self.center_num)
+        self.id_center: np.ndarray = np.zeros((self.center_num, 2), dtype=int)
         # 初始化工作中心
         for function_list in self.function_matrix:
             self.work_center_list.append(WorkCenter(function_list))
@@ -128,10 +99,11 @@ class EnvRun:
 
         for i in range(self.function_num):
             for work_center in self.work_center_list:
-                indices = np.where(work_center.get_function() == i)[0]
+                # 函数返回值的第二位是funcid，第一位是workcellid
+                fl = np.array([sub[1] for sub in work_center.get_all_cell_func()])
+                indices = np.where(fl == i)[0]
                 if len(indices) > 0:
                     self.product_capacity[i] += work_center.get_cell_speed(indices)
-
         # 初始化集散中心
         self.center_list: List[TransitCenter] = []
         for i in range(function_num):
@@ -185,10 +157,12 @@ class EnvRun:
             # 需要按列拼接
             self.edge_index["work_cell_to_work_cell"] = torch.cat(
                 [self.edge_index["work_cell_to_work_cell"], in_edge], dim=1
-            ).to(self.device)
+            )
             self.edge_index["work_cell_to_center"] = torch.cat(
                 [self.edge_index["work_cell_to_center"], out_edge], dim=1
-            ).to(self.device)
+            )
+        self.edge_index["work_cell_to_work_cell"].to(self.device)
+        self.edge_index["work_cell_to_center"].to(self.device)
         return self.edge_index
 
         # 生成边
@@ -320,15 +294,16 @@ class EnvRun:
             self.done = 1
 
     def get_obs(self):
-        work_cell_states = torch.zeros(
-            (self.work_cell_num, self.work_cell_state_num)
-        ).to(self.device)
         center_states = torch.zeros((self.center_num, self.center_state_num)).to(
             self.device
         )
+        a = []
+        for work_center in self.work_center_list:
+            a += work_center.get_all_cell_state()
+        # 按cellid排序，因为要构造数据结构
+        sort_state = sorted(a, key=lambda x: x[0])
+        work_cell_states = torch.stack(sort_state)
 
-        for work_cell in self.work_cell_list:
-            work_cell_states[work_cell._id] = work_cell.get_state()
         for center in self.center_list:
             center_states[center.cell_id] = center.get_state()
 
@@ -339,19 +314,17 @@ class EnvRun:
 
         return obs_states, self.edge_index, self.reward, self.done, self.episode_step
 
-    def get_work_cell_functions(self):
-        work_station_functions = np.zeros((self.work_cell_num, 1), dtype=int)
-        for i, work_cell in enumerate(self.work_cell_list):
-            work_station_functions[i] = work_cell.get_function()
-        return work_station_functions
-
     def get_function_group(self):
+        work_function = []
+        for work_center in self.work_center_list:
+            work_function += work_center.get_all_cell_func()
+        # 排序
+        sort_func = sorted(work_function, key=lambda x: x[0])
+        work_function = torch.tensor(sort_func).T
         # 针对function的分类
-        work_function = self.get_work_cell_functions()
-        function_id = torch.tensor(work_function.squeeze())
-        unique_labels = torch.unique(function_id)
+        unique_labels = torch.unique(work_function)
         grouped_indices = [
-            torch.where(function_id == label)[0] for label in unique_labels
+            torch.where(work_function == label)[0] for label in unique_labels
         ]
         # 因为功能0是从原材料是无穷无尽的，所以不需要考虑不需要改变
         return grouped_indices

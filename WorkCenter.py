@@ -15,7 +15,7 @@ class WorkCenter:
         self.id = WorkCenter.next_id
         WorkCenter.next_id += 1
         self.workcell_list: List[WorkCell] = []
-        self.function_list = function_list
+        self.function_list: List[int] = function_list.tolist()
         # 构建workcell
         for f in function_list:
             self.workcell_list.append(WorkCell(f, self.id))
@@ -57,8 +57,11 @@ class WorkCenter:
         for cell in self.workcell_list:
             cell.work(actions[cell.get_id()])
 
-    def get_function(self):
-        return self.function_list
+    def get_all_cell_func(self) -> List:
+        a = []
+        for workcell in self.workcell_list:
+            a.append([workcell.get_id(), workcell.get_function()])
+        return a
 
     def get_id(self):
         return self.id
@@ -70,3 +73,6 @@ class WorkCenter:
         cell_list = [self.workcell_list[index].get_speed() for index in indexs]
         speed = sum(cell_list)
         return speed
+
+    def get_all_cell_state(self):
+        return [cell.get_state() for cell in self.workcell_list]

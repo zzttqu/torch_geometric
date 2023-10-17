@@ -71,6 +71,7 @@ class WorkCell:
     def get_state(self):
         return torch.tensor(
             [
+                self._id,
                 self.work_center_id,
                 self.state.value,
                 self.function,
