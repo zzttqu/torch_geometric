@@ -69,15 +69,10 @@ class EnvRun:
         product_goal=500,
     ):
         self.device = device
-        self.edge_index: Dict[str, torch.Tensor] = {}
-        # 构建字典的index
-        node_type_list = ["work_cell", "center", "work_cell"]
-        # for i in range(2):
-        #     self.edge_index[f"{node_type_list[i]}_to_{node_type_list[i+1]}"] = []
+        self.edge_index: Dict[Tuple[str, str, str], torch.Tensor] = {}
         self.work_center_num = work_center_num
         self.work_cell_num = self.work_center_num * fun_per_center
         self.work_center_list: List[WorkCenter] = []
-        self.work_cell_state_num = 4
         self.function_num = function_num
         self.center_num = function_num
         self.center_state_num = 3
@@ -147,25 +142,34 @@ class EnvRun:
                     graph.add_edge(center.cell_id + self.work_cell_num, work_cell._id)
 
     def build_edge(self):
-        self.edge_index["work_cell_to_work_cell"] = torch.zeros(
-            (2, 0), dtype=torch.long
-        )
-        self.edge_index["work_cell_to_center"] = torch.zeros((2, 0), dtype=torch.long)
+        center_index = ("work_cell", "work_cell_to_work_cell", "work_cell")
+        product_index = ("work_cell", "work_cell_to_center", "center")
+        material_index = ("center", "center_to_work_cell", "work_cell")
+        self.edge_index[center_index] = torch.zeros((2, 0), dtype=torch.long)
+        self.edge_index[product_index] = torch.zeros((2, 0), dtype=torch.long)
+        self.edge_index[material_index] = torch.zeros((2, 0), dtype=torch.long)
         # 连接在workcenter中生成的边
         for work_center in self.work_center_list:
-            in_edge, out_edge = work_center.build_edge(id_center=self.id_center)
+            center_edge, product_edge, material_edge = work_center.build_edge(
+                id_center=self.id_center
+            )
             # 需要按列拼接
-            self.edge_index["work_cell_to_work_cell"] = torch.cat(
-                [self.edge_index["work_cell_to_work_cell"], in_edge], dim=1
+            self.edge_index[center_index] = torch.cat(
+                [self.edge_index[center_index], center_edge], dim=1
             )
-            self.edge_index["work_cell_to_center"] = torch.cat(
-                [self.edge_index["work_cell_to_center"], out_edge], dim=1
+            self.edge_index[product_index] = torch.cat(
+                [self.edge_index[product_index], product_edge], dim=1
             )
-        self.edge_index["work_cell_to_work_cell"].to(self.device)
-        self.edge_index["work_cell_to_center"].to(self.device)
+            self.edge_index[material_index] = torch.cat(
+                [self.edge_index[material_index], material_edge], dim=1
+            )
+        self.edge_index[center_index].to(self.device)
+        self.edge_index[product_index].to(self.device)
+        self.edge_index[material_index].to(self.device)
         return self.edge_index
 
         # 生成边
+        # region
         for work_cell in self.work_cell_list:
             for center in self.center_list:
                 cell_fun_id = work_cell.function
@@ -187,6 +191,7 @@ class EnvRun:
                 self.device
             )
         # self.edge_index = torch.tensor(np.array(graph.edges()), dtype=torch.int64).T
+        # endregion
 
     def deliver_centers_material(self, workcell_get_material):
         #  计算有同一功能有几个节点要接收

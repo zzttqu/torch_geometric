@@ -4,11 +4,9 @@ from typing import Dict, List, Tuple
 from torch.distributions import Categorical
 from torch.utils.data import BatchSampler, SubsetRandomSampler
 from torch_geometric.data import Data, Batch, HeteroData
-from torch_geometric.loader import DataLoader
-from GNNNet import GNNNet, HGTNet
+from GNNNet import HGTNet
 import torch
 import torch.nn.functional as F
-import torch_geometric.transforms as T
 from PPOMemory import PPOMemory
 
 # T.Constant()
@@ -17,8 +15,6 @@ from PPOMemory import PPOMemory
 class Agent:
     def __init__(
         self,
-        work_cell_num,
-        center_num,
         batch_size,
         n_epochs,
         init_data: HeteroData,
@@ -28,8 +24,8 @@ class Agent:
         gae_lambda=0.95,
     ):
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self.work_cell_num = work_cell_num
-        self.center_num = center_num
+        # self.work_cell_num = work_cell_num
+        # self.center_num = center_num
         self.gamma = gamma
         self.batch_size = batch_size
         self.gae_lambda = gae_lambda

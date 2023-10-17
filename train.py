@@ -60,8 +60,8 @@ if __name__ == "__main__":
     torch.set_printoptions(precision=3, sci_mode=False)
     # 神奇trick
     torch.manual_seed(3407)
-    function_num = 6
-    work_center_num = 10
+    function_num = 2
+    work_center_num = 5
     batch_size = 64
 
     total_step = init_step
@@ -89,7 +89,8 @@ if __name__ == "__main__":
     # 加载之前的
 
     obs_states, edge_index, reward, dones, _ = env.get_obs()
-
+    print(f"初始化状态为{obs_states}")
+    print(f"初始化边为{edge_index}")
     print(f"加工能力为{env.product_capacity}")
     hetero_data = HeteroData()
     # 节点信息
@@ -97,13 +98,10 @@ if __name__ == "__main__":
         hetero_data[key].x = _value
         # 边信息
     for key, _value in edge_index.items():
-        node1, node2 = key.split("_to_")
-        hetero_data[f"{node1}", f"{key}", f"{node2}"].edge_index = _value
-    print(hetero_data)
-    raise SystemExit
+        hetero_data[key].edge_index = _value
+    print(hetero_data.edge_types)
+    
     agent = Agent(
-        work_center_num,
-        function_num,
         batch_size=batch_size,
         n_epochs=n_epochs,
         init_data=hetero_data,
@@ -114,6 +112,7 @@ if __name__ == "__main__":
         batch_size,
         device,
     )
+    raise SystemExit
     init_time = datetime.now()
     print(f"模型加载完成，环境初始化完成，当前时间{init_time.strftime('%Y-%m-%d %H:%M:%S')}")
     now_time = datetime.now()

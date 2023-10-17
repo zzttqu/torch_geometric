@@ -32,6 +32,7 @@ class WorkCenter:
                     _edge.append((i, j))
         center_edge = torch.tensor(np.array(_edge).T, dtype=torch.long)
         _edge = []
+        _edge1 = []
         # 建立上下游联系
         # TODO 这里需要根据运输中心的id解决上下游和内部节点的联系
         for cell in self.workcell_list:
@@ -40,9 +41,10 @@ class WorkCenter:
                 if cell.get_function() == _center[1]:
                     _edge.append((cell.get_id(), _center[0]))
                 elif cell.get_function() - 1 == _center[1]:
-                    _edge.append((_center[0], cell.get_id()))
+                    _edge1.append((_center[0], cell.get_id()))
         product_edge = torch.tensor(np.array(_edge).T, dtype=torch.long)
-        return center_edge, product_edge
+        material_edge = torch.tensor(np.array(_edge1).T, dtype=torch.long)
+        return center_edge, product_edge, material_edge
 
     def get_material(self, materials: List[int]):
         # 这个material是全部的
