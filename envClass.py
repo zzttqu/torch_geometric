@@ -163,10 +163,12 @@ class EnvRun:
             self.edge_index[material_index] = torch.cat(
                 [self.edge_index[material_index], material_edge], dim=1
             )
-        self.edge_index[center_index].to(self.device)
-        self.edge_index[product_index].to(self.device)
-        self.edge_index[material_index].to(self.device)
-        
+        self.edge_index[center_index] = self.edge_index[center_index].to(self.device)
+        self.edge_index[product_index] = self.edge_index[product_index].to(self.device)
+        self.edge_index[material_index] = self.edge_index[material_index].to(
+            self.device
+        )
+
         return self.edge_index
 
         # 生成边
@@ -308,7 +310,7 @@ class EnvRun:
             a += work_center.get_all_cell_state()
         # 按cellid排序，因为要构造数据结构
         sort_state = sorted(a, key=lambda x: x[0])
-        work_cell_states = torch.stack(sort_state)
+        work_cell_states = torch.stack(sort_state).to(self.device)
 
         for center in self.center_list:
             center_states[center.cell_id] = center.get_state()
@@ -317,6 +319,7 @@ class EnvRun:
             "work_cell": work_cell_states,
             "center": center_states,
         }
+        # 保证obsstates和edgeindex都转到cuda上
 
         return obs_states, self.edge_index, self.reward, self.done, self.episode_step
 

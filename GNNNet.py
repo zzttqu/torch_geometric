@@ -148,8 +148,7 @@ class HGTNet(nn.Module):
         """
 
         # 根据node type分别传播
-        print(x_dict.values())
-        print(edge_index_dict.values())
+
         x_dict = {
             node_type: self.encoders[f"{node_type}_linear"](x).relu_()
             for node_type, x in x_dict.items()

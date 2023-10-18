@@ -117,8 +117,10 @@ if __name__ == "__main__":
     now_time = datetime.now()
 
     # 添加计算图
-    agent.network(obs_states, edge_index)
+    print(obs_states.values(),edge_index.values())
     raise SystemExit
+    agent.network(obs_states, edge_index)
+    
     writer.add_graph(
         agent.network,
         input_to_model=[obs_states, edge_index],
@@ -139,7 +141,9 @@ if __name__ == "__main__":
         #    raw[key] = _value.cpu()
         assert isinstance(raw, torch.Tensor), "raw 不是tensor"
         assert raw.device != "cpu", "raw 不在cpu中"
+        raise SystemExit
         env.update_all(raw.cpu())
+        raise SystemExit
         # 所以需要搬回cuda中
         # for key, _value in raw.items():
         #    raw[key] = _value.to(device)
