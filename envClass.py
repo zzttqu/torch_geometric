@@ -166,6 +166,7 @@ class EnvRun:
         self.edge_index[center_index].to(self.device)
         self.edge_index[product_index].to(self.device)
         self.edge_index[material_index].to(self.device)
+        
         return self.edge_index
 
         # 生成边

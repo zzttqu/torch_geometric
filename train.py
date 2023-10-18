@@ -89,8 +89,8 @@ if __name__ == "__main__":
     # 加载之前的
 
     obs_states, edge_index, reward, dones, _ = env.get_obs()
-    print(f"初始化状态为{obs_states}")
-    print(f"初始化边为{edge_index}")
+    # print(f"初始化状态为{obs_states}")
+    # print(f"初始化边为{edge_index}")
     print(f"加工能力为{env.product_capacity}")
     hetero_data = HeteroData()
     # 节点信息
@@ -99,7 +99,6 @@ if __name__ == "__main__":
         # 边信息
     for key, _value in edge_index.items():
         hetero_data[key].edge_index = _value
-    print(hetero_data.edge_types)
     
     agent = Agent(
         batch_size=batch_size,
@@ -112,13 +111,14 @@ if __name__ == "__main__":
         batch_size,
         device,
     )
-    raise SystemExit
+
     init_time = datetime.now()
     print(f"模型加载完成，环境初始化完成，当前时间{init_time.strftime('%Y-%m-%d %H:%M:%S')}")
     now_time = datetime.now()
-    # print(obs_states)
+
     # 添加计算图
     agent.network(obs_states, edge_index)
+    raise SystemExit
     writer.add_graph(
         agent.network,
         input_to_model=[obs_states, edge_index],
