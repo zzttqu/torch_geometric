@@ -142,9 +142,9 @@ class EnvRun:
                     graph.add_edge(center.cell_id + self.work_cell_num, work_cell._id)
 
     def build_edge(self):
-        center_index = ("work_cell", "work_cell_to_work_cell", "work_cell")
-        product_index = ("work_cell", "work_cell_to_center", "center")
-        material_index = ("center", "center_to_work_cell", "work_cell")
+        center_index = "work_cell_to_work_cell"
+        product_index = "work_cell_to_center"
+        material_index = "center_to_work_cell"
         self.edge_index[center_index] = torch.zeros((2, 0), dtype=torch.long)
         self.edge_index[product_index] = torch.zeros((2, 0), dtype=torch.long)
         self.edge_index[material_index] = torch.zeros((2, 0), dtype=torch.long)
@@ -263,6 +263,7 @@ class EnvRun:
         # 要先折叠，再切片
         all_action_fold = all_action.view((-1, 2))
         work_cell_action_slice = all_action_fold[: self.work_cell_num].numpy()
+        # TODO 需要修改针对workcenter的
         self.update_all_work_cell(work_cell_action_slice[:, 0])
         self.deliver_centers_material(work_cell_action_slice[:, 1])
 
@@ -302,15 +303,15 @@ class EnvRun:
             self.done = 1
 
     def get_obs(self):
-        center_states = torch.zeros((self.center_num, self.center_state_num)).to(
-            self.device
-        )
+        center_states = torch.zeros(
+            (self.center_num, self.center_state_num), dtype=torch.float
+        ).to(self.device)
         a = []
         for work_center in self.work_center_list:
             a += work_center.get_all_cell_state()
         # 按cellid排序，因为要构造数据结构
         sort_state = sorted(a, key=lambda x: x[0])
-        work_cell_states = torch.stack(sort_state).to(self.device)
+        work_cell_states = torch.stack(sort_state).float().to(self.device)
 
         for center in self.center_list:
             center_states[center.cell_id] = center.get_state()

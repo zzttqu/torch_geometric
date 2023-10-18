@@ -34,7 +34,6 @@ class WorkCenter:
         _edge = []
         _edge1 = []
         # 建立上下游联系
-        # TODO 这里需要根据运输中心的id解决上下游和内部节点的联系
         for cell in self.workcell_list:
             for _center in id_center:
                 # _center是一个长度为2的数组，第一位是center的id，第二位是product的id

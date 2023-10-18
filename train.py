@@ -98,8 +98,8 @@ if __name__ == "__main__":
         hetero_data[key].x = _value
         # 边信息
     for key, _value in edge_index.items():
-        hetero_data[key].edge_index = _value
-    
+        node1, node2 = key.split("_to_")
+        hetero_data[(f"{node1}", f"{key}", f"{node2}")].edge_index = _value
     agent = Agent(
         batch_size=batch_size,
         n_epochs=n_epochs,
@@ -117,10 +117,9 @@ if __name__ == "__main__":
     now_time = datetime.now()
 
     # 添加计算图
-    print(obs_states.values(),edge_index.values())
-    raise SystemExit
+
     agent.network(obs_states, edge_index)
-    
+
     writer.add_graph(
         agent.network,
         input_to_model=[obs_states, edge_index],
@@ -141,7 +140,6 @@ if __name__ == "__main__":
         #    raw[key] = _value.cpu()
         assert isinstance(raw, torch.Tensor), "raw 不是tensor"
         assert raw.device != "cpu", "raw 不在cpu中"
-        raise SystemExit
         env.update_all(raw.cpu())
         raise SystemExit
         # 所以需要搬回cuda中

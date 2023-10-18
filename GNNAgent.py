@@ -196,7 +196,7 @@ class Agent:
                     mini_actions,
                 )
 
-                # TODO 这里感觉应该连接起来变成一个
+                # 这里感觉应该连接起来变成一个
 
                 ratios = torch.exp(new_log_prob - mini_probs).sum(1)
                 surr1 = ratios * flat_advantages[index]
