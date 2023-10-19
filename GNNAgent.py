@@ -71,9 +71,7 @@ class Agent:
     ) -> (Dict[str, torch.Tensor], Dict[str, torch.Tensor]):
         # hetero_data = T.ToUndirected()(hetero_data)
 
-        logits, _ = self.network(state, edge_index)
-        # 切割出workcell
-        all_logits = logits
+        all_logits, _ = self.network(state, edge_index)
 
         # 第一项是功能动作，第二项是是否接受上一级运输
         # 目前不需要对center进行动作，所以存储后可以不用
@@ -105,7 +103,7 @@ class Agent:
         self,
         mini_batch_size,
         node: List[Dict[str, torch.Tensor]],
-        edge: List[Dict[Tuple[str], torch.Tensor]],
+        edge: List[Dict[str, torch.Tensor]],
         action_list: List[torch.Tensor],
     ):
         all_log_probs = []

@@ -4,6 +4,8 @@ import torch
 from torch import Tensor
 import numpy as np
 
+from envClass import StateCode
+
 
 # 这个类是用来定义加工中心的，一个加工中心包括多个加工单元，但同一时间只能有一个加工单元工作
 class WorkCenter:
@@ -16,9 +18,12 @@ class WorkCenter:
         WorkCenter.next_id += 1
         self.workcell_list: List[WorkCell] = []
         self.function_list: List[int] = function_list.tolist()
+
         # 构建workcell
         for f in function_list:
             self.workcell_list.append(WorkCell(f, self.id))
+        self.func = self.workcell_list[0].get_function()
+        self.product = 0
 
     def build_edge(self, id_center) -> Union[torch.Tensor, torch.Tensor]:
         # 建立一个workcenter内部节点的联系
@@ -45,18 +50,29 @@ class WorkCenter:
         material_edge = torch.tensor(np.array(_edge1).T, dtype=torch.long)
         return center_edge, product_edge, material_edge
 
-    def get_material(self, materials: List[int]):
+    def recive_material(self, materials: List[int]):
+        material_list = []
         # 这个material是全部的
         for cell in self.workcell_list:
-            cell.get_material(materials[cell.get_function()])
+            cell.recive_material(materials[cell.get_function()])
 
     def move_product(self, products_list: List[int]):
         for cell in self.workcell_list:
             products_list[cell.get_function] = cell.move_product()
 
-    def work(self, actions):
-        for cell in self.workcell_list:
-            cell.work(actions[cell.get_id()])
+    def work(self, actions: np.ndarray):
+        # 如果同时工作的单元数量大于1，就会报错，惩罚就是当前步无法工作
+        if np.sum(actions == 1) > 1:
+            for cell in self.workcell_list:
+                cell.func_err()
+        # 如果正常就正常
+        else:
+            for i, cell in enumerate(self.workcell_list):
+                state = cell.work(actions[i])
+                # 表示当前工作单元的功能
+                if state == StateCode.workcell_working:
+                    self.func = cell.get_function()
+                    self.product = cell.get_products()
 
     def get_all_cell_func(self) -> List:
         a = []
@@ -77,3 +93,9 @@ class WorkCenter:
 
     def get_all_cell_state(self):
         return [cell.get_state() for cell in self.workcell_list]
+
+    def get_func(self):
+        return self.func
+
+    def get_product(self):
+        return self.product

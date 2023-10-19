@@ -21,4 +21,4 @@ class TransitCenter:
         return self.product_num
 
     def get_state(self):
-        return torch.tensor((self.state.value, self.product_id, self.product_num))
+        return torch.tensor((self.product_id, self.state.value, self.product_num))

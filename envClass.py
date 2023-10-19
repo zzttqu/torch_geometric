@@ -72,6 +72,7 @@ class EnvRun:
         self.edge_index: Dict[Tuple[str, str, str], torch.Tensor] = {}
         self.work_center_num = work_center_num
         self.work_cell_num = self.work_center_num * fun_per_center
+        self.func_per_center = fun_per_center
         self.work_center_list: List[WorkCenter] = []
         self.function_num = function_num
         self.center_num = function_num
@@ -87,6 +88,7 @@ class EnvRun:
         # 生成物流运输中心代号和中心存储物料的对应关系
         self.id_center: np.ndarray = np.zeros((self.center_num, 2), dtype=int)
         # 初始化工作中心
+        # 这个初始化的顺序和工作单元的id顺序也是一致
         for function_list in self.function_matrix:
             self.work_center_list.append(WorkCenter(function_list))
         # 各级别生产能力
@@ -219,27 +221,29 @@ class EnvRun:
         #     self.edge_weight[index] = flatt[i]
         products = np.zeros(self.function_num)
         # 处理产品
-        for work_cell in self.work_cell_list:
+        for work_center in self.work_center_list:
+            _func = work_center.get_func()
+            _products = work_center.get_product()
             # 取出所有物品，放入center中
-            self.center_list[work_cell.function].putin_product(work_cell.products)
+            self.center_list[_func].putin_product(work_center.get_product())
             # 当前步全部的product数量
-            products[work_cell.function] += work_cell.products
+            products[_func] += _products
 
-            work_cell.transport(2, 0)
+            work_center.transport(2, 0)
         self.step_products = products
         self.total_products += self.step_products
         # 根据是否接收物料的这个动作空间传递原料
-        for work_cell in self.work_cell_list:
+        for work_center in self.work_cell_list:
             # 如果为原料处理单元，function_id为0
-            if work_cell.function == 0:
-                work_cell.transport(3, work_cell.speed)
+            if work_center.function == 0:
+                work_center.transport(3, work_center.speed)
             else:
-                self.center_list[work_cell.function - 1].moveout_product(
-                    int(products[work_cell.function - 1] * collect[work_cell._id])
+                self.center_list[work_center.function - 1].moveout_product(
+                    int(products[work_center.function - 1] * collect[work_center._id])
                 )
-                work_cell.transport(
+                work_center.transport(
                     3,
-                    int(products[work_cell.function - 1] * collect[work_cell._id]),
+                    int(products[work_center.function - 1] * collect[work_center._id]),
                 )
                 # # 看看当前id在flat里边排第几个，然后把对应权重进行计算
                 # collect = flatt[torch.where(work_cell.cell_id == flat_id)[0].item()]
@@ -252,11 +256,13 @@ class EnvRun:
     #     for _id, action, work_cell in zip(workcell_id, workcell_action, self.work_cell_list):
     #         work_cell.work(action)
 
-    def update_all_work_cell(self, workcell_action, workcell_function=0):
-        # 先检测workcell是否出现冲突，冲突则报错
+    def update_all_work_center(self, workcell_action: np.ndarray, workcell_function=0):
+        # TODO 先检测workcell是否出现冲突，冲突则报错
+        # 按照每个工作中心具有的工作单元的数量进行折叠
+        workcell_action = workcell_action.reshape((-1, self.func_per_center))
 
-        for action, work_cell in zip(workcell_action, self.work_cell_list):
-            work_cell.work(action)
+        for action, work_center in zip(workcell_action, self.work_center_list):
+            work_center.work(action)
 
     def update_all(self, all_action: torch.Tensor):
         # 这里需要注意是raw顺序是一个节点，两个动作，不能这样拆分，需要重新折叠
@@ -264,7 +270,7 @@ class EnvRun:
         all_action_fold = all_action.view((-1, 2))
         work_cell_action_slice = all_action_fold[: self.work_cell_num].numpy()
         # TODO 需要修改针对workcenter的
-        self.update_all_work_cell(work_cell_action_slice[:, 0])
+        self.update_all_work_center(work_cell_action_slice[:, 0])
         self.deliver_centers_material(work_cell_action_slice[:, 1])
 
         # 额定扣血
@@ -302,7 +308,9 @@ class EnvRun:
             self.reward += 5
             self.done = 1
 
-    def get_obs(self):
+    def get_obs(
+        self,
+    ) -> (Dict[str, torch.Tensor], Dict[str, torch.Tensor], float, int, int):
         center_states = torch.zeros(
             (self.center_num, self.center_state_num), dtype=torch.float
         ).to(self.device)

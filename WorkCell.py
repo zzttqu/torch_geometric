@@ -7,7 +7,7 @@ from envClass import StateCode
 class WorkCell:
     next_id = 0
 
-    def __init__(self, function_id, work_center_id, speed=6, materials=0, products=0):
+    def __init__(self, function_id, work_center_id, speed=6, materials=6, products=0):
         super().__init__()
         # 需要有当前这个工作单元每个功能的备件，每个功能生产效率
         self._id = WorkCell.next_id
@@ -20,7 +20,7 @@ class WorkCell:
         self.health = 100
         self.state = StateCode.workcell_ready
 
-    def get_material(self, num):
+    def recive_material(self, num):
         # 或者接收原材料
         self.materials += num
 
@@ -30,8 +30,11 @@ class WorkCell:
         self.products = 0
         return current_product
 
+    def func_err(self):
+        self.state = StateCode.workcell_function_error
+
     def work(self, action):
-        # 工作/继续工作
+        # 工作/继续工作，就直接修改状态了，不用重置function_err
         if action == 1:
             self.state = StateCode.workcell_working
         # 停止工作
@@ -45,6 +48,7 @@ class WorkCell:
             self.products += self.speed
             self.materials -= self.speed
             # self.health -= 0.1
+        return self.state
 
     def state_check(self):
         # 低健康度
@@ -89,3 +93,10 @@ class WorkCell:
 
     def get_speed(self):
         return self.speed
+
+    def get_products(self):
+        return self.products
+
+    def get_materials(self):
+        return self.materials
+

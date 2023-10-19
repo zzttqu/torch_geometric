@@ -23,13 +23,13 @@ class PPOMemory:
     def remember(
         self,
         node_state: Dict[str, torch.Tensor],
-        edge_index: Dict[Tuple[str], torch.Tensor],
+        edge_index: Dict[str, torch.Tensor],
         value: torch.Tensor,
-        reward: torch.Tensor,
+        reward: float,
         done: int,
-        total_action: Dict[str, torch.Tensor],
+        total_action: torch.Tensor,
         log_probs: Dict[str, torch.Tensor],
-        eposide_step: int,
+        eposide_step: int = 0,
     ):
         self.node_states[self.count] = node_state
         self.total_actions[self.count] = total_action
@@ -45,7 +45,7 @@ class PPOMemory:
         self,
     ) -> (
         List[Dict[str, torch.Tensor]],
-        List[Dict[Tuple[str, str, str], torch.Tensor]],
+        List[Dict[str, torch.Tensor]],
         torch.Tensor,
         torch.Tensor,
         List[Dict[str, torch.Tensor]],

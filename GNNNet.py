@@ -127,7 +127,6 @@ class HGTNet(nn.Module):
                 data.num_node_features[node_type], hidden_channels
             )
         self.conv_list = torch.nn.ModuleList()
-        print(data.metadata())
         for _ in range(num_layers):
             conv = HANConv(hidden_channels, hidden_channels, data.metadata(), heads=2)
             self.conv_list.append(conv)

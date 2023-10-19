@@ -65,9 +65,9 @@ if __name__ == "__main__":
     batch_size = 64
 
     total_step = init_step
-    max_steps = 1000
+    max_steps = 5
     episode_step_max = 128
-    product_goal = 200
+    product_goal = 100
     n_epochs = 16
 
     episode_num = 0
@@ -132,8 +132,10 @@ if __name__ == "__main__":
         total_step += 1
         agent.network.eval()
         with torch.no_grad():
+            # raw是一个2*节点数量
             raw, log_prob = agent.get_action(obs_states, edge_index)
             value = agent.get_value(obs_states, edge_index)
+
         # 这个raw因为是字典，这里变了之后会影响get action中的raw
         # 后来还是改为了直接的tensor
         # for key, _value in raw.items():
@@ -141,16 +143,17 @@ if __name__ == "__main__":
         assert isinstance(raw, torch.Tensor), "raw 不是tensor"
         assert raw.device != "cpu", "raw 不在cpu中"
         env.update_all(raw.cpu())
-        raise SystemExit
         # 所以需要搬回cuda中
         # for key, _value in raw.items():
         #    raw[key] = _value.to(device)
         obs_states, edge_index, reward, dones, episode_step = env.get_obs()
+        print(obs_states, raw.view(-1, 2))
+        # raise SystemExit
         writer.add_scalars(
             "step/products",
             {
                 f"产品{i}": env.total_products[i]
-                for i in range(1, env.total_products.shape[0])
+                for i in range(0, env.total_products.shape[0])
             },
             total_step,
         )
