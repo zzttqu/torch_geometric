@@ -20,9 +20,12 @@ class WorkCell:
         self.health = 100
         self.state = StateCode.workcell_ready
 
-    def recive_material(self, num):
-        # 或者接收原材料
-        self.materials += num
+    def recive_material(self, num: int = None):
+        if num is None:
+            self.materials += self.speed
+        else:
+            # 或者接收原材料
+            self.materials += num
 
     def send_product(self):
         # 转移生产产品
@@ -99,4 +102,3 @@ class WorkCell:
 
     def get_materials(self):
         return self.materials
-

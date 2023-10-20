@@ -51,8 +51,6 @@ if __name__ == "__main__":
     else:
         init_step = int(data[-1][0])
     # 设置显示
-    # print(select_functions(0, 6, 14))
-    # raise SystemExit
     plt.rcParams["font.sans-serif"] = ["SimHei"]  # 显示中文标签
     plt.rcParams["axes.unicode_minus"] = False
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -61,7 +59,7 @@ if __name__ == "__main__":
     # 神奇trick
     torch.manual_seed(3407)
     function_num = 2
-    work_center_num = 5
+    work_center_num = 3
     batch_size = 64
 
     total_step = init_step
@@ -89,9 +87,10 @@ if __name__ == "__main__":
     # 加载之前的
 
     obs_states, edge_index, reward, dones, _ = env.get_obs()
+    print(obs_states)
     # print(f"初始化状态为{obs_states}")
     # print(f"初始化边为{edge_index}")
-    print(f"加工能力为{env.product_capacity}")
+    # print(f"加工能力为{env.product_capacity}")
     hetero_data = HeteroData()
     # 节点信息
     for key, _value in obs_states.items():
@@ -106,7 +105,7 @@ if __name__ == "__main__":
         init_data=hetero_data,
     )
 
-    agent.load_model("last_model.pth")
+    # agent.load_model("last_model.pth")
     memory = PPOMemory(
         batch_size,
         device,
@@ -147,7 +146,7 @@ if __name__ == "__main__":
         # for key, _value in raw.items():
         #    raw[key] = _value.to(device)
         obs_states, edge_index, reward, dones, episode_step = env.get_obs()
-        print(obs_states, raw.view(-1, 2))
+
         # raise SystemExit
         writer.add_scalars(
             "step/products",

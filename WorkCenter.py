@@ -4,8 +4,6 @@ import torch
 from torch import Tensor
 import numpy as np
 
-from envClass import StateCode
-
 
 # 这个类是用来定义加工中心的，一个加工中心包括多个加工单元，但同一时间只能有一个加工单元工作
 class WorkCenter:
@@ -25,6 +23,7 @@ class WorkCenter:
         self.func = self.workcell_list[0].get_function()
         self.product = 0
         self.working_cell = self.workcell_list[0]
+        self.all_cell_id = [workcell.get_id() for workcell in self.workcell_list]
 
     def build_edge(self, id_center) -> Union[torch.Tensor, torch.Tensor]:
         # 建立一个workcenter内部节点的联系
@@ -51,11 +50,19 @@ class WorkCenter:
         material_edge = torch.tensor(np.array(_edge1).T, dtype=torch.long)
         return center_edge, product_edge, material_edge
 
-    def recive_material(self, materials: List[int]):
-        material_list = []
+    def recive_material(self, materials: Union[List[int], int]):
+        # 如果为int说明这个center只有一个0号节点，也就直接给0功能节点加数值就行了
+        if isinstance(materials, int):
+            self.workcell_list[
+                self.get_all_cell_id().index(materials)
+            ].recive_material()
+        # materials如果是0号就只是int，需要判断
         # 这个material是全部的
-        for cell in self.workcell_list:
-            cell.recive_material(materials[cell.get_function()])
+        # 这个应该可以改成类似查表的，用cellid直接查在list中的位置
+        else:
+            print(materials)
+            for cell, material in zip(self.workcell_list, materials):
+                cell.recive_material(material)
 
     def move_product(self, products_list: List[int]):
         for cell in self.workcell_list:
@@ -71,6 +78,8 @@ class WorkCenter:
             for cell, action in zip(self.workcell_list, actions):
                 state = cell.work(action)
                 # 表示当前工作单元的功能
+                from envClass import StateCode
+
                 if state == StateCode.workcell_working:
                     self.working_cell = cell
                     self.func = cell.get_function()
@@ -79,22 +88,28 @@ class WorkCenter:
     def send_product(self):
         self.working_cell.send_product()
 
-    def get_all_cell_func(self) -> List:
+    def get_all_cellid_func(self) -> List:
         a = []
         for workcell in self.workcell_list:
             a.append([workcell.get_id(), workcell.get_function()])
         return a
 
+    def get_all_funcs(self) -> List[int]:
+        return self.function_list
+
     def get_id(self):
         return self.id
 
-    def get_all_cell_id(self):
-        return [workcell.get_id for workcell in self.workcell_list]
+    def get_all_cell_id(self) -> List[int]:
+        return self.all_cell_id
 
-    def get_cell_speed(self, indexs: List[int]) -> int:
-        # 输入是cell位置
-        cell_list = [self.workcell_list[index].get_speed() for index in indexs]
-        speed = sum(cell_list)
+    def get_cell_speed(self, indexs: Union[List[int], int]) -> int:
+        if isinstance(indexs, int):
+            speed = self.workcell_list[indexs].get_speed()
+        else:
+            # 输入是cell位置
+            speed_list = [self.workcell_list[index].get_speed() for index in indexs]
+            speed = sum(speed_list)
         return speed
 
     def get_all_cell_state(self):
