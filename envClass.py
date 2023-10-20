@@ -198,7 +198,7 @@ class EnvRun:
         # self.edge_index = torch.tensor(np.array(graph.edges()), dtype=torch.int64).T
         # endregion
 
-    def deliver_centers_material(self, workcell_get_material):
+    def deliver_centers_material(self, workcell_get_material: np.ndarray):
         #  计算有同一功能有几个节点要接收
         collect = np.zeros(self.work_cell_num)
         for indices in self.function_group:
@@ -222,28 +222,37 @@ class EnvRun:
         products = np.zeros(self.function_num)
         # 处理产品
         for work_center in self.work_center_list:
-            _func = work_center.get_func()
+            _funcs = work_center.get_func()
             _products = work_center.get_product()
             # 取出所有物品，放入center中
-            self.center_list[_func].putin_product(work_center.get_product())
+            self.center_list[_funcs].putin_product(work_center.get_product())
             # 当前步全部的product数量
-            products[_func] += _products
-
-            work_center.transport(2, 0)
+            products[_funcs] += _products
+            # 转移产品，清空workcell库存
+            work_center.send_product()
         self.step_products = products
         self.total_products += self.step_products
         # 根据是否接收物料的这个动作空间传递原料
-        for work_center in self.work_cell_list:
+        for work_center in self.work_center_list:
+            _funcs = work_center.get_all_cell_func()
             # 如果为原料处理单元，function_id为0
-            if work_center.function == 0:
-                work_center.transport(3, work_center.speed)
+            if 0 in _funcs:
+                # 如何function_id是0在workcenter中的话，就存入列表中，然后去workcenter中处理
+                work_center.recive_material(
+                    3,
+                    work_center.get_cell_speed(
+                        [i for i, x in enumerate(_funcs) if x == 0]
+                    ),
+                )
+            # 我就是让他相乘一个系数，如果不分配，这个系数就是0
             else:
-                self.center_list[work_center.function - 1].moveout_product(
-                    int(products[work_center.function - 1] * collect[work_center._id])
+                for _func in _funcs:
+                self.center_list[_funcs].moveout_product(
+                    int(products[_funcs] * collect[work_center._id])
                 )
                 work_center.transport(
                     3,
-                    int(products[work_center.function - 1] * collect[work_center._id]),
+                    int(products[_funcs] * collect[work_center._id]),
                 )
                 # # 看看当前id在flat里边排第几个，然后把对应权重进行计算
                 # collect = flatt[torch.where(work_cell.cell_id == flat_id)[0].item()]

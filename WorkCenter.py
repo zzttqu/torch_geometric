@@ -24,6 +24,7 @@ class WorkCenter:
             self.workcell_list.append(WorkCell(f, self.id))
         self.func = self.workcell_list[0].get_function()
         self.product = 0
+        self.working_cell = self.workcell_list[0]
 
     def build_edge(self, id_center) -> Union[torch.Tensor, torch.Tensor]:
         # 建立一个workcenter内部节点的联系
@@ -58,7 +59,7 @@ class WorkCenter:
 
     def move_product(self, products_list: List[int]):
         for cell in self.workcell_list:
-            products_list[cell.get_function] = cell.move_product()
+            products_list[cell.get_function] = cell.send_product()
 
     def work(self, actions: np.ndarray):
         # 如果同时工作的单元数量大于1，就会报错，惩罚就是当前步无法工作
@@ -67,12 +68,16 @@ class WorkCenter:
                 cell.func_err()
         # 如果正常就正常
         else:
-            for i, cell in enumerate(self.workcell_list):
-                state = cell.work(actions[i])
+            for cell, action in zip(self.workcell_list, actions):
+                state = cell.work(action)
                 # 表示当前工作单元的功能
                 if state == StateCode.workcell_working:
+                    self.working_cell = cell
                     self.func = cell.get_function()
                     self.product = cell.get_products()
+
+    def send_product(self):
+        self.working_cell.send_product()
 
     def get_all_cell_func(self) -> List:
         a = []
@@ -87,6 +92,7 @@ class WorkCenter:
         return [workcell.get_id for workcell in self.workcell_list]
 
     def get_cell_speed(self, indexs: List[int]) -> int:
+        # 输入是cell位置
         cell_list = [self.workcell_list[index].get_speed() for index in indexs]
         speed = sum(cell_list)
         return speed

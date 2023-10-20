@@ -12,11 +12,11 @@ class TransitCenter:
         self.state = StateCode.workcell_working
         self.product_num = 0
 
-    def putin_product(self, num):
+    def recive_product(self, num: int) -> int:
         self.product_num += num
         return self.product_num
 
-    def moveout_product(self, num):
+    def send_product(self, num: int) -> int:
         self.product_num -= num
         return self.product_num
 

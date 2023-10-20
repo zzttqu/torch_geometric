@@ -24,7 +24,7 @@ class WorkCell:
         # 或者接收原材料
         self.materials += num
 
-    def move_product(self):
+    def send_product(self):
         # 转移生产产品
         current_product = self.products
         self.products = 0
