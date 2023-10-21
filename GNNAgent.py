@@ -1,6 +1,5 @@
-from datetime import datetime
 import os
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 from torch.distributions import Categorical
 from torch.utils.data import BatchSampler, SubsetRandomSampler
 from torch_geometric.data import Data, Batch, HeteroData
@@ -58,7 +57,7 @@ class Agent:
     def get_value(
         self,
         state: Dict[str, torch.Tensor],
-        edge_index: Dict[Tuple[str], torch.Tensor],
+        edge_index: Dict[str, torch.Tensor],
     ) -> torch.Tensor:
         _, value = self.network(state, edge_index)
         return value
@@ -66,9 +65,9 @@ class Agent:
     def get_action(
         self,
         state: Dict[str, torch.Tensor],
-        edge_index: Dict[Tuple[str], torch.Tensor],
-        all_action: torch.Tensor = None,
-    ) -> (Dict[str, torch.Tensor], Dict[str, torch.Tensor]):
+        edge_index: Dict[str, torch.Tensor],
+        all_action: torch.Tensor = None, # type: ignore
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         # hetero_data = T.ToUndirected()(hetero_data)
 
         all_logits, _ = self.network(state, edge_index)
@@ -89,7 +88,7 @@ class Agent:
     def get_batch_values(
         self,
         node: List[Dict[str, torch.Tensor]],
-        edge: List[Dict[Tuple[str], torch.Tensor]],
+        edge: List[Dict[str, torch.Tensor]],
         mini_batch_size,
     ):
         all_values = []

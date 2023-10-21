@@ -5,7 +5,7 @@ import torch
 from GNNAgent import Agent, PPOMemory
 from torch_geometric.data import Data, Batch, HeteroData
 from envClass import EnvRun, select_functions
-from torch.utils.tensorboard import SummaryWriter
+from torch.utils.tensorboard.writer import SummaryWriter
 import csv
 from datetime import datetime
 
@@ -43,13 +43,10 @@ if __name__ == "__main__":
     # 读取用np读，写入用csv写
     try:
         data = np.genfromtxt("./log.csv", delimiter=",", skip_header=1)
-    except:
-        data = 0
-    # 检测nparray有几个维度
-    if data.ndim <= 1:
+        init_step = int(data[-1, 0]) if data.ndim > 1 else 0
+    except (IOError, ValueError):
+        # 处理文件不存在或数据不可读的情况
         init_step = 0
-    else:
-        init_step = int(data[-1][0])
     # 设置显示
     plt.rcParams["font.sans-serif"] = ["SimHei"]  # 显示中文标签
     plt.rcParams["axes.unicode_minus"] = False
@@ -63,9 +60,9 @@ if __name__ == "__main__":
     batch_size = 64
 
     total_step = init_step
-    max_steps = 5
-    episode_step_max = 128
-    product_goal = 100
+    max_steps = 500
+    episode_step_max = 64
+    product_goal = 200
     n_epochs = 16
 
     episode_num = 0
@@ -90,7 +87,7 @@ if __name__ == "__main__":
     print(obs_states)
     # print(f"初始化状态为{obs_states}")
     # print(f"初始化边为{edge_index}")
-    # print(f"加工能力为{env.product_capacity}")
+    print(f"加工能力为{env.product_capacity}")
     hetero_data = HeteroData()
     # 节点信息
     for key, _value in obs_states.items():
@@ -105,7 +102,7 @@ if __name__ == "__main__":
         init_data=hetero_data,
     )
 
-    # agent.load_model("last_model.pth")
+    agent.load_model("last_model.pth")
     memory = PPOMemory(
         batch_size,
         device,

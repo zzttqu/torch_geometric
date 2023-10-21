@@ -93,12 +93,13 @@ class EnvRun:
             self.work_center_list.append(WorkCenter(function_list))
         # 各级别生产能力
         self.product_capacity = [0 for _ in range(self.function_num)]
-
-        for i in range(self.function_num):
-            for work_center in self.work_center_list:
-                # 函数返回值的第二位是funcid，第一位是workcellid
-                fl = work_center.get_all_funcs()
+        for work_center in self.work_center_list:
+            fl = work_center.get_all_funcs()
+            for i in range(self.function_num):
+                # 函数返回值的是funcid
+                # where返回的是tuple，需要提取第一项
                 indices = np.where(fl == i)[0]
+                # indices实际上是index，不是id
                 if len(indices) > 0:
                     self.product_capacity[i] += work_center.get_cell_speed(indices)
         # 初始化集散中心
@@ -143,7 +144,7 @@ class EnvRun:
                     # 可视化节点需要id不能重复的
                     graph.add_edge(center.cell_id + self.work_cell_num, work_cell._id)
 
-    def build_edge(self):
+    def build_edge(self) -> Dict[str, torch.Tensor]:
         center_index = "work_cell_to_work_cell"
         product_index = "work_cell_to_center"
         material_index = "center_to_work_cell"
@@ -201,26 +202,13 @@ class EnvRun:
     def deliver_centers_material(self, workcell_get_material: np.ndarray):
         # 计算有同一功能有几个节点要接收
         # 这个是每个id的cell的分配数量
-        collect = np.zeros(self.work_cell_num)
-        print(workcell_get_material)
+        ratio = np.zeros(self.work_cell_num)
         for indices in self.function_group:
             if workcell_get_material[indices].sum() != 0:
                 softmax_value = 1 / (workcell_get_material[indices].sum())
             else:
                 softmax_value = 0
-            collect[indices] = softmax_value * workcell_get_material[indices]
-        # print(f"总共有{workcell_get_material[indices]}")
-        # print(f"softmax_value{softmax_value}")
-        # print(indices)
-        # flatt = torch.cat(softmax_values).squeeze()
-        # flat_id = torch.cat(self.function_group)
-        # # print(flatt, flat_id)
-        # # edgeindex第二行是接收方，选择出除了function0的节点id在接收方的
-        # any1 = torch.isin(self.edge_index[1], flat_id)
-        # edge_weight_index = torch.where(any1)[0]
-        # # 重新给edgeweigh赋值
-        # for i, index in enumerate(edge_weight_index):
-        #     self.edge_weight[index] = flatt[i]
+            ratio[indices] = softmax_value * workcell_get_material[indices]
         products = np.zeros(self.function_num)
         # 处理产品
         for work_center in self.work_center_list:
@@ -239,37 +227,28 @@ class EnvRun:
         for work_center in self.work_center_list:
             id_funcs = np.array(work_center.get_all_cellid_func(), dtype=int)
             # 第一列是cellid，第二列是functionid
-            # print(id_funcs[:, 0])
-            # 如果为原料处理单元，function_id为0
-            # 还需要考虑如果一个cell是0另一个不为0咋办。。。。
-            if 0 in id_funcs[0, :]:
-                zero_list = [
-                    i for i, x in zip(id_funcs[:, 0], id_funcs[:, 1]) if x == 0
-                ]
-                # 如何function_id是0在workcenter中的话，就存入列表中，然后去workcenter中处理
-                for zero_id in zero_list:
-                    work_center.recive_material(zero_id)
             # 我就是让他相乘一个系数，如果不分配，这个系数就是0
-            else:
-                # 这个是center中的每一个单元的功能
+            for _func in id_funcs:
                 # 第一位是cellid，第二位是functionid
-                for _func in id_funcs:
-                    assert isinstance(_func, np.ndarray)
-                    _func_id: int = _func[1]
-                    _cell_id: int = _func[0]
-                    self.center_list[_func_id].send_product(
-                        int(products[_func_id] * collect[_cell_id])
-                    )
-                # 因为products和collect都是ndarray，可以使用列表直接获取元素
-                work_center.recive_material(
-                    [products[id_funcs[0, :]] * collect[work_center.get_all_cell_id()]]
+                assert isinstance(_func, np.ndarray)
+                _func_id: int = _func[1]
+                _cell_id: int = _func[0]
+                self.center_list[_func_id].send_product(
+                    int(products[_func_id] * ratio[_cell_id])
                 )
-                # # 看看当前id在flat里边排第几个，然后把对应权重进行计算
-                # collect = flatt[torch.where(work_cell.cell_id == flat_id)[0].item()]
-                # # int会导致有盈余，但是至少不会发生没办法转移的情况
-                # self.center_list[work_cell.function - 1].moveout_product(
-                #     int(products[work_cell.function - 1] * collect))
-                # work_cell.transport(3, int(products[work_cell.function - 1] * collect))
+                # 因为products和collect都是ndarray，可以使用列表直接获取元素
+            # print(id_funcs, id_funcs[:, 0])
+            #
+            # collect是每个cell的权重
+            work_center.recive_material(
+                products[id_funcs[:, 1]] * ratio[id_funcs[:, 0]].tolist()
+            )
+            # # 看看当前id在flat里边排第几个，然后把对应权重进行计算
+            # collect = flatt[torch.where(work_cell.cell_id == flat_id)[0].item()]
+            # # int会导致有盈余，但是至少不会发生没办法转移的情况
+            # self.center_list[work_cell.function - 1].moveout_product(
+            #     int(products[work_cell.function - 1] * collect))
+            # work_cell.transport(3, int(products[work_cell.function - 1] * collect))
 
     # def update_work_cell(self, workcell_id, workcell_action, workcell_function=0):
     #     for _id, action, work_cell in zip(workcell_id, workcell_action, self.work_cell_list):

@@ -21,13 +21,13 @@ class WorkCell:
         self.health = 100
         self.state = StateCode.workcell_ready
 
-    def recive_material(self, num: int = None):  # type: ignore
+    def recive_material(self, num: int):
         """_summary_
 
         Args:
-            num (int, optional): _description_. Defaults to None.
+            num (int): 接受原料，但是如果功能为0则直接加speed
         """
-        if num is None:
+        if self.function == 0:
             self.materials += self.speed
         else:
             # 或者接收原材料

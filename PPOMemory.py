@@ -10,9 +10,10 @@ class PPOMemory:
         device,
     ):
         self.node_states = [{} for _ in range(batch_size)]
-        self.total_actions = [{} for _ in range(batch_size)]
         self.edge_indexs = [{} for _ in range(batch_size)]
-        self.log_probs = [{} for _ in range(batch_size)]
+        # 这里的actions还没考虑过要用字典来存不同类型的动作
+        self.total_actions = [torch.zeros(0) for _ in range(batch_size)]
+        self.log_probs = [torch.zeros(0) for _ in range(batch_size)]
 
         self.values = torch.zeros(batch_size).to(device)
         self.rewards = torch.zeros(batch_size).to(device)
@@ -28,7 +29,7 @@ class PPOMemory:
         reward: float,
         done: int,
         total_action: torch.Tensor,
-        log_probs: Dict[str, torch.Tensor],
+        log_probs: torch.Tensor,
         eposide_step: int = 0,
     ):
         self.node_states[self.count] = node_state
@@ -43,14 +44,15 @@ class PPOMemory:
 
     def generate_batches(
         self,
-    ) -> (
+    ) -> Tuple[
         List[Dict[str, torch.Tensor]],
         List[Dict[str, torch.Tensor]],
         torch.Tensor,
         torch.Tensor,
-        List[Dict[str, torch.Tensor]],
-        List[Dict[str, torch.Tensor]],
-    ):
+        torch.Tensor,
+        List[torch.Tensor],
+        List[torch.Tensor],
+    ]:
         data_list = []
         """ for i in range(self.count):
             hetero_data = HeteroData()
