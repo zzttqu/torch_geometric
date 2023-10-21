@@ -115,9 +115,18 @@ class EnvRun:
         # 奖励和完成与否
         self.reward = 0
         self.done = 0
-        self.product_goal = product_goal
+        # 根据生产能力和最大步数计算生产目标数量
+        # 根据水桶效应，选择最低的生产能力环节代表
+        # TODO 每个工步的生产能力其实是波动的，因为其实是工作中心的生产能力
+        desire_product_goal = int(1.5 * episode_step_max / min(self.product_capacity))
+        if product_goal - desire_product_goal < 10:
+            self.product_goal = desire_product_goal
+        else:
+            self.product_goal = product_goal
         # 一次循环前的step数量
         self.episode_step = 0
+        print("目标生产数量:", self.product_goal)
+
         self.episode_step_max = episode_step_max
 
     def show_graph(self):
@@ -282,17 +291,19 @@ class EnvRun:
 
         # 生产有奖励，根据产品级别加分
         products_reward = 0
-        for i, prod_num in enumerate(self.step_products):
-            # 生产数量/该产品生产单元数量*生产产品类别/总产品类别
+        for i, prod_num in enumerate(self.step_products - 1):
+            # 生产数量/该产品生产单元数量*生产产品类别/总产品类别，当生产第一个类别的时候不计数
             products_reward += (
                 0.005
-                * max(prod_num, 0.1)
+                * prod_num
                 / self.product_capacity[i]
                 * (i + 1)
                 / self.function_num
             )
+        # 最终产物肯定要大大滴加分
+        products_reward += 0.01 * self.step_products[-1] / self.product_capacity[-1]
         # 最终产物奖励，要保证这个产物奖励小于扣血
-        goal_reward = max(self.total_products[-1], 0.1) / self.product_goal * 0.1
+        goal_reward = self.total_products[-1] / self.product_goal * 0.1
         self.reward += stable_reward
         self.reward += goal_reward
         self.reward += products_reward
@@ -316,6 +327,7 @@ class EnvRun:
         a = []
         for work_center in self.work_center_list:
             a += work_center.get_all_cell_state()
+            b = work_center.get_speed()
         # 按cellid排序，因为要构造数据结构
         sort_state = sorted(a, key=lambda x: x[0])
         work_cell_states = torch.stack(sort_state).float().to(self.device)

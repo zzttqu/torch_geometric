@@ -21,6 +21,7 @@ class WorkCenter:
         for f in function_list:
             self.workcell_list.append(WorkCell(f, self.id))
         self.func = self.workcell_list[0].get_function()
+        self.speed = self.workcell_list[0].get_speed()
         self.product = 0
         self.working_cell = self.workcell_list[0]
         self.all_cell_id = [workcell.get_id() for workcell in self.workcell_list]
@@ -78,6 +79,7 @@ class WorkCenter:
                 if state == StateCode.workcell_working:
                     self.working_cell = cell
                     self.func = cell.get_function()
+                    self.speed = cell.get_speed()
                     self.product = cell.get_products()
 
     def send_product(self):
@@ -109,6 +111,9 @@ class WorkCenter:
 
     def get_all_cell_state(self):
         return [cell.get_state() for cell in self.workcell_list]
+
+    def get_speed(self):
+        return self.speed
 
     def get_func(self):
         return self.func

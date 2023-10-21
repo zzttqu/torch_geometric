@@ -10,7 +10,7 @@ import csv
 from datetime import datetime
 
 
-def show():
+def show(graph):
     # 可视化
     node_states = nx.get_node_attributes(graph, "state")
     node_function = nx.get_node_attributes(graph, "function")
@@ -55,12 +55,12 @@ if __name__ == "__main__":
     torch.set_printoptions(precision=3, sci_mode=False)
     # 神奇trick
     torch.manual_seed(3407)
-    function_num = 2
-    work_center_num = 3
+    function_num = 5
+    work_center_num = 10
     batch_size = 64
 
     total_step = init_step
-    max_steps = 500
+    max_steps = 64 * 4
     episode_step_max = 64
     product_goal = 200
     n_epochs = 16
