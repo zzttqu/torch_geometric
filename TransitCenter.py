@@ -17,6 +17,9 @@ class TransitCenter:
         return self.product_num
 
     def send_product(self, num: int) -> int:
+        """
+        从物流中心中向外发送产品
+        """
         self.product_num -= num
         return self.product_num
 

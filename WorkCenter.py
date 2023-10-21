@@ -1,4 +1,4 @@
-from typing import List, Union
+from typing import List, Union, Tuple
 
 import torch
 from torch import Tensor
@@ -15,7 +15,7 @@ class WorkCenter:
         self.id = WorkCenter.next_id
         WorkCenter.next_id += 1
         self.workcell_list: List[WorkCell] = []
-        self.function_list: List[int] = function_list.tolist()
+        self.function_list: np.ndarray = function_list
 
         # 构建workcell
         for f in function_list:
@@ -25,7 +25,7 @@ class WorkCenter:
         self.working_cell = self.workcell_list[0]
         self.all_cell_id = [workcell.get_id() for workcell in self.workcell_list]
 
-    def build_edge(self, id_center) -> Union[torch.Tensor, torch.Tensor]:
+    def build_edge(self, id_center) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # 建立一个workcenter内部节点的联系
         _id_list = []
         _edge = []
@@ -66,7 +66,7 @@ class WorkCenter:
 
     def move_product(self, products_list: List[int]):
         for cell in self.workcell_list:
-            products_list[cell.get_function] = cell.send_product()
+            products_list[cell.get_function()] = cell.send_product()
 
     def work(self, actions: np.ndarray):
         # 如果同时工作的单元数量大于1，就会报错，惩罚就是当前步无法工作
@@ -94,7 +94,7 @@ class WorkCenter:
             a.append([workcell.get_id(), workcell.get_function()])
         return a
 
-    def get_all_funcs(self) -> List[int]:
+    def get_all_funcs(self) -> np.ndarray:
         return self.function_list
 
     def get_id(self):

@@ -1,3 +1,4 @@
+from typing import Union
 import numpy as np
 import torch
 
@@ -20,7 +21,12 @@ class WorkCell:
         self.health = 100
         self.state = StateCode.workcell_ready
 
-    def recive_material(self, num: int = None):
+    def recive_material(self, num: int = None):  # type: ignore
+        """_summary_
+
+        Args:
+            num (int, optional): _description_. Defaults to None.
+        """
         if num is None:
             self.materials += self.speed
         else:
@@ -28,15 +34,26 @@ class WorkCell:
             self.materials += num
 
     def send_product(self):
-        # 转移生产产品
+        """
+        转移生产出来的产品
+        """
         current_product = self.products
         self.products = 0
         return current_product
 
     def func_err(self):
+        """工作中心是否因为错误启动工作单元而报错"""
         self.state = StateCode.workcell_function_error
 
-    def work(self, action):
+    def work(self, action: int) -> StateCode:
+        """工作单元运行
+
+        Args:
+            action (int): 工作单元的动作，只有0：停止和1：运行
+
+        Returns:
+            StateCode: 当前工作单元的状态
+        """
         # 工作/继续工作，就直接修改状态了，不用重置function_err
         if action == 1:
             self.state = StateCode.workcell_working
@@ -54,6 +71,7 @@ class WorkCell:
         return self.state
 
     def state_check(self):
+        """检测目前工作单元状态，检测原料是否够生产"""
         # 低健康度
         # if self.health < 50:
         #      = None
@@ -75,7 +93,16 @@ class WorkCell:
         self.products = 0
 
     # 状态空间
-    def get_state(self):
+    def get_state(self) -> torch.Tensor:
+        """获取工作单元状态
+
+        Returns:
+            torch.Tensor: 第一项是工作单元id
+            第二项是工作单元隶属的工作中心id
+            第三项是当前的功能
+            第四项是一个工步的生产能力
+            第五项是当前的产品数量
+        """
         return torch.tensor(
             [
                 self._id,

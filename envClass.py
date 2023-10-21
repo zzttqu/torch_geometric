@@ -69,7 +69,7 @@ class EnvRun:
         product_goal=500,
     ):
         self.device = device
-        self.edge_index: Dict[Tuple[str, str, str], torch.Tensor] = {}
+        self.edge_index: Dict[str, torch.Tensor] = {}
         self.work_center_num = work_center_num
         self.work_cell_num = self.work_center_num * fun_per_center
         self.func_per_center = fun_per_center
@@ -97,7 +97,7 @@ class EnvRun:
         for i in range(self.function_num):
             for work_center in self.work_center_list:
                 # 函数返回值的第二位是funcid，第一位是workcellid
-                fl = np.array([sub[1] for sub in work_center.get_all_cellid_func()])
+                fl = work_center.get_all_funcs()
                 indices = np.where(fl == i)[0]
                 if len(indices) > 0:
                     self.product_capacity[i] += work_center.get_cell_speed(indices)
@@ -123,7 +123,7 @@ class EnvRun:
         # 可视化
         graph = nx.DiGraph()
         for node in self.work_cell_list:
-            graph.add_node(node._id, working=node.working)
+            graph.add_node(node._id, working=node.get_function())
         for center in self.center_list:
             graph.add_node(
                 center.cell_id + self.work_cell_num, product=center.product_id
@@ -209,8 +209,6 @@ class EnvRun:
             else:
                 softmax_value = 0
             collect[indices] = softmax_value * workcell_get_material[indices]
-        print(collect)
-        raise SystemExit
         # print(f"总共有{workcell_get_material[indices]}")
         # print(f"softmax_value{softmax_value}")
         # print(indices)
@@ -226,6 +224,7 @@ class EnvRun:
         products = np.zeros(self.function_num)
         # 处理产品
         for work_center in self.work_center_list:
+            # 这个是取出当前正在工作的
             _funcs = work_center.get_func()
             _products = work_center.get_product()
             # 取出所有物品，放入center中
@@ -238,7 +237,7 @@ class EnvRun:
         self.total_products += self.step_products
         # 根据是否接收物料的这个动作空间传递原料
         for work_center in self.work_center_list:
-            id_funcs = np.array(work_center.get_all_cellid_func())
+            id_funcs = np.array(work_center.get_all_cellid_func(), dtype=int)
             # 第一列是cellid，第二列是functionid
             # print(id_funcs[:, 0])
             # 如果为原料处理单元，function_id为0
@@ -255,8 +254,11 @@ class EnvRun:
                 # 这个是center中的每一个单元的功能
                 # 第一位是cellid，第二位是functionid
                 for _func in id_funcs:
-                    self.center_list[_func[1]].send_product(
-                        int(products[_func[1]] * collect[_func[0]])
+                    assert isinstance(_func, np.ndarray)
+                    _func_id: int = _func[1]
+                    _cell_id: int = _func[0]
+                    self.center_list[_func_id].send_product(
+                        int(products[_func_id] * collect[_cell_id])
                     )
                 # 因为products和collect都是ndarray，可以使用列表直接获取元素
                 work_center.recive_material(
@@ -328,7 +330,7 @@ class EnvRun:
 
     def get_obs(
         self,
-    ) -> (Dict[str, torch.Tensor], Dict[str, torch.Tensor], float, int, int):
+    ) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor], float, int, int]:
         center_states = torch.zeros(
             (self.center_num, self.center_state_num), dtype=torch.float
         ).to(self.device)
