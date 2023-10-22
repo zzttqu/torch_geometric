@@ -1,10 +1,12 @@
 from enum import Enum
+from itertools import count
 import numpy as np
 import networkx as nx
 from matplotlib import pyplot as plt
 import torch
 from typing import List, Dict, Tuple, Union
-
+from torch_geometric.data import HeteroData, Data
+from torch_geometric.utils import to_networkx
 from WorkCenter import WorkCenter
 
 
@@ -130,28 +132,55 @@ class EnvRun:
         self.episode_step_max = episode_step_max
 
     def show_graph(self):
+        # norm_data: Data = data.to_homogeneous()
+        process_state = []
+        size = 0
+        for i, _value in enumerate(self.obs_states.values()):
+            # 先取出第一列id，然后乘上i，因为每个index都是从0开始的
+            process_state += (_value[:, 0] + size).tolist()
+            size = _value.shape[0]
+
+
+
+        print(process_state)
+        raise SystemExit
+        process_edge = []
+        node = []
+        hetero_data = HeteroData()
+        # 节点信息
+        for key, _value in self.obs_states.items():
+            hetero_data[key].x = _value
+            # 边信息
+        for key, _value in self.edge_index.items():
+            node1, node2 = key.split("_to_")
+            hetero_data[(f"{node1}", f"{key}", f"{node2}")].edge_index = _value
+        graph: nx.Graph = to_networkx(data=hetero_data, to_undirected=False)
+        for key in self.edge_index.keys():
+            graph.add_edges_from([self.edge_index[key]])
+        nx.draw(graph, with_labels=True)
+        plt.show()
         # 可视化
-        graph = nx.DiGraph()
-        for node in self.work_cell_list:
-            graph.add_node(node._id, working=node.get_function())
-        for center in self.center_list:
-            graph.add_node(
-                center.cell_id + self.work_cell_num, product=center.product_id
-            )
-        # 生成边
-        for work_cell in self.work_cell_list:
-            for center in self.center_list:
-                cell_fun_id = work_cell.function
-                product_id = center.product_id
-                # 边信息
-                # 从生产到中转
-                if cell_fun_id == product_id:
-                    # 可视化节点需要id不能重复的
-                    graph.add_edge(work_cell._id, center.cell_id + self.work_cell_num)
-                # 从中转到下一步
-                if product_id == cell_fun_id - 1:
-                    # 可视化节点需要id不能重复的
-                    graph.add_edge(center.cell_id + self.work_cell_num, work_cell._id)
+        # graph = nx.DiGraph()
+        # for node in self.work_cell_list:
+        #     graph.add_node(node._id, working=node.get_function())
+        # for center in self.center_list:
+        #     graph.add_node(
+        #         center.cell_id + self.work_cell_num, product=center.product_id
+        #     )
+        # # 生成边
+        # for work_cell in self.work_cell_list:
+        #     for center in self.center_list:
+        #         cell_fun_id = work_cell.function
+        #         product_id = center.product_id
+        #         # 边信息
+        #         # 从生产到中转
+        #         if cell_fun_id == product_id:
+        #             # 可视化节点需要id不能重复的
+        #             graph.add_edge(work_cell._id, center.cell_id + self.work_cell_num)
+        #         # 从中转到下一步
+        #         if product_id == cell_fun_id - 1:
+        #             # 可视化节点需要id不能重复的
+        #             graph.add_edge(center.cell_id + self.work_cell_num, work_cell._id)
 
     def build_edge(self) -> Dict[str, torch.Tensor]:
         center_index = "work_cell_to_work_cell"
@@ -335,13 +364,19 @@ class EnvRun:
         for center in self.center_list:
             center_states[center.cell_id] = center.get_state()
 
-        obs_states: Dict[str, torch.Tensor] = {
+        self.obs_states: Dict[str, torch.Tensor] = {
             "work_cell": work_cell_states,
             "center": center_states,
         }
         # 保证obsstates和edgeindex都转到cuda上
 
-        return obs_states, self.edge_index, self.reward, self.done, self.episode_step
+        return (
+            self.obs_states,
+            self.edge_index,
+            self.reward,
+            self.done,
+            self.episode_step,
+        )
 
     def get_function_group(self):
         work_function = []

@@ -143,7 +143,7 @@ if __name__ == "__main__":
         # for key, _value in raw.items():
         #    raw[key] = _value.to(device)
         obs_states, edge_index, reward, dones, episode_step = env.get_obs()
-
+        env.show_graph()
         # raise SystemExit
         writer.add_scalars(
             "step/products",
