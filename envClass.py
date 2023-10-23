@@ -425,6 +425,7 @@ class EnvRun:
             self.done = 1
         # 完成任务目标
         if self.total_products[-1] > self.product_goal:
+            print(self.total_products)
             self.reward += 5
             self.done = 1
 
