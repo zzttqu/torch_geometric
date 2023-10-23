@@ -135,14 +135,13 @@ class EnvRun:
         # norm_data: Data = data.to_homogeneous()
         process_state = []
         size = 0
-        for i, _value in enumerate(self.obs_states.values()):
-            # 先取出第一列id，然后乘上i，因为每个index都是从0开始的
+        for _value in self.obs_states.values():
+            # 先取出第一列id，然后乘上i，因为每个index都是从0开始的，所以需要知道上一组的个数
             process_state += (_value[:, 0] + size).tolist()
             size = _value.shape[0]
-
-
-
-        print(process_state)
+        process_id = list(map(int, process_state))
+        process_state = [(process_id[i], {"func": process_id[i + 1]}) for i in range(5)]
+        print(process_id)
         raise SystemExit
         process_edge = []
         node = []
@@ -356,7 +355,6 @@ class EnvRun:
         a = []
         for work_center in self.work_center_list:
             a += work_center.get_all_cell_state()
-            b = work_center.get_speed()
         # 按cellid排序，因为要构造数据结构
         sort_state = sorted(a, key=lambda x: x[0])
         work_cell_states = torch.stack(sort_state).float().to(self.device)
