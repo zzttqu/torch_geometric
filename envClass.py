@@ -141,7 +141,6 @@ class EnvRun:
         # 初始化生产中心
         # 产品数量
         self.step_products = np.zeros(function_num)
-        self.total_products = np.zeros(function_num)
         self.function_group = self.get_function_group()
         # 奖励和完成与否
         self.reward = 0
@@ -149,11 +148,11 @@ class EnvRun:
         # 根据生产能力和最大步数计算生产目标数量
         # 根据水桶效应，选择最低的生产能力环节代表
         # TODO 每个工步的生产能力其实是波动的，因为其实是工作中心的生产能力
-        desire_product_goal = int(1.5 * episode_step_max / min(self.product_capacity))
-        if product_goal - desire_product_goal < 10:
+        desire_product_goal = int(0.2 * episode_step_max * min(self.product_capacity))
+        if abs(product_goal - desire_product_goal) < 100:
             self.product_goal = desire_product_goal
         else:
-            self.product_goal = product_goal
+            self.product_goal = desire_product_goal
         # 一次循环前的step数量
         self.episode_step = 0
         print("目标生产数量:", self.product_goal)
@@ -332,7 +331,7 @@ class EnvRun:
         # 处理产品
         for work_center in self.work_center_list:
             # 这个是取出当前正在工作的
-            _funcs = work_center.get_func()
+            _funcs: int = work_center.get_func()
             _products = work_center.get_product()
             # 取出所有物品，放入center中
             self.center_list[_funcs].recive_product(work_center.get_product())
@@ -341,7 +340,6 @@ class EnvRun:
             # 转移产品，清空workcell库存
             work_center.send_product()
         self.step_products = products
-        self.total_products += self.step_products
         # 根据是否接收物料的这个动作空间传递原料
         for work_center in self.work_center_list:
             id_funcs = np.array(work_center.get_all_cellid_func(), dtype=int)
@@ -404,28 +402,27 @@ class EnvRun:
         for i, prod_num in enumerate(self.step_products - 1):
             # 生产数量/该产品生产单元数量*生产产品类别/总产品类别，当生产第一个类别的时候不计数
             products_reward += (
-                0.005
+                -0.002
                 * prod_num
                 / self.product_capacity[i]
-                * (i + 1)
-                / self.function_num
+                # * (i)
+                # / self.function_num
             )
         # 最终产物肯定要大大滴加分
         products_reward += 0.01 * self.step_products[-1] / self.product_capacity[-1]
         # 最终产物奖励，要保证这个产物奖励小于扣血
-        goal_reward = self.total_products[-1] / self.product_goal * 0.1
+        goal_reward = self.center_list[-1].get_product_num() / self.product_goal * 0.1
         self.reward += stable_reward
         self.reward += goal_reward
         self.reward += products_reward
-        self.episode_step += 1
         self.done = 0
-        # 超过步数
-        if self.episode_step > self.episode_step_max:
+        self.episode_step += 1
+        # 相等的时候刚好是episode，就是1,2,3,4，4如果是max，那等于4的时候就应该跳出了
+        if self.episode_step >= self.episode_step_max:
             # self.reward -= 10
             self.done = 1
         # 完成任务目标
-        if self.total_products[-1] > self.product_goal:
-            print(self.total_products)
+        elif self.center_list[-1].get_product_num() > self.product_goal:
             self.reward += 5
             self.done = 1
 

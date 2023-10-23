@@ -57,13 +57,13 @@ if __name__ == "__main__":
     torch.manual_seed(3407)
     function_num = 4
     work_center_num = 5
-    batch_size = 64
+    batch_size = 32
 
     total_step = init_step
     max_steps = 64 * 4
-    episode_step_max = 64
+    episode_step_max = 32
     product_goal = 200
-    n_epochs = 16
+    n_epochs = 8
 
     episode_num = 0
     learn_num = 0
@@ -113,7 +113,6 @@ if __name__ == "__main__":
     now_time = datetime.now()
 
     # 添加计算图
-
     agent.network(obs_states, edge_index)
 
     writer.add_graph(
@@ -147,8 +146,8 @@ if __name__ == "__main__":
         writer.add_scalars(
             "step/products",
             {
-                f"产品{i}": env.total_products[i]
-                for i in range(0, env.total_products.shape[0])
+                f"产品{i}": env.center_list[i].get_product_num()
+                for i in range(0, len(env.center_list))
             },
             total_step,
         )
@@ -172,6 +171,7 @@ if __name__ == "__main__":
             writer.add_scalar("loss", loss, total_step)
         if dones == 1:
             print("=================")
+            # 因为步数是先+1，所以是从1开始演变的1,2,3,4,5,6,7,8,9,10
             print(f"总步数：{total_step}，本次循环步数为：{episode_step}，奖励为{ reward:.3f}")
             writer.add_scalar("reward", reward, total_step)
             with open("./log.csv", "a", newline="") as csvfile:

@@ -22,7 +22,8 @@ class TransitCenter:
         """
         self.product_num -= num
         return self.product_num
-
+    def get_product_num(self):
+        return self.product_num
     def get_state(self):
         return torch.tensor(
             [self.product_id, 
