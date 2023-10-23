@@ -28,6 +28,7 @@ class WorkCenter:
 
     def build_edge(self, id_center) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # 建立一个workcenter内部节点的联系
+        # TODO 还是应该新建一个工作中心节点表示
         _id_list = []
         _edge = []
         for cell in self.workcell_list:
