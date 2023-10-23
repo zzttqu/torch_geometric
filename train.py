@@ -84,9 +84,9 @@ if __name__ == "__main__":
     # 加载之前的
 
     obs_states, edge_index, reward, dones, _ = env.get_obs()
-    
-    # print(obs_states)
-    env.show_graph()
+
+    print(obs_states)
+
     # print(f"初始化状态为{obs_states}")
     # print(f"初始化边为{edge_index}")
     print(f"加工能力为{env.product_capacity}")
@@ -154,6 +154,7 @@ if __name__ == "__main__":
             },
             total_step,
         )
+        env.show_graph(total_step)
         writer.add_scalar("step/reward", reward, total_step)
         memory.remember(obs_states, edge_index, value, reward, dones, raw, log_prob)
         # 如果记忆数量等于batch_size就学习

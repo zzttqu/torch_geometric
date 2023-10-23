@@ -161,7 +161,7 @@ class EnvRun:
         self.episode_step_max = episode_step_max
 
     # TODO 正在完成可视化相关工作
-    def show_graph(self):
+    def show_graph(self, step):
         # norm_data: Data = data.to_homogeneous()
         process_label = {}
         process_edge = []
@@ -180,7 +180,9 @@ class EnvRun:
                         count
                     ] = f"{i}：\n 状态：{state[1]} \n 功能：{state[0]} \n 属于{state[2]}"
                 elif _key == "center":
-                    process_label[count] = f"{i}：\n 状态：{state[1]} \n 产品：{state[0]}"
+                    process_label[
+                        count
+                    ] = f"{i}：\n 状态：{state[1]} \n 产品：{state[0]} \n 数量：{state[2]}"
                 count += 1
         for _key, _edge in self.edge_index.items():
             node1, node2 = _key.split("_to_")
@@ -219,9 +221,10 @@ class EnvRun:
         nx.draw_networkx_labels(graph, pos=pos, labels=process_label)
         nx.draw_networkx_edges(graph, pos, edgelist=process_edge, edge_color="black")
         # nx.draw(graph, with_labels=True)
-        
-        plt.savefig("./graph.png", dpi=1000, bbox_inches="tight")
-        raise SystemExit
+
+        plt.savefig(f"./graph/{step}.png", dpi=800, bbox_inches="tight")
+        plt.close()
+        return
         process_edge = []
         node = []
         hetero_data = HeteroData()
