@@ -131,17 +131,51 @@ class EnvRun:
 
         self.episode_step_max = episode_step_max
 
+    # TODO 正在完成可视化相关工作
     def show_graph(self):
         # norm_data: Data = data.to_homogeneous()
         process_state = []
+        process_edge = []
         size = 0
-        for _value in self.obs_states.values():
-            # 先取出第一列id，然后乘上i，因为每个index都是从0开始的，所以需要知道上一组的个数
-            process_state += (_value[:, 0] + size).tolist()
+        for _key, _value in self.obs_states.items():
+            # 按照顺序一个一个处理成字典和元组形式，state是一行的数据
+            for i, state in enumerate(_value):
+                # 根据键值不同设置不同的属性
+                # cell的function指的是其生成的产品id
+                state = list(map(int, state))
+                if _key == "work_cell":
+                    process_state.append(
+                        (
+                            i + size,
+                            {
+                                "function": state[0],
+                                "state": state[1],
+                            },
+                        )
+                    )
+                elif _key == "center":
+                    process_state.append(
+                        (
+                            i + size,
+                            {"product": state[0], "state": state[1]},
+                        )
+                    )
+
             size = _value.shape[0]
-        process_id = list(map(int, process_state))
-        process_state = [(process_id[i], {"func": process_id[i + 1]}) for i in range(5)]
-        print(process_id)
+        for _key, _edge in self.edge_index.items():
+            node1, node2 = _key.split("_to_")
+            edge_T = _edge.T.int().tolist()
+            if node1 == "center":
+                for __edge in edge_T:
+                    process_edge.append((__edge[0] + size, __edge[1]))
+            if node2 == "center":
+                for __edge in edge_T:
+                    process_edge.append((__edge[0] + size, __edge[1]))
+        print(process_edge)
+        print("========")
+        print(process_state)
+        graph = nx.DiGraph()
+        graph.add_nodes_from(process_state)
         raise SystemExit
         process_edge = []
         node = []
@@ -306,7 +340,7 @@ class EnvRun:
         work_cell_action_slice = all_action_fold[: self.work_cell_num].numpy()
 
         self.update_all_work_center(work_cell_action_slice[:, 0])
-        # TODO 需要修改针对workcenter的
+        # 针对workcenter的
         self.deliver_centers_material(work_cell_action_slice[:, 1])
 
         # 额定扣血
@@ -355,9 +389,9 @@ class EnvRun:
         a = []
         for work_center in self.work_center_list:
             a += work_center.get_all_cell_state()
-        # 按cellid排序，因为要构造数据结构
-        sort_state = sorted(a, key=lambda x: x[0])
-        work_cell_states = torch.stack(sort_state).float().to(self.device)
+        # 按cellid排序，因为要构造数据结构，其实不用排序，因为本来就是按顺序生成的。。。。
+        # sort_state = sorted(a, key=lambda x: x[0])
+        work_cell_states = torch.stack(a).to(self.device)
 
         for center in self.center_list:
             center_states[center.cell_id] = center.get_state()

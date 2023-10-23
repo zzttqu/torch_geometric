@@ -25,5 +25,7 @@ class TransitCenter:
 
     def get_state(self):
         return torch.tensor(
-            [self.product_id, self.state.value, self.product_num], dtype=torch.float32
+            [self.product_id, 
+             self.state.value, 
+             self.product_num], dtype=torch.float32
         )

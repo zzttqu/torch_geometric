@@ -105,12 +105,13 @@ class WorkCell:
         """
         return torch.tensor(
             [
-                self.work_center_id,
-                self.state.value,
                 self.function,
+                self.state.value,
+                self.work_center_id,
                 self.speed,
                 self.products,
-            ]
+            ],
+            dtype=torch.float32,
         )
 
     # 功能id
