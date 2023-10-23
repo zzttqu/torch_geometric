@@ -60,7 +60,7 @@ if __name__ == "__main__":
     batch_size = 32
 
     total_step = init_step
-    max_steps = 64 * 4
+    max_steps = 64 * 8
     episode_step_max = 32
     product_goal = 200
     n_epochs = 8

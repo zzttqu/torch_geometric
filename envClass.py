@@ -399,19 +399,19 @@ class EnvRun:
 
         # 生产有奖励，根据产品级别加分
         products_reward = 0
-        for i, prod_num in enumerate(self.step_products - 1):
-            # 生产数量/该产品生产单元数量*生产产品类别/总产品类别，当生产第一个类别的时候不计数
-            products_reward += (
-                -0.002
-                * prod_num
-                / self.product_capacity[i]
-                # * (i)
-                # / self.function_num
-            )
+        # for i, prod_num in enumerate(self.step_products - 1):
+        #     # 生产数量/该产品生产单元数量*生产产品类别/总产品类别，当生产第一个类别的时候不计数
+        #     products_reward += (
+        #         -0.002
+        #         * prod_num
+        #         / self.product_capacity[i]
+        #         # * (i)
+        #         # / self.function_num
+        #     )
         # 最终产物肯定要大大滴加分
-        products_reward += 0.01 * self.step_products[-1] / self.product_capacity[-1]
+        products_reward += 0.05 * self.step_products[-1] / self.product_capacity[-1]
         # 最终产物奖励，要保证这个产物奖励小于扣血
-        goal_reward = self.center_list[-1].get_product_num() / self.product_goal * 0.1
+        goal_reward = self.center_list[-1].get_product_num() / self.product_goal * 0.01
         self.reward += stable_reward
         self.reward += goal_reward
         self.reward += products_reward
@@ -419,7 +419,7 @@ class EnvRun:
         self.episode_step += 1
         # 相等的时候刚好是episode，就是1,2,3,4，4如果是max，那等于4的时候就应该跳出了
         if self.episode_step >= self.episode_step_max:
-            # self.reward -= 10
+            self.reward -= 5
             self.done = 1
         # 完成任务目标
         elif self.center_list[-1].get_product_num() > self.product_goal:
