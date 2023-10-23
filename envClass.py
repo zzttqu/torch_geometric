@@ -1,5 +1,6 @@
 from enum import Enum
 from itertools import count
+from platform import node
 import numpy as np
 import networkx as nx
 from matplotlib import pyplot as plt
@@ -58,6 +59,34 @@ def edge_weight_init(raw_array):
     for value, ratio in normalized_value.items():
         normalized_array = np.where(normalized_array == value, ratio, normalized_array)
     return torch.tensor(normalized_array)
+
+
+def gen_pos(node_lists: List[List], nodes):
+    """产生工作单元和搬运中心的位置坐标
+
+    Args:
+        node_list (_type_): _description_
+        node_type_array (_type_): _description_
+
+    Raises:
+        SystemExit: _description_
+
+    Returns:
+        _type_: _description_
+    """
+    step = 1
+    x_list = []
+    y_list = []
+    for i, node_list in enumerate(node_lists):
+        x_step = 10 / len(node_list)
+        for j in range(len(node_list)):
+            y_list.append(i * step)
+            x_list.append((j + 0.5) * x_step)
+
+    pos = {}
+    for node, x, y in zip(nodes, x_list, y_list):
+        pos[node] = (x, y)
+    return pos
 
 
 class EnvRun:
@@ -134,9 +163,12 @@ class EnvRun:
     # TODO 正在完成可视化相关工作
     def show_graph(self):
         # norm_data: Data = data.to_homogeneous()
-        process_state = []
+        process_label = {}
         process_edge = []
-        size = 0
+        # 这个size是有多少个worcell，主要是为了重新编号
+        size = self.obs_states["work_cell"].shape[0]
+        # 总节点数量
+        count = 0
         for _key, _value in self.obs_states.items():
             # 按照顺序一个一个处理成字典和元组形式，state是一行的数据
             for i, state in enumerate(_value):
@@ -144,38 +176,51 @@ class EnvRun:
                 # cell的function指的是其生成的产品id
                 state = list(map(int, state))
                 if _key == "work_cell":
-                    process_state.append(
-                        (
-                            i + size,
-                            {
-                                "function": state[0],
-                                "state": state[1],
-                            },
-                        )
-                    )
+                    process_label[
+                        count
+                    ] = f"{i}：\n 状态：{state[1]} \n 功能：{state[0]} \n 属于{state[2]}"
                 elif _key == "center":
-                    process_state.append(
-                        (
-                            i + size,
-                            {"product": state[0], "state": state[1]},
-                        )
-                    )
-
-            size = _value.shape[0]
+                    process_label[count] = f"{i}：\n 状态：{state[1]} \n 产品：{state[0]}"
+                count += 1
         for _key, _edge in self.edge_index.items():
             node1, node2 = _key.split("_to_")
-            edge_T = _edge.T.int().tolist()
+            edge_T = _edge.T.tolist()
             if node1 == "center":
                 for __edge in edge_T:
                     process_edge.append((__edge[0] + size, __edge[1]))
-            if node2 == "center":
+            elif node2 == "center":
                 for __edge in edge_T:
-                    process_edge.append((__edge[0] + size, __edge[1]))
-        print(process_edge)
-        print("========")
-        print(process_state)
+                    process_edge.append((__edge[0], __edge[1] + size))
+            else:
+                for __edge in edge_T:
+                    process_edge.append((__edge[0], __edge[1]))
+        # print(process_edge)
+        # print("========")
+        # print(process_label)
+        # print(count)
         graph = nx.DiGraph()
-        graph.add_nodes_from(process_state)
+        graph.add_nodes_from([i for i in range(count)])
+        graph.add_edges_from(process_edge)
+        nn = [[i for i in range(size)], [i for i in range(size, count)]]
+        pos = gen_pos(nn, [i for i in range(count)])
+        plt.figure(figsize=(15, 10))
+        nx.draw_networkx_nodes(
+            graph,
+            pos=pos,
+            nodelist=[i for i in range(size)],
+            node_color="red",
+        )
+        nx.draw_networkx_nodes(
+            graph,
+            pos,
+            nodelist=[i for i in range(size, count)],
+            node_color="blue",
+        )
+        nx.draw_networkx_labels(graph, pos=pos, labels=process_label)
+        nx.draw_networkx_edges(graph, pos, edgelist=process_edge, edge_color="black")
+        # nx.draw(graph, with_labels=True)
+        
+        plt.savefig("./graph.png", dpi=1000, bbox_inches="tight")
         raise SystemExit
         process_edge = []
         node = []

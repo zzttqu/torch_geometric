@@ -55,8 +55,8 @@ if __name__ == "__main__":
     torch.set_printoptions(precision=3, sci_mode=False)
     # 神奇trick
     torch.manual_seed(3407)
-    function_num = 5
-    work_center_num = 10
+    function_num = 4
+    work_center_num = 5
     batch_size = 64
 
     total_step = init_step
@@ -85,7 +85,7 @@ if __name__ == "__main__":
 
     obs_states, edge_index, reward, dones, _ = env.get_obs()
     
-    print(obs_states)
+    # print(obs_states)
     env.show_graph()
     # print(f"初始化状态为{obs_states}")
     # print(f"初始化边为{edge_index}")
