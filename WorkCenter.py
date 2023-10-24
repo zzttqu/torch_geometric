@@ -31,25 +31,28 @@ class WorkCenter:
         # TODO 还是应该新建一个工作中心节点表示
         _id_list = []
         _edge = []
+        # 从cell到center
         for cell in self.workcell_list:
-            _id_list.append(cell.get_id())
-        for i in _id_list:
-            for j in _id_list:
-                if i != j:
-                    _edge.append((i, j))
-        center_edge = torch.tensor(np.array(_edge).T, dtype=torch.long)
+            _edge.append((cell.get_id(), self.id))
+        center_edge = torch.tensor(_edge, dtype=torch.long).squeeze().T
+        # 从center到storage
         _edge = []
         _edge1 = []
         # 建立上下游联系
         for cell in self.workcell_list:
             for _center in id_center:
                 # _center是一个长度为2的数组，第一位是center的id，第二位是product的id
+                # 从center到storage
                 if cell.get_function() == _center[1]:
-                    _edge.append((cell.get_id(), _center[0]))
+                    _edge.append((self.get_id(), _center[0]))
+                # 从storage到center
                 elif cell.get_function() - 1 == _center[1]:
                     _edge1.append((_center[0], cell.get_id()))
-        product_edge = torch.tensor(np.array(_edge).T, dtype=torch.long)
-        material_edge = torch.tensor(np.array(_edge1).T, dtype=torch.long)
+        product_edge = torch.tensor(_edge, dtype=torch.long).squeeze().T
+        if len(_edge1) > 0:
+            material_edge = torch.tensor(_edge1, dtype=torch.long).T
+        else:      
+            material_edge = None
         return center_edge, product_edge, material_edge
 
     def recive_material(self, materials: List[int]):

@@ -263,7 +263,7 @@ class EnvRun:
         #             graph.add_edge(center.cell_id + self.work_cell_num, work_cell._id)
 
     def build_edge(self) -> Dict[str, torch.Tensor]:
-        center2_index = "center_to_cell"
+        # center2_index = "center_to_cell"
         center1_index = "cell_to_center"
         product_index = "center_to_storage"
         material_index = "storage_to_cell"
@@ -282,9 +282,10 @@ class EnvRun:
             self.edge_index[product_index] = torch.cat(
                 [self.edge_index[product_index], product_edge], dim=1
             )
-            self.edge_index[material_index] = torch.cat(
-                [self.edge_index[material_index], material_edge], dim=1
-            )
+            if material_edge is not None:
+                self.edge_index[material_index] = torch.cat(
+                    [self.edge_index[material_index], material_edge], dim=1
+                )
         self.edge_index[center1_index] = self.edge_index[center1_index].to(self.device)
         self.edge_index[product_index] = self.edge_index[product_index].to(self.device)
         self.edge_index[material_index] = self.edge_index[material_index].to(

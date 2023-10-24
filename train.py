@@ -55,8 +55,8 @@ if __name__ == "__main__":
     torch.set_printoptions(precision=3, sci_mode=False)
     # 神奇trick
     torch.manual_seed(3407)
-    function_num = 4
-    work_center_num = 5
+    function_num = 2
+    work_center_num = 3
     batch_size = 32
 
     total_step = init_step
@@ -84,7 +84,7 @@ if __name__ == "__main__":
     # 加载之前的
 
     obs_states, edge_index, reward, dones, _ = env.get_obs()
-
+    print(edge_index)
     # print(f"初始化状态为{obs_states}")
     # print(f"初始化边为{edge_index}")
     print(f"加工能力为{env.product_capacity}")
@@ -113,8 +113,9 @@ if __name__ == "__main__":
     now_time = datetime.now()
 
     # 添加计算图
-    agent.network(obs_states, edge_index)
-
+    a, b = agent.network(obs_states, edge_index)
+    print(a)
+    raise SystemExit
     writer.add_graph(
         agent.network,
         input_to_model=[obs_states, edge_index],

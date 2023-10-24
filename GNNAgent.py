@@ -66,14 +66,16 @@ class Agent:
         self,
         state: Dict[str, torch.Tensor],
         edge_index: Dict[str, torch.Tensor],
-        all_action: torch.Tensor = None, # type: ignore
+        all_action: Dict[str, torch.Tensor] = None,  # type: ignore
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         # hetero_data = T.ToUndirected()(hetero_data)
 
         all_logits, _ = self.network(state, edge_index)
-
+        assert isinstance(all_logits, Dict[str, torch.Tensor]), "必须是字典类型"
         # 第一项是功能动作，第二项是是否接受上一级运输
         # 目前不需要对center进行动作，所以存储后可以不用
+        for key, value in all_logits.items():
+            all_logits[key] = value.view((-1, 2))
         all_logits = all_logits.view((-1, 2))
         all_dist = Categorical(logits=all_logits)
         # 判断action是否为空

@@ -131,7 +131,10 @@ class HGTNet(nn.Module):
             conv = HANConv(hidden_channels, hidden_channels, data.metadata(), heads=2)
             self.conv_list.append(conv)
         self.lin0 = nn.Linear(hidden_channels, hidden_channels)
-        self.linOut = nn.Linear(hidden_channels, action_dim * action_choice)
+        # 这里先写死了吧，应该需要根据需求进行设置
+        # 工作中心一个动作，动作空间为工作单元数量+1，表示启动哪个工作单元，工作单元一个动作，是否接收
+        self.linCenter = nn.Linear(hidden_channels, 3)
+        self.linCell = nn.Linear(hidden_channels, 2)
         self.linV = nn.Linear(hidden_channels, 1)
         # self.pool = SoftmaxAggregation(channels=hidden_channels)
 
@@ -165,10 +168,18 @@ class HGTNet(nn.Module):
         value = self.linV(full_x).mean()
         # 另一个需要根据每个节点用异质图线性层输出成一个dict
         # dict无法直接用tanh激活，还需要for
-
-        full_x = self.lin0(full_x)
-
-        action = torch.tanh(self.linOut(full_x))
+        x_dict = {
+            node_type: F.leaky_relu(self.lin0(x)) for node_type, x in x_dict.items()
+        }
+        action = {}
+        for node_type, x in x_dict.items():
+            if node_type == "center":
+                action[node_type] = torch.tanh(self.linCenter(x))
+            elif node_type == "cell":
+                action[node_type] = torch.tanh(self.linCell(x))
+        # action = {
+        #     node_type: torch.tanh(self.linOut(x)) for node_type, x in x_dict.items()
+        # }
         return action, value
 
     def save_model(self, name):
