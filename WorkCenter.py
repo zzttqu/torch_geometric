@@ -121,3 +121,13 @@ class WorkCenter:
 
     def get_product(self):
         return self.product
+
+    def get_state(self):
+        return torch.tensor(
+            [
+                self.func,
+                self.speed,
+                self.product,
+            ],
+            dtype=torch.float32,
+        )

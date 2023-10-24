@@ -134,9 +134,9 @@ class EnvRun:
                 if len(indices) > 0:
                     self.product_capacity[i] += work_center.get_cell_speed(indices)
         # 初始化集散中心
-        self.center_list: List[TransitCenter] = []
+        self.storage_list: List[TransitCenter] = []
         for i in range(function_num):
-            self.center_list.append(TransitCenter(i))
+            self.storage_list.append(TransitCenter(i))
             self.id_center[i] = i
         # 初始化生产中心
         # 产品数量
@@ -263,10 +263,11 @@ class EnvRun:
         #             graph.add_edge(center.cell_id + self.work_cell_num, work_cell._id)
 
     def build_edge(self) -> Dict[str, torch.Tensor]:
-        center_index = "work_cell_to_work_cell"
-        product_index = "work_cell_to_center"
-        material_index = "center_to_work_cell"
-        self.edge_index[center_index] = torch.zeros((2, 0), dtype=torch.long)
+        center2_index = "center_to_cell"
+        center1_index = "cell_to_center"
+        product_index = "center_to_storage"
+        material_index = "storage_to_cell"
+        self.edge_index[center1_index] = torch.zeros((2, 0), dtype=torch.long)
         self.edge_index[product_index] = torch.zeros((2, 0), dtype=torch.long)
         self.edge_index[material_index] = torch.zeros((2, 0), dtype=torch.long)
         # 连接在workcenter中生成的边
@@ -275,8 +276,8 @@ class EnvRun:
                 id_center=self.id_center
             )
             # 需要按列拼接
-            self.edge_index[center_index] = torch.cat(
-                [self.edge_index[center_index], center_edge], dim=1
+            self.edge_index[center1_index] = torch.cat(
+                [self.edge_index[center1_index], center_edge], dim=1
             )
             self.edge_index[product_index] = torch.cat(
                 [self.edge_index[product_index], product_edge], dim=1
@@ -284,7 +285,7 @@ class EnvRun:
             self.edge_index[material_index] = torch.cat(
                 [self.edge_index[material_index], material_edge], dim=1
             )
-        self.edge_index[center_index] = self.edge_index[center_index].to(self.device)
+        self.edge_index[center1_index] = self.edge_index[center1_index].to(self.device)
         self.edge_index[product_index] = self.edge_index[product_index].to(self.device)
         self.edge_index[material_index] = self.edge_index[material_index].to(
             self.device
@@ -295,7 +296,7 @@ class EnvRun:
         # 生成边
         # region
         for work_cell in self.work_cell_list:
-            for center in self.center_list:
+            for center in self.storage_list:
                 cell_fun_id = work_cell.function
                 product_id = center.product_id
                 # 边信息
@@ -334,7 +335,7 @@ class EnvRun:
             _funcs: int = work_center.get_func()
             _products = work_center.get_product()
             # 取出所有物品，放入center中
-            self.center_list[_funcs].recive_product(work_center.get_product())
+            self.storage_list[_funcs].recive_product(work_center.get_product())
             # 当前步全部的product数量
             products[_funcs] += _products
             # 转移产品，清空workcell库存
@@ -350,7 +351,7 @@ class EnvRun:
                 assert isinstance(_func, np.ndarray)
                 _func_id: int = _func[1]
                 _cell_id: int = _func[0]
-                self.center_list[_func_id].send_product(
+                self.storage_list[_func_id].send_product(
                     int(products[_func_id] * ratio[_cell_id])
                 )
                 # 因为products和collect都是ndarray，可以使用列表直接获取元素
@@ -411,7 +412,7 @@ class EnvRun:
         # 最终产物肯定要大大滴加分
         products_reward += 0.05 * self.step_products[-1] / self.product_capacity[-1]
         # 最终产物奖励，要保证这个产物奖励小于扣血
-        goal_reward = self.center_list[-1].get_product_num() / self.product_goal * 0.01
+        goal_reward = self.storage_list[-1].get_product_num() / self.product_goal * 0.01
         self.reward += stable_reward
         self.reward += goal_reward
         self.reward += products_reward
@@ -422,14 +423,14 @@ class EnvRun:
             self.reward -= 5
             self.done = 1
         # 完成任务目标
-        elif self.center_list[-1].get_product_num() > self.product_goal:
+        elif self.storage_list[-1].get_product_num() > self.product_goal:
             self.reward += 5
             self.done = 1
 
     def get_obs(
         self,
     ) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor], float, int, int]:
-        center_states = torch.zeros(
+        storage_states = torch.zeros(
             (self.center_num, self.center_state_num), dtype=torch.float
         ).to(self.device)
         a = []
@@ -439,12 +440,17 @@ class EnvRun:
         # sort_state = sorted(a, key=lambda x: x[0])
         work_cell_states = torch.stack(a).to(self.device)
 
-        for center in self.center_list:
-            center_states[center.cell_id] = center.get_state()
+        for storage in self.storage_list:
+            storage_states[storage.cell_id] = storage.get_state()
+        b = []
+        for center in self.work_center_list:
+            b.append(center.get_state())
+        work_center_states = torch.stack(b).to(self.device)
 
         self.obs_states: Dict[str, torch.Tensor] = {
-            "work_cell": work_cell_states,
-            "center": center_states,
+            "cell": work_cell_states,
+            "center": work_center_states,
+            "storage": storage_states,
         }
         # 保证obsstates和edgeindex都转到cuda上
 
@@ -481,5 +487,5 @@ class EnvRun:
         self.episode_step = 0
         for worker in self.work_cell_list:
             worker.reset_state()
-        for center in self.center_list:
+        for center in self.storage_list:
             center.product_num = 0

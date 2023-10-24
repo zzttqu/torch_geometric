@@ -146,8 +146,8 @@ if __name__ == "__main__":
         writer.add_scalars(
             "step/products",
             {
-                f"产品{i}": env.center_list[i].get_product_num()
-                for i in range(0, len(env.center_list))
+                f"产品{i}": env.storage_list[i].get_product_num()
+                for i in range(0, len(env.storage_list))
             },
             total_step,
         )

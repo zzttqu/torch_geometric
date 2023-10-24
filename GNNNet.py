@@ -142,9 +142,9 @@ class HGTNet(nn.Module):
         self,
         x_dict: Dict[str, torch.Tensor],
         edge_index_dict: Dict[str, torch.Tensor],
-    ) -> (Dict[str, torch.Tensor], torch.Tensor):
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        前向传播，tensorboard不支持tuple类型的输入，需要单独的字符串作为输入
+        前向传播，tensorboard不支持tuple类型的输入，需要单独的字符串作为字典索引
         """
         norm_edge_index_dict = {}
         for key, _value in edge_index_dict.items():
@@ -153,7 +153,7 @@ class HGTNet(nn.Module):
         # 根据node type分别传播
 
         x_dict = {
-            node_type: self.encoders[f"{node_type}_linear"](x).relu_()
+            node_type: F.leaky_relu(self.encoders[f"{node_type}_linear"](x))
             for node_type, x in x_dict.items()
         }
 

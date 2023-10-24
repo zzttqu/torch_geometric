@@ -103,13 +103,14 @@ class WorkCell:
             第四项是一个工步的生产能力
             第五项是当前的产品数量
         """
+        # TODO  改为onehot编码的function和state
         return torch.tensor(
             [
                 self.function,
                 self.state.value,
-                self.work_center_id,
+                # self.work_center_id,
                 self.speed,
-                self.products,
+                # self.products,
             ],
             dtype=torch.float32,
         )
