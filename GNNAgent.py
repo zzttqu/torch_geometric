@@ -74,16 +74,23 @@ class Agent:
         assert isinstance(all_logits, Dict[str, torch.Tensor]), "必须是字典类型"
         # 第一项是功能动作，第二项是是否接受上一级运输
         # 目前不需要对center进行动作，所以存储后可以不用
+
+        all_dist: Dict[str, Categorical] = {}
         for key, value in all_logits.items():
-            all_logits[key] = value.view((-1, 2))
-        all_logits = all_logits.view((-1, 2))
-        all_dist = Categorical(logits=all_logits)
+            all_dist[key] = Categorical(logits=value)
         # 判断action是否为空
+        log_probs = torch.zeros(1, dtype=torch.float32)
         if all_action is None:
-            all_action = all_dist.sample()
+            all_action = {}
+            for key, value in all_dist.items():
+                all_action[key] = value.sample()
+        for key, value in all_dist.items():
+            log_probs += torch.stack(
+                [all_dist[key].log_prob(action) for key, action in all_action.values()]
+            ).sum(0)
         # 只管采样，不管是哪类节点
         # 前边是workcell，后边是center
-        log_probs = torch.stack([all_dist.log_prob(all_action)]).sum(0)
+        # log_probs = torch.stack([all_dist.log_prob(all_action)]).sum(0)
 
         return all_action, log_probs
 
