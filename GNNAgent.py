@@ -67,11 +67,11 @@ class Agent:
         state: Dict[str, torch.Tensor],
         edge_index: Dict[str, torch.Tensor],
         all_action: Dict[str, torch.Tensor] = None,  # type: ignore
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor]:
         # hetero_data = T.ToUndirected()(hetero_data)
 
         all_logits, _ = self.network(state, edge_index)
-        assert isinstance(all_logits, Dict[str, torch.Tensor]), "必须是字典类型"
+        assert isinstance(all_logits, dict), "必须是字典类型"
         # 第一项是功能动作，第二项是是否接受上一级运输
         # 目前不需要对center进行动作，所以存储后可以不用
 
@@ -85,8 +85,9 @@ class Agent:
             for key, value in all_dist.items():
                 all_action[key] = value.sample()
         for key, value in all_dist.items():
+            print(torch.stack([value.log_prob(all_action[key])]).sum(0))
             log_probs += torch.stack(
-                [all_dist[key].log_prob(action) for key, action in all_action.values()]
+                [all_dist[key].log_prob(action) for key, action in all_action.items()]
             ).sum(0)
         # 只管采样，不管是哪类节点
         # 前边是workcell，后边是center
@@ -112,7 +113,7 @@ class Agent:
         mini_batch_size,
         node: List[Dict[str, torch.Tensor]],
         edge: List[Dict[str, torch.Tensor]],
-        action_list: List[torch.Tensor],
+        action_list: List[Dict[str, torch.Tensor]],
     ):
         all_log_probs = []
         for i in range(mini_batch_size):

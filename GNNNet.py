@@ -145,7 +145,7 @@ class HGTNet(nn.Module):
         self,
         x_dict: Dict[str, torch.Tensor],
         edge_index_dict: Dict[str, torch.Tensor],
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor]:
         """
         前向传播，tensorboard不支持tuple类型的输入，需要单独的字符串作为字典索引
         """

@@ -8,6 +8,7 @@ from envClass import EnvRun, select_functions
 from torch.utils.tensorboard.writer import SummaryWriter
 import csv
 from datetime import datetime
+from loguru import logger
 
 
 def show(graph):
@@ -60,7 +61,7 @@ if __name__ == "__main__":
     batch_size = 32
 
     total_step = init_step
-    max_steps = 64 * 8
+    max_steps = 10
     episode_step_max = 32
     product_goal = 200
     n_epochs = 8
@@ -86,7 +87,7 @@ if __name__ == "__main__":
     obs_states, edge_index, reward, dones, _ = env.get_obs()
     # print(f"初始化状态为{obs_states}")
     # print(f"初始化边为{edge_index}")
-    print(f"加工能力为{env.product_capacity}")
+    logger.info(f"加工能力为{env.product_capacity}")
     hetero_data = HeteroData()
     # 节点信息
     for key, _value in obs_states.items():
@@ -113,8 +114,7 @@ if __name__ == "__main__":
 
     # 添加计算图
     a, b = agent.network(obs_states, edge_index)
-    print(a)
-    raise SystemExit
+
     writer.add_graph(
         agent.network,
         input_to_model=[obs_states, edge_index],
@@ -135,9 +135,11 @@ if __name__ == "__main__":
         # 后来还是改为了直接的tensor
         # for key, _value in raw.items():
         #    raw[key] = _value.cpu()
-        assert isinstance(raw, torch.Tensor), "raw 不是tensor"
-        assert raw.device != "cpu", "raw 不在cpu中"
-        env.update_all(raw.cpu())
+        assert isinstance(raw, dict), "raw 不是字典"
+        # assert raw.device != "cpu", "raw 不在cpu中"
+        for key, _value in raw.items():
+            raw[key] = _value.cpu()
+        env.update_all(raw)
         # 所以需要搬回cuda中
         # for key, _value in raw.items():
         #    raw[key] = _value.to(device)

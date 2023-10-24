@@ -53,7 +53,7 @@ class WorkCenter:
             material_edge = torch.tensor(_edge1, dtype=torch.long).T
         else:      
             material_edge = None
-        return center_edge, product_edge, material_edge
+        return center_edge, product_edge, material_edge # type: ignore
 
     def recive_material(self, materials: List[int]):
         # 如果为int说明这个center只有一个0号节点，也就直接给0功能节点加数值就行了

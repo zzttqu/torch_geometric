@@ -11,8 +11,8 @@ class PPOMemory:
     ):
         self.node_states = [{} for _ in range(batch_size)]
         self.edge_indexs = [{} for _ in range(batch_size)]
-        # 这里的actions还没考虑过要用字典来存不同类型的动作
-        self.total_actions = [torch.zeros(0) for _ in range(batch_size)]
+        # 这里的actions用字典来存不同类型的动作
+        self.total_actions = [{} for _ in range(batch_size)]
         self.log_probs = [torch.zeros(0) for _ in range(batch_size)]
 
         self.values = torch.zeros(batch_size).to(device)
@@ -28,7 +28,7 @@ class PPOMemory:
         value: torch.Tensor,
         reward: float,
         done: int,
-        total_action: torch.Tensor,
+        total_action: Dict[str, torch.Tensor],
         log_probs: torch.Tensor,
         eposide_step: int = 0,
     ):
@@ -50,7 +50,7 @@ class PPOMemory:
         torch.Tensor,
         torch.Tensor,
         torch.Tensor,
-        List[torch.Tensor],
+        List[Dict[str, torch.Tensor]],
         List[torch.Tensor],
     ]:
         data_list = []

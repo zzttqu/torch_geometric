@@ -9,7 +9,7 @@ torchvision = "*"
 torchaudio = "*"
 pipreqs = "*"
 matplotlib = "*"
-
+loguru= "*"
 [dev-packages]
 
 [requires]

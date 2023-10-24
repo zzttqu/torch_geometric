@@ -369,27 +369,19 @@ class EnvRun:
             #     int(products[work_cell.function - 1] * collect))
             # work_cell.transport(3, int(products[work_cell.function - 1] * collect))
 
-    # def update_work_cell(self, workcell_id, workcell_action, workcell_function=0):
-    #     for _id, action, work_cell in zip(workcell_id, workcell_action, self.work_cell_list):
-    #         work_cell.work(action)
-
-    def update_all_work_center(self, workcell_action: np.ndarray, workcell_function=0):
+    def update_all_work_center(self, workcell_action: np.ndarray):
         # 先检测workcell是否出现冲突，冲突则报错
         # 按照每个工作中心具有的工作单元的数量进行折叠
-        workcell_action = workcell_action.reshape((-1, self.func_per_center))
-
+    
         for action, work_center in zip(workcell_action, self.work_center_list):
             work_center.work(action)
 
-    def update_all(self, all_action: torch.Tensor):
-        # 这里需要注意是raw顺序是一个节点，两个动作，不能这样拆分，需要重新折叠
-        # 要先折叠，再切片
-        all_action_fold = all_action.view((-1, 2))
-        work_cell_action_slice = all_action_fold[: self.work_cell_num].numpy()
+    def update_all(self, all_action: Dict[str, torch.Tensor]):
+        # action按节点类别分开
 
-        self.update_all_work_center(work_cell_action_slice[:, 0])
+        self.update_all_work_center(all_action["center"].numpy())
         # 针对workcenter的
-        self.deliver_centers_material(work_cell_action_slice[:, 1])
+        self.deliver_centers_material(all_action["cell"].numpy())
 
         # 额定扣血
         stable_reward = (
