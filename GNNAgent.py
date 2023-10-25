@@ -7,8 +7,7 @@ from GNNNet import HGTNet
 import torch
 import torch.nn.functional as F
 from PPOMemory import PPOMemory
-
-# T.Constant()
+from loguru import logger
 
 
 class Agent:
@@ -76,19 +75,19 @@ class Agent:
         # 目前不需要对center进行动作，所以存储后可以不用
 
         all_dist: Dict[str, Categorical] = {}
-        for key, value in all_logits.items():
-            all_dist[key] = Categorical(logits=value)
+        for key, logit in all_logits.items():
+            all_dist[key] = Categorical(logits=logit)
         # 判断action是否为空
-        log_probs = torch.zeros(1, dtype=torch.float32)
+        log_probs = torch.zeros(0, dtype=torch.float32, device=self.device)
+        # if all_action is not None:
+        #     logger.info(all_action)
         if all_action is None:
             all_action = {}
-            for key, value in all_dist.items():
-                all_action[key] = value.sample()
-        for key, value in all_dist.items():
-            print(torch.stack([value.log_prob(all_action[key])]).sum(0))
-            log_probs += torch.stack(
-                [all_dist[key].log_prob(action) for key, action in all_action.items()]
-            ).sum(0)
+            for key, dist in all_dist.items():
+                all_action[key] = dist.sample()
+        for key, _dist in all_dist.items():
+            tmp = torch.stack([_dist.log_prob(all_action[key])]).sum(0)
+            log_probs = torch.cat((log_probs, tmp), dim=0)
         # 只管采样，不管是哪类节点
         # 前边是workcell，后边是center
         # log_probs = torch.stack([all_dist.log_prob(all_action)]).sum(0)
@@ -117,7 +116,8 @@ class Agent:
     ):
         all_log_probs = []
         for i in range(mini_batch_size):
-            action, log_probs = self.get_action(node[i], edge[i], action_list[i])
+            _, log_probs = self.get_action(node[i], edge[i], action_list[i])
+            # 这个probs本来就是一维的，其实不用cat，stack更好吧
             all_log_probs.append(log_probs)
         log_probs_list = torch.cat(all_log_probs, dim=0).view((mini_batch_size, -1))
         return log_probs_list.sum(0)
@@ -139,7 +139,7 @@ class Agent:
         last_node_state,
         last_done,
         edge_index,
-        mini_batch_size=16,
+        mini_batch_size,
     ):
         (
             nodes,
@@ -193,7 +193,6 @@ class Agent:
                 mini_nodes = [nodes[i] for i in index]
                 mini_edges = [edges[i] for i in index]
                 mini_actions = [actions[i] for i in index]
-
                 # 这里必须用stack因为是堆叠出新的维度，logprobs只有一个维度
                 mini_probs = torch.stack([log_probs[i] for i in index])
                 new_log_prob = self.get_batch_actions_probs(
@@ -202,6 +201,7 @@ class Agent:
                     mini_edges,
                     mini_actions,
                 )
+                # logger.debug(f"new_log_prob: {new_log_prob}")
 
                 # 这里感觉应该连接起来变成一个
 

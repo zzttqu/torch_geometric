@@ -2,7 +2,7 @@ import torch
 from torch_geometric.nn import GCNConv
 from torch import nn
 import torchvision.models as models
-import gym
+#import gym
 from envClass import AGVCell, WorkCell, StateCode
 
 

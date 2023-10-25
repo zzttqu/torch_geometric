@@ -58,10 +58,10 @@ if __name__ == "__main__":
     torch.manual_seed(3407)
     function_num = 2
     work_center_num = 3
-    batch_size = 32
+    batch_size = 16
 
     total_step = init_step
-    max_steps = 10
+    max_steps = 64 * 8
     episode_step_max = 32
     product_goal = 200
     n_epochs = 8
@@ -102,7 +102,7 @@ if __name__ == "__main__":
         init_data=hetero_data,
     )
 
-    # agent.load_model("last_model.pth")
+    agent.load_model("last_model.pth")
     memory = PPOMemory(
         batch_size,
         device,
@@ -137,9 +137,10 @@ if __name__ == "__main__":
         #    raw[key] = _value.cpu()
         assert isinstance(raw, dict), "raw 不是字典"
         # assert raw.device != "cpu", "raw 不在cpu中"
+        _raw = {}
         for key, _value in raw.items():
-            raw[key] = _value.cpu()
-        env.update_all(raw)
+            _raw[key] = _value.cpu()
+        env.update_all(_raw)
         # 所以需要搬回cuda中
         # for key, _value in raw.items():
         #    raw[key] = _value.to(device)
@@ -165,6 +166,7 @@ if __name__ == "__main__":
                 last_node_state=obs_states,
                 last_done=dones,
                 edge_index=edge_index,
+                mini_batch_size=batch_size // 4,
             )
             learn_time = (datetime.now() - now_time).seconds
             print(f"第{learn_num}次学习，学习用时：{learn_time}秒")

@@ -159,7 +159,6 @@ class EnvRun:
 
         self.episode_step_max = episode_step_max
 
-    # TODO 正在完成可视化相关工作
     def show_graph(self, step):
         # norm_data: Data = data.to_homogeneous()
         process_label = {}
@@ -372,9 +371,9 @@ class EnvRun:
     def update_all_work_center(self, workcell_action: np.ndarray):
         # 先检测workcell是否出现冲突，冲突则报错
         # 按照每个工作中心具有的工作单元的数量进行折叠
-    
+
         for action, work_center in zip(workcell_action, self.work_center_list):
-            work_center.work(action)
+            work_center.work(int(action))
 
     def update_all(self, all_action: Dict[str, torch.Tensor]):
         # action按节点类别分开

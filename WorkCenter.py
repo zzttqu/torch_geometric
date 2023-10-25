@@ -1,4 +1,5 @@
 from typing import List, Union, Tuple
+from loguru import logger
 
 import torch
 from torch import Tensor
@@ -51,9 +52,9 @@ class WorkCenter:
         product_edge = torch.tensor(_edge, dtype=torch.long).squeeze().T
         if len(_edge1) > 0:
             material_edge = torch.tensor(_edge1, dtype=torch.long).T
-        else:      
+        else:
             material_edge = None
-        return center_edge, product_edge, material_edge # type: ignore
+        return center_edge, product_edge, material_edge  # type: ignore
 
     def recive_material(self, materials: List[int]):
         # 如果为int说明这个center只有一个0号节点，也就直接给0功能节点加数值就行了
@@ -68,23 +69,22 @@ class WorkCenter:
         for cell in self.workcell_list:
             products_list[cell.get_function()] = cell.send_product()
 
-    def work(self, actions: np.ndarray):
+    def work(self, action: int):
         # 如果同时工作的单元数量大于1，就会报错，惩罚就是当前步无法工作
-        if np.sum(actions == 1) > 1:
+        # 这里目前改为了工作中心选择哪个工作单元工作
+        if action == 0:
             for cell in self.workcell_list:
-                cell.func_err()
-        # 如果正常就正常
+                state = cell.work(0)
         else:
-            for cell, action in zip(self.workcell_list, actions):
-                state = cell.work(action)
-                # 表示当前工作单元的功能
-                from envClass import StateCode
+            work_cell = self.workcell_list[action - 1]
+            state = work_cell.work(1)
+            from envClass import StateCode
 
-                if state == StateCode.workcell_working:
-                    self.working_cell = cell
-                    self.func = cell.get_function()
-                    self.speed = cell.get_speed()
-                    self.product = cell.get_products()
+            if state == StateCode.workcell_working:
+                self.working_cell = work_cell
+                self.func = work_cell.get_function()
+                self.speed = work_cell.get_speed()
+                self.product = work_cell.get_products()
 
     def send_product(self):
         self.working_cell.send_product()
