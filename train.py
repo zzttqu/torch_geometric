@@ -56,12 +56,12 @@ if __name__ == "__main__":
     torch.set_printoptions(precision=3, sci_mode=False)
     # 神奇trick
     torch.manual_seed(3407)
-    function_num = 2
-    work_center_num = 3
-    batch_size = 16
+    function_num = 3
+    work_center_num = 4
+    batch_size = 32
 
     total_step = init_step
-    max_steps = 64 * 8
+    max_steps = 32
     episode_step_max = 32
     product_goal = 200
     n_epochs = 8
@@ -145,7 +145,8 @@ if __name__ == "__main__":
         # for key, _value in raw.items():
         #    raw[key] = _value.to(device)
         obs_states, edge_index, reward, dones, episode_step = env.get_obs()
-        # raise SystemExit
+        logger.debug(obs_states)
+        logger.debug(_raw)
         writer.add_scalars(
             "step/products",
             {

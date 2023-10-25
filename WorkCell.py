@@ -111,6 +111,7 @@ class WorkCell:
                 # self.work_center_id,
                 self.speed,
                 # self.products,
+                self.materials
             ],
             dtype=torch.float32,
         )

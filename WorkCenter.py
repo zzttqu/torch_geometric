@@ -65,9 +65,9 @@ class WorkCenter:
         for cell, material in zip(self.workcell_list, materials):
             cell.recive_material(material)
 
-    def move_product(self, products_list: List[int]):
-        for cell in self.workcell_list:
-            products_list[cell.get_function()] = cell.send_product()
+    # def move_product(self, products_list: List[int]):
+    #     for cell in self.workcell_list:
+    #         products_list[cell.get_function()] = cell.send_product()
 
     def work(self, action: int):
         # 如果同时工作的单元数量大于1，就会报错，惩罚就是当前步无法工作
@@ -76,18 +76,22 @@ class WorkCenter:
             for cell in self.workcell_list:
                 state = cell.work(0)
         else:
-            work_cell = self.workcell_list[action - 1]
-            state = work_cell.work(1)
-            from envClass import StateCode
+            for cell in self.workcell_list:
+                if cell.get_id() == action - 1:
+                    state = cell.work(1)
+                    from envClass import StateCode
 
-            if state == StateCode.workcell_working:
-                self.working_cell = work_cell
-                self.func = work_cell.get_function()
-                self.speed = work_cell.get_speed()
-                self.product = work_cell.get_products()
+                    if state == StateCode.workcell_working:
+                        self.working_cell = cell
+                        self.func = cell.get_function()
+                        self.speed = cell.get_speed()
+                        self.product = cell.get_products()
+                else:
+                    state = cell.work(0)
 
     def send_product(self):
         self.working_cell.send_product()
+        self.product = 0
 
     def get_all_cellid_func(self) -> List:
         a = []

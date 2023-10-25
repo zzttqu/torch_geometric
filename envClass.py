@@ -1,6 +1,7 @@
 from enum import Enum
 from itertools import count
 from platform import node
+from loguru import logger
 import numpy as np
 import networkx as nx
 from matplotlib import pyplot as plt
@@ -335,7 +336,7 @@ class EnvRun:
             _funcs: int = work_center.get_func()
             _products = work_center.get_product()
             # 取出所有物品，放入center中
-            self.storage_list[_funcs].recive_product(work_center.get_product())
+            self.storage_list[_funcs].recive_product(_products)
             # 当前步全部的product数量
             products[_funcs] += _products
             # 转移产品，清空workcell库存
@@ -346,14 +347,19 @@ class EnvRun:
             id_funcs = np.array(work_center.get_all_cellid_func(), dtype=int)
             # 第一列是cellid，第二列是functionid
             # 我就是让他相乘一个系数，如果不分配，这个系数就是0
+            # 这里得去掉0功能和最后一个功能
             for _func in id_funcs:
                 # 第一位是cellid，第二位是functionid
                 assert isinstance(_func, np.ndarray)
                 _func_id: int = _func[1]
                 _cell_id: int = _func[0]
-                self.storage_list[_func_id].send_product(
-                    int(products[_func_id] * ratio[_cell_id])
-                )
+                # 如果功能为0就不能运送了，如果功能为最后一个也不能运送走了
+                if _func_id == 0:
+                    pass
+                else:
+                    self.storage_list[_func_id - 1].send_product(
+                        int(products[_func_id - 1] * ratio[_cell_id])
+                    )
                 # 因为products和collect都是ndarray，可以使用列表直接获取元素
             # print(id_funcs, id_funcs[:, 0])
             #
