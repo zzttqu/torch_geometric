@@ -1,7 +1,7 @@
 import os
 from typing import Dict, List, Tuple, Union
 from torch.distributions import Categorical
-from torch.utils.data import BatchSampler, SubsetRandomSampler
+from torch.utils.data import BatchSampler, SubsetRandomSampler,SequentialSampler
 from torch_geometric.data import Data, Batch, HeteroData
 from GNNNet import HGTNet
 import torch
@@ -187,7 +187,7 @@ class Agent:
         for _ in range(self.n_epochs):
             # 这里是设置minibatch，也就是送入图神经网络的大小
             for index in BatchSampler(
-                SubsetRandomSampler(range(self.batch_size)), mini_batch_size, False
+                SequentialSampler(range(self.batch_size)), mini_batch_size, False
             ):
                 # batch_time = datetime.now()
                 mini_nodes = [nodes[i] for i in index]

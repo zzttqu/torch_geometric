@@ -9,13 +9,22 @@ from envClass import StateCode
 class WorkCell:
     next_id = 0
 
-    def __init__(self, function_id, work_center_id, speed=6, materials=6, products=0):
+    def __init__(
+        self,
+        function_id,
+        work_center_id,
+        max_func,
+        speed=6,
+        materials=6,
+        products=0,
+    ):
         super().__init__()
         # 需要有当前这个工作单元每个功能的备件，每个功能生产效率
         self._id = WorkCell.next_id
         self.work_center_id = work_center_id
         WorkCell.next_id += 1
         self.function = function_id
+        self.max_func = max_func
         self.speed = speed
         self.materials = materials
         self.products = products
@@ -107,16 +116,18 @@ class WorkCell:
             第五项是当前的产品数量
         """
         # 归一化speed和materials
-        speed = 1
-        materials = self.materials / speed
+        speed_norm = 1
+        materials_norm = self.materials / self.speed
+        func_norm = self.function / self.max_func
+        state_norm = self.state.value / len(StateCode)
         return torch.tensor(
             [
-                self.function,
-                self.state.value,
+                func_norm,
+                state_norm,
                 # self.work_center_id,
-                speed,
+                speed_norm,
                 # self.products,
-                materials,
+                materials_norm,
             ],
             dtype=torch.float32,
         )

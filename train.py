@@ -130,7 +130,14 @@ if __name__ == "__main__":
             # raw是一个2*节点数量
             raw, log_prob = agent.get_action(obs_states, edge_index)
             value = agent.get_value(obs_states, edge_index)
-
+        writer.add_scalars(
+            "step/products",
+            {
+                f"产品{i}": env.storage_list[i].get_product_num()
+                for i in range(0, len(env.storage_list))
+            },
+            total_step,
+        )
         # 这个raw因为是字典，这里变了之后会影响get action中的raw
         # 后来还是改为了直接的tensor
         # for key, _value in raw.items():
@@ -147,14 +154,7 @@ if __name__ == "__main__":
         obs_states, edge_index, reward, dones, episode_step = env.get_obs()
         # logger.debug(obs_states)
         # logger.debug(_raw)
-        writer.add_scalars(
-            "step/products",
-            {
-                f"产品{i}": env.storage_list[i].get_product_num()
-                for i in range(0, len(env.storage_list))
-            },
-            total_step,
-        )
+
         # env.show_graph(total_step)
         writer.add_scalar("step/reward", reward, total_step)
         memory.remember(obs_states, edge_index, value, reward, dones, raw, log_prob)
@@ -167,7 +167,7 @@ if __name__ == "__main__":
                 last_node_state=obs_states,
                 last_done=dones,
                 edge_index=edge_index,
-                mini_batch_size=batch_size // 4,
+                mini_batch_size=batch_size // 2,
             )
             learn_time = (datetime.now() - now_time).seconds
             print(f"第{learn_num}次学习，学习用时：{learn_time}秒")

@@ -123,7 +123,7 @@ class EnvRun:
         # 初始化工作中心
         # 这个初始化的顺序和工作单元的id顺序也是一致
         for function_list in self.function_matrix:
-            self.work_center_list.append(WorkCenter(function_list))
+            self.work_center_list.append(WorkCenter(function_list, self.function_num))
         self.function_group = self.get_function_group()
         # 各级别生产能力，这个应该排除同一个节点拥有两个相同单元
         self.product_capacity = [0 for _ in range(self.function_num)]
@@ -151,7 +151,9 @@ class EnvRun:
         # 初始化集散中心
         self.storage_list: List[TransitCenter] = []
         for i in range(function_num):
-            self.storage_list.append(TransitCenter(i, self.product_goal))
+            self.storage_list.append(
+                TransitCenter(i, self.product_goal, self.function_num)
+            )
             self.id_center[i] = i
         # 产品数量
         self.step_products = np.zeros(function_num)
@@ -401,15 +403,17 @@ class EnvRun:
 
         # 生产有奖励，根据产品级别加分
         products_reward = 0
-        # for i, prod_num in enumerate(self.step_products - 1):
-        #     # 生产数量/该产品生产单元数量*生产产品类别/总产品类别，当生产第一个类别的时候不计数
-        #     products_reward += (
-        #         -0.002
-        #         * prod_num
-        #         / self.product_capacity[i]
-        #         # * (i)
-        #         # / self.function_num
-        #     )
+        for i, strorage in enumerate(self.storage_list):
+            # 库存数量/该产品生产能力，当生产最后一个类别的时候不计
+            if i == len(self.storage_list):
+                break
+            products_reward += (
+                -0.002
+                * strorage.get_product_num()
+                / self.product_capacity[i]
+                # * (i)
+                # / self.function_num
+            )
         # 最终产物肯定要大大滴加分
         products_reward += 0.05 * self.step_products[-1] / self.product_capacity[-1]
         # 最终产物奖励，要保证这个产物奖励小于扣血

@@ -5,7 +5,8 @@ from envClass import StateCode
 class TransitCenter:
     next_id = 0
 
-    def __init__(self, product_id, goal):
+    def __init__(self, product_id, goal, max_func):
+        self.max_func = max_func
         self.goal = goal
         self.cell_id = TransitCenter.next_id
         TransitCenter.next_id += 1
@@ -29,5 +30,7 @@ class TransitCenter:
 
     def get_state(self):
         # 改用生产进度作为表征
+        # id归一化
         produce_prograss = self.product_num / self.goal
-        return torch.tensor([self.product_id, produce_prograss], dtype=torch.float32)
+        product_id_norm = self.product_id / self.max_func
+        return torch.tensor([product_id_norm, produce_prograss], dtype=torch.float32)

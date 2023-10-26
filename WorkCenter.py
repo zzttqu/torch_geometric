@@ -10,17 +10,18 @@ import numpy as np
 class WorkCenter:
     next_id = 0
 
-    def __init__(self, function_list: np.ndarray) -> None:
+    def __init__(self, function_list: np.ndarray, max_func_num) -> None:
         from WorkCell import WorkCell
 
         self.id = WorkCenter.next_id
+        self.max_func_num = max_func_num
         WorkCenter.next_id += 1
         self.workcell_list: List[WorkCell] = []
         self.function_list: np.ndarray = function_list
 
         # 构建workcell
         for f in function_list:
-            self.workcell_list.append(WorkCell(f, self.id))
+            self.workcell_list.append(WorkCell(f, self.id, self.max_func_num))
         self.func = self.workcell_list[0].get_function()
         self.speed = self.workcell_list[0].get_speed()
         self.product = 0
@@ -29,8 +30,6 @@ class WorkCenter:
 
     def build_edge(self, id_center) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # 建立一个workcenter内部节点的联系
-        # TODO 还是应该新建一个工作中心节点表示
-        _id_list = []
         _edge = []
         # 从cell到center
         for cell in self.workcell_list:
@@ -62,7 +61,7 @@ class WorkCenter:
         # materials如果是0号就只是int，需要判断
         # 这个material是全部的
         # 这个应该可以改成类似查表的，用cellid直接查在list中的位置
-        
+
         for cell, material in zip(self.workcell_list, materials):
             cell.recive_material(material)
 
@@ -131,11 +130,12 @@ class WorkCenter:
         return
 
     def get_state(self):
+        func_norm = self.get_func() / self.max_func_num
         return torch.tensor(
             [
-                self.func,
-#                self.speed,
-#                self.product,
+                func_norm,
+                #                self.speed,
+                #                self.product,
             ],
             dtype=torch.float32,
         )
