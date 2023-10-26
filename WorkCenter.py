@@ -62,6 +62,7 @@ class WorkCenter:
         # materials如果是0号就只是int，需要判断
         # 这个material是全部的
         # 这个应该可以改成类似查表的，用cellid直接查在list中的位置
+        
         for cell, material in zip(self.workcell_list, materials):
             cell.recive_material(material)
 
@@ -76,8 +77,8 @@ class WorkCenter:
             for cell in self.workcell_list:
                 state = cell.work(0)
         else:
-            for cell in self.workcell_list:
-                if cell.get_id() == action - 1:
+            for i, cell in enumerate(self.workcell_list):
+                if i == action - 1:
                     state = cell.work(1)
                     from envClass import StateCode
 
@@ -129,12 +130,17 @@ class WorkCenter:
     def get_product(self):
         return self.product
 
+    def reset_state(self):
+        for cell in self.workcell_list:
+            cell.reset_state()
+        return
+
     def get_state(self):
         return torch.tensor(
             [
                 self.func,
-                self.speed,
-                self.product,
+#                self.speed,
+#                self.product,
             ],
             dtype=torch.float32,
         )

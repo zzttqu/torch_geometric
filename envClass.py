@@ -99,6 +99,7 @@ class EnvRun:
         device,
         episode_step_max=256,
         product_goal=500,
+        product_goal_scale=0.2,
     ):
         self.device = device
         self.edge_index: Dict[str, torch.Tensor] = {}
@@ -149,14 +150,16 @@ class EnvRun:
         # 根据生产能力和最大步数计算生产目标数量
         # 根据水桶效应，选择最低的生产能力环节代表
         # TODO 每个工步的生产能力其实是波动的，因为其实是工作中心的生产能力
-        desire_product_goal = int(0.2 * episode_step_max * min(self.product_capacity))
+        desire_product_goal = int(
+            product_goal_scale * episode_step_max * min(self.product_capacity)
+        )
         if abs(product_goal - desire_product_goal) < 100:
             self.product_goal = desire_product_goal
         else:
             self.product_goal = desire_product_goal
         # 一次循环前的step数量
         self.episode_step = 0
-        print("目标生产数量:", self.product_goal)
+        logger.info(f"目标生产数量:{self.product_goal}")
 
         self.episode_step_max = episode_step_max
 
@@ -332,7 +335,7 @@ class EnvRun:
         products = np.zeros(self.function_num)
         # 处理产品
         for work_center in self.work_center_list:
-            # 这个是取出当前正在工作的
+            # 这个是取出当前正在工作的，因为work如果在前边的话func改变后product对不上号了
             _funcs: int = work_center.get_func()
             _products = work_center.get_product()
             # 取出所有物品，放入center中
@@ -360,12 +363,11 @@ class EnvRun:
                     self.storage_list[_func_id - 1].send_product(
                         int(products[_func_id - 1] * ratio[_cell_id])
                     )
-                # 因为products和collect都是ndarray，可以使用列表直接获取元素
-            # print(id_funcs, id_funcs[:, 0])
             #
             # collect是每个cell的权重
+            # 这里还是错啦！！！！，因为funcs要-1才是需要的原料
             work_center.recive_material(
-                products[id_funcs[:, 1]] * ratio[id_funcs[:, 0]].tolist()
+                products[id_funcs[:, 1] - 1] * ratio[id_funcs[:, 0]].tolist()
             )
             # # 看看当前id在flat里边排第几个，然后把对应权重进行计算
             # collect = flatt[torch.where(work_cell.cell_id == flat_id)[0].item()]
@@ -384,9 +386,9 @@ class EnvRun:
     def update_all(self, all_action: Dict[str, torch.Tensor]):
         # action按节点类别分开
 
-        self.update_all_work_center(all_action["center"].numpy())
         # 针对workcenter的
         self.deliver_centers_material(all_action["cell"].numpy())
+        self.update_all_work_center(all_action["center"].numpy())
 
         # 额定扣血
         stable_reward = (
@@ -483,7 +485,7 @@ class EnvRun:
         self.reward = 0
         self.done = 0
         self.episode_step = 0
-        for worker in self.work_cell_list:
-            worker.reset_state()
+        for center in self.work_center_list:
+            center.reset_state()
         for center in self.storage_list:
             center.product_num = 0

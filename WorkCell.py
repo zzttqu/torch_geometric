@@ -1,4 +1,5 @@
 from typing import Union
+from loguru import logger
 import numpy as np
 import torch
 
@@ -28,7 +29,7 @@ class WorkCell:
             num (int): 接受原料，但是如果功能为0则直接加speed
         """
         if self.function == 0:
-            self.materials += self.speed
+            pass
         else:
             # 或者接收原材料
             self.materials += num
@@ -64,8 +65,10 @@ class WorkCell:
         self.state_check()
         if self.state == StateCode.workcell_working:
             # 工作中
-            # 2是生产库存数量，0是生产速度,1是原料数量
             self.products += self.speed
+            # 如果是0号功能，那就不扣原料
+            if self.function == 0:
+                return self.state
             self.materials -= self.speed
             # self.health -= 0.1
         return self.state
@@ -111,7 +114,7 @@ class WorkCell:
                 # self.work_center_id,
                 self.speed,
                 # self.products,
-                self.materials
+                self.materials,
             ],
             dtype=torch.float32,
         )

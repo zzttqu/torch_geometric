@@ -57,11 +57,11 @@ if __name__ == "__main__":
     # 神奇trick
     torch.manual_seed(3407)
     function_num = 3
-    work_center_num = 4
+    work_center_num = 5
     batch_size = 32
 
     total_step = init_step
-    max_steps = 32
+    max_steps = 64 * 10
     episode_step_max = 32
     product_goal = 200
     n_epochs = 8
@@ -75,7 +75,7 @@ if __name__ == "__main__":
         function_num=function_num,
         device=device,
         episode_step_max=episode_step_max,
-        product_goal=product_goal,
+        product_goal_scale=0.3
     )
     # 如果不可视化节点就不用取返回值graph
     # 加入tensorboard
@@ -145,8 +145,8 @@ if __name__ == "__main__":
         # for key, _value in raw.items():
         #    raw[key] = _value.to(device)
         obs_states, edge_index, reward, dones, episode_step = env.get_obs()
-        logger.debug(obs_states)
-        logger.debug(_raw)
+        # logger.debug(obs_states)
+        # logger.debug(_raw)
         writer.add_scalars(
             "step/products",
             {
@@ -179,9 +179,9 @@ if __name__ == "__main__":
             # 因为步数是先+1，所以是从1开始演变的1,2,3,4,5,6,7,8,9,10
             print(f"总步数：{total_step}，本次循环步数为：{episode_step}，奖励为{ reward:.3f}")
             writer.add_scalar("reward", reward, total_step)
-            with open("./log.csv", "a", newline="") as csvfile:
+            """ with open("./log.csv", "a", newline="") as csvfile:
                 csv_writer = csv.writer(csvfile)
-                csv_writer.writerow([total_step, f"{reward:.3f}"])
+                csv_writer.writerow([total_step, f"{reward:.3f}"]) """
             env.reset()
         if total_step % 500 == 0:
             agent.save_model("model_" + str(total_step) + ".pth")
@@ -189,7 +189,7 @@ if __name__ == "__main__":
     # 神经网络要输出每个工作站的工作，功能和传输与否
     agent.save_model("last_model.pth")
     total_time = (datetime.now() - init_time).seconds // 60
-    with open("./log.csv", "a", newline="") as csvfile:
+    """ with open("./log.csv", "a", newline="") as csvfile:
         csv_writer = csv.writer(csvfile)
-        csv_writer.writerow([total_step, f"{reward:.3f}"])
+        csv_writer.writerow([total_step, f"{reward:.3f}"]) """
     print(f"总计用时：{total_time}分钟，运行{total_step}步，学习{learn_num}次")
