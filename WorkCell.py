@@ -26,13 +26,13 @@ class WorkCell:
         """_summary_
 
         Args:
-            num (int): 接受原料，但是如果功能为0则直接加speed
+            num (int): 接受原料，但是如果功能为0则忽略
         """
         if self.function == 0:
-            pass
-        else:
-            # 或者接收原材料
-            self.materials += num
+            return
+
+        # 接收原材料
+        self.materials += num
 
     def send_product(self):
         """
@@ -106,15 +106,17 @@ class WorkCell:
             第四项是一个工步的生产能力
             第五项是当前的产品数量
         """
-        # TODO  改为onehot编码的function和state
+        # 归一化speed和materials
+        speed = 1
+        materials = self.materials / speed
         return torch.tensor(
             [
                 self.function,
                 self.state.value,
                 # self.work_center_id,
-                self.speed,
+                speed,
                 # self.products,
-                self.materials,
+                materials,
             ],
             dtype=torch.float32,
         )

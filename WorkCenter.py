@@ -109,13 +109,8 @@ class WorkCenter:
     def get_all_cell_id(self) -> List[int]:
         return self.all_cell_id
 
-    def get_cell_speed(self, indexs: Union[np.ndarray, int]) -> int:
-        if isinstance(indexs, int):
-            speed = self.workcell_list[indexs].get_speed()
-        else:
-            # 输入是cell位置
-            speed_list = [self.workcell_list[index].get_speed() for index in indexs]
-            speed = sum(speed_list)
+    def get_cell_speed(self, indexs: int) -> int:
+        speed = self.workcell_list[indexs].get_speed()
         return speed
 
     def get_all_cell_state(self):

@@ -109,7 +109,7 @@ class EnvRun:
         self.work_center_list: List[WorkCenter] = []
         self.function_num = function_num
         self.center_num = function_num
-        self.center_state_num = 3
+        self.center_state_num = 2
         # 随机生成一个2*n的矩阵，每列对应一个工作中心F
         self.function_matrix = select_functions(
             0,
@@ -124,7 +124,8 @@ class EnvRun:
         # 这个初始化的顺序和工作单元的id顺序也是一致
         for function_list in self.function_matrix:
             self.work_center_list.append(WorkCenter(function_list))
-        # 各级别生产能力
+        self.function_group = self.get_function_group()
+        # 各级别生产能力，这个应该排除同一个节点拥有两个相同单元
         self.product_capacity = [0 for _ in range(self.function_num)]
         for work_center in self.work_center_list:
             fl = work_center.get_all_funcs()
@@ -132,21 +133,11 @@ class EnvRun:
                 # 函数返回值的是funcid
                 # where返回的是tuple，需要提取第一项
                 indices = np.where(fl == i)[0]
-                # indices实际上是index，不是id
+                # indices是工作中心中工作单元列表的index，不是id
+                # 反正同时只能有一个工作中心工作，所以就取第一个就行了
                 if len(indices) > 0:
-                    self.product_capacity[i] += work_center.get_cell_speed(indices)
-        # 初始化集散中心
-        self.storage_list: List[TransitCenter] = []
-        for i in range(function_num):
-            self.storage_list.append(TransitCenter(i))
-            self.id_center[i] = i
-        # 初始化生产中心
-        # 产品数量
-        self.step_products = np.zeros(function_num)
-        self.function_group = self.get_function_group()
-        # 奖励和完成与否
-        self.reward = 0
-        self.done = 0
+                    self.product_capacity[i] += work_center.get_cell_speed(indices[0])
+
         # 根据生产能力和最大步数计算生产目标数量
         # 根据水桶效应，选择最低的生产能力环节代表
         # TODO 每个工步的生产能力其实是波动的，因为其实是工作中心的生产能力
@@ -157,8 +148,18 @@ class EnvRun:
             self.product_goal = desire_product_goal
         else:
             self.product_goal = desire_product_goal
-        # 一次循环前的step数量
+        # 初始化集散中心
+        self.storage_list: List[TransitCenter] = []
+        for i in range(function_num):
+            self.storage_list.append(TransitCenter(i, self.product_goal))
+            self.id_center[i] = i
+        # 产品数量
+        self.step_products = np.zeros(function_num)
+        # 一次循环的step数量
         self.episode_step = 0
+        # 奖励和完成与否
+        self.reward = 0
+        self.done = 0
         logger.info(f"目标生产数量:{self.product_goal}")
 
         self.episode_step_max = episode_step_max
