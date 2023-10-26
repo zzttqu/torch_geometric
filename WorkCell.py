@@ -132,6 +132,9 @@ class WorkCell:
             dtype=torch.float32,
         )
 
+    def read_state(self):
+        return [self.function, self.state.value, self.speed, int(self.materials)]
+
     # 功能id
     def get_function(self):
         return self.function

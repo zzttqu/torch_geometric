@@ -75,7 +75,7 @@ if __name__ == "__main__":
         function_num=function_num,
         device=device,
         episode_step_max=episode_step_max,
-        product_goal_scale=0.25,
+        product_goal_scale=0.3,
     )
     # 如果不可视化节点就不用取返回值graph
     # 加入tensorboard
@@ -148,6 +148,8 @@ if __name__ == "__main__":
         for key, _value in raw.items():
             _raw[key] = _value.cpu()
         env.update_all(_raw)
+        logger.debug(f"{total_step} {env.read_state()}")
+
         # 所以需要搬回cuda中
         # for key, _value in raw.items():
         #    raw[key] = _value.to(device)

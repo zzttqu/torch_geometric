@@ -139,3 +139,12 @@ class WorkCenter:
             ],
             dtype=torch.float32,
         )
+
+    def read_state(self):
+        return self.get_func()
+
+    def read_all_cell_state(self):
+        a = []
+        for cell in self.workcell_list:
+            a.append(cell.read_state())
+        return a

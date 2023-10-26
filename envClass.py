@@ -369,9 +369,11 @@ class EnvRun:
             #
             # collect是每个cell的权重
             # 这里还是错啦！！！！，因为funcs要-1才是需要的原料
-            work_center.recive_material(
+            material_list = (
                 products[id_funcs[:, 1] - 1] * ratio[id_funcs[:, 0]].tolist()
             )
+            material_list = list(map(int, material_list))
+            work_center.recive_material(material_list)
             # # 看看当前id在flat里边排第几个，然后把对应权重进行计算
             # collect = flatt[torch.where(work_cell.cell_id == flat_id)[0].item()]
             # # int会导致有盈余，但是至少不会发生没办法转移的情况
@@ -466,6 +468,22 @@ class EnvRun:
             self.done,
             self.episode_step,
         )
+
+    def read_state(self):
+        a = []
+        for work_center in self.work_center_list:
+            a += work_center.read_all_cell_state()
+        b = []
+        for center in self.work_center_list:
+            b.append(center.read_state())
+        c = []
+        for storage in self.storage_list:
+            c.append(storage.get_product_num())
+        return {
+            "cell": a,
+            "center": b,
+            "storage": c,
+        }
 
     def get_function_group(self):
         work_function = []

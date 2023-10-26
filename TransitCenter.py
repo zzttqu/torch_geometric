@@ -34,3 +34,7 @@ class TransitCenter:
         produce_prograss = self.product_num / self.goal
         product_id_norm = self.product_id / self.max_func
         return torch.tensor([product_id_norm, produce_prograss], dtype=torch.float32)
+
+    def read_state(self):
+        """ 可视化状态 """
+        return [self.product_id, self.product_num]
