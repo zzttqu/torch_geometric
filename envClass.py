@@ -368,7 +368,7 @@ class EnvRun:
                     )
             #
             # collect是每个cell的权重
-            # 这里还是错啦！！！！，因为funcs要-1才是需要的原料
+            # 这里注意！！！！，因为funcs要-1才是需要的原料
             material_list = (
                 products[id_funcs[:, 1] - 1] * ratio[id_funcs[:, 0]].tolist()
             )

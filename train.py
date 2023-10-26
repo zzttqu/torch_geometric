@@ -148,7 +148,8 @@ if __name__ == "__main__":
         for key, _value in raw.items():
             _raw[key] = _value.cpu()
         env.update_all(_raw)
-        logger.debug(f"{total_step} {env.read_state()}")
+        # 可视化状态
+        # logger.debug(f"{total_step} {env.read_state()}")
 
         # 所以需要搬回cuda中
         # for key, _value in raw.items():
