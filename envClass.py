@@ -182,16 +182,20 @@ class EnvRun:
             for i, state in enumerate(_value):
                 # 根据键值不同设置不同的属性
                 # cell的function指的是其生成的产品id
-                state = list(map(int, state))
+                if isinstance(state, list):
+                    state = list(map(int, state))
+                else:
+                    state = int(state)
                 if _key == "cell":
                     process_label[
                         count
-                    ] = f"{i}：\n 状态：{state[1]} \n 功能：{state[0]} \n 原料：{state[3]}"
+                    ] = f"{i}:\n 状态:{state[1]}\n功能:{state[0]}\n原料:{state[3]}"
                 elif _key == "center":
-                    process_label[count] = f"{i}\n 产品：{state}"
+                    process_label[count] = f"{i}\n产品:{state}"
                 elif _key == "storage":
-                    process_label[count] = f"{i}：\n 产品：{state[0]} \n 数量：{state[1]}"
+                    process_label[count] = f"{i}:\n产品:{state[0]}\n数量:{state[1]}"
                 count += 1
+        # 建立边
         for _key, _edge in self.edge_index.items():
             node1, node2 = _key.split("_to_")
             edge_T = _edge.T.tolist()
@@ -203,36 +207,66 @@ class EnvRun:
             elif node1 == "cell" and node2 == "center":
                 for __edge in edge_T:
                     process_edge.append((__edge[0], __edge[1] + size[0]))
-            elif node1=="":
+            elif node1 == "storage" and node2 == "cell":
                 for __edge in edge_T:
-                    process_edge.append((__edge[0], __edge[1]))
-        # print(process_edge)
-        # print("========")
-        # print(process_label)
-        # print(count)
+                    process_edge.append((__edge[0] + size[0] + size[1], __edge[1]))
         graph = nx.DiGraph()
         graph.add_nodes_from([i for i in range(count)])
         graph.add_edges_from(process_edge)
-        nn = [[i for i in range(size)], [i for i in range(size, count)]]
+        # if count==sum(size):
+        logger.info(f"{count},{sum(size)}")
+        nn = [
+            [i for i in range(size[0])],
+            [i for i in range(size[0], size[0] + size[1])],
+            [i for i in range(size[0] + size[1], size[0] + size[1] + size[2])],
+        ]
         pos = gen_pos(nn, [i for i in range(count)])
-        plt.figure(figsize=(15, 10))
+        plt.figure(figsize=(10, 5))
         nx.draw_networkx_nodes(
             graph,
             pos=pos,
-            nodelist=[i for i in range(size)],
-            node_color="red",
+            nodelist=[i for i in range(size[0])],
+            node_color="white",
+            node_size=500,
+            edgecolors="black",
+            node_shape="s",
+            linewidths=1,
         )
         nx.draw_networkx_nodes(
             graph,
             pos,
-            nodelist=[i for i in range(size, count)],
-            node_color="blue",
+            nodelist=[i for i in range(size[0], size[0] + size[1])],
+            node_color="white",
+            node_size=500,
+            edgecolors="black",
+            node_shape="s",
+            linewidths=1,
         )
-        nx.draw_networkx_labels(graph, pos=pos, labels=process_label)
-        nx.draw_networkx_edges(graph, pos, edgelist=process_edge, edge_color="black")
+        nx.draw_networkx_nodes(
+            graph,
+            pos,
+            nodelist=[i for i in range(size[0] + size[1], size[0] + size[1] + size[2])],
+            node_color="white",
+            node_size=500,
+            edgecolors="blue",
+            node_shape="s",
+            linewidths=1,
+        )
+        nx.draw_networkx_labels(graph, pos=pos, labels=process_label, font_size=6)
+        nx.draw_networkx_edges(
+            graph,
+            pos,
+            edgelist=process_edge,
+            edge_color="black",
+            arrows=True,
+            connectionstyle="arc3,rad=0.12",
+            node_size=500,
+            node_shape="s",
+        )
         # nx.draw(graph, with_labels=True)
 
-        plt.savefig(f"./graph/{step}.png", dpi=800, bbox_inches="tight")
+        plt.savefig(f"./graph/{step}.png", dpi=500, bbox_inches="tight")
+        plt.show()
         plt.close()
         return
         process_edge = []
@@ -483,7 +517,7 @@ class EnvRun:
             b.append(center.read_state())
         c = []
         for storage in self.storage_list:
-            c.append(storage.get_product_num())
+            c.append(storage.read_state())
         return {
             "cell": a,
             "center": b,
