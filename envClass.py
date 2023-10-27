@@ -166,39 +166,44 @@ class EnvRun:
 
         self.episode_step_max = episode_step_max
 
+    # TODO 修改为适配当前的可视化
     def show_graph(self, step):
         # norm_data: Data = data.to_homogeneous()
         process_label = {}
         process_edge = []
+        raw_dict = self.read_state()
         # 这个size是有多少个worcell，主要是为了重新编号
-        size = self.obs_states["work_cell"].shape[0]
+        size = []
         # 总节点数量
         count = 0
-        for _key, _value in self.obs_states.items():
+        for _key, _value in raw_dict.items():
+            size.append(len(_value))
             # 按照顺序一个一个处理成字典和元组形式，state是一行的数据
             for i, state in enumerate(_value):
                 # 根据键值不同设置不同的属性
                 # cell的function指的是其生成的产品id
                 state = list(map(int, state))
-                if _key == "work_cell":
+                if _key == "cell":
                     process_label[
                         count
-                    ] = f"{i}：\n 状态：{state[1]} \n 功能：{state[0]} \n 属于{state[2]}"
+                    ] = f"{i}：\n 状态：{state[1]} \n 功能：{state[0]} \n 原料：{state[3]}"
                 elif _key == "center":
-                    process_label[
-                        count
-                    ] = f"{i}：\n 状态：{state[1]} \n 产品：{state[0]} \n 数量：{state[2]}"
+                    process_label[count] = f"{i}\n 产品：{state}"
+                elif _key == "storage":
+                    process_label[count] = f"{i}：\n 产品：{state[0]} \n 数量：{state[1]}"
                 count += 1
         for _key, _edge in self.edge_index.items():
             node1, node2 = _key.split("_to_")
             edge_T = _edge.T.tolist()
-            if node1 == "center":
+            if node1 == "center" and node2 == "storage":
                 for __edge in edge_T:
-                    process_edge.append((__edge[0] + size, __edge[1]))
-            elif node2 == "center":
+                    process_edge.append(
+                        (__edge[0] + size[0], __edge[1] + size[0] + size[1])
+                    )
+            elif node1 == "cell" and node2 == "center":
                 for __edge in edge_T:
-                    process_edge.append((__edge[0], __edge[1] + size))
-            else:
+                    process_edge.append((__edge[0], __edge[1] + size[0]))
+            elif node1=="":
                 for __edge in edge_T:
                     process_edge.append((__edge[0], __edge[1]))
         # print(process_edge)
