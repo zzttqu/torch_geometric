@@ -1,6 +1,4 @@
 from enum import Enum
-from itertools import count
-from platform import node
 from loguru import logger
 import numpy as np
 import networkx as nx
@@ -92,14 +90,14 @@ def gen_pos(node_lists: List[List], nodes):
 
 class EnvRun:
     def __init__(
-        self,
-        work_center_num,
-        fun_per_center,
-        function_num,
-        device,
-        episode_step_max=256,
-        product_goal=500,
-        product_goal_scale=0.2,
+            self,
+            work_center_num,
+            fun_per_center,
+            function_num,
+            device,
+            episode_step_max=256,
+            product_goal=500,
+            product_goal_scale=0.2,
     ):
         self.device = device
         self.edge_index: Dict[str, torch.Tensor] = {}
@@ -409,7 +407,7 @@ class EnvRun:
             # collect是每个cell的权重
             # 这里注意！！！！，因为funcs要-1才是需要的原料
             material_list = (
-                products[id_funcs[:, 1] - 1] * ratio[id_funcs[:, 0]].tolist()
+                    products[id_funcs[:, 1] - 1] * ratio[id_funcs[:, 0]].tolist()
             )
             material_list = list(map(int, material_list))
             work_center.recive_material(material_list)
@@ -436,10 +434,10 @@ class EnvRun:
 
         # 额定扣血
         stable_reward = (
-            -0.05
-            * self.work_cell_num
-            / self.function_num
-            * max(self.episode_step / self.episode_step_max, 1 / 2)
+                -0.05
+                * self.work_cell_num
+                / self.function_num
+                * max(self.episode_step / self.episode_step_max, 1 / 2)
         )
 
         # 生产有奖励，根据产品级别加分
@@ -449,9 +447,9 @@ class EnvRun:
             if i == len(self.storage_list):
                 break
             products_reward += (
-                -0.002
-                * strorage.get_product_num()
-                / self.product_capacity[i]
+                    -0.002
+                    * strorage.get_product_num()
+                    / self.product_capacity[i]
                 # * (i)
                 # / self.function_num
             )
@@ -474,7 +472,7 @@ class EnvRun:
             self.done = 1
 
     def get_obs(
-        self,
+            self,
     ) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor], float, int, int]:
         storage_states = torch.zeros(
             (self.center_num, self.center_state_num), dtype=torch.float
