@@ -1,13 +1,13 @@
 import os
-from typing import Dict, List, Tuple, Union
-from torch.distributions import Categorical
-from torch.utils.data import BatchSampler, SubsetRandomSampler,SequentialSampler
-from torch_geometric.data import Data, Batch, HeteroData
-from GNNNet import HGTNet
+from typing import Dict, List, Tuple
+
 import torch
 import torch.nn.functional as F
+from GNNNet import HGTNet
 from PPOMemory import PPOMemory
-from loguru import logger
+from torch.distributions import Categorical
+from torch.utils.data import BatchSampler, SequentialSampler
+from torch_geometric.data import HeteroData
 
 
 class Agent:

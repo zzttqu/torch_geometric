@@ -1,12 +1,10 @@
-import numpy as np
-import networkx as nx
-from matplotlib import pyplot as plt
+from datetime import datetime
+
 import torch
-from GNNAgent import Agent, PPOMemory
+from GNNAgent import Agent
 from envClass import EnvRun
 from torch.utils.tensorboard import SummaryWriter
-from datetime import datetime
-from torch_geometric.data import Data, Batch, HeteroData
+from torch_geometric.data import HeteroData
 
 if __name__ == "__main__":
     function_num = 6
