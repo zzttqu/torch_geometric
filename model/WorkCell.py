@@ -1,6 +1,6 @@
 import torch
 
-from envClass import StateCode
+from model.StateCode import *
 
 
 class WorkCell:

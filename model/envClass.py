@@ -1,4 +1,3 @@
-from enum import Enum
 from typing import List, Dict, Tuple
 
 import networkx as nx
@@ -10,17 +9,11 @@ from matplotlib import pyplot as plt
 from torch_geometric.data import HeteroData
 from torch_geometric.utils import to_networkx
 
-
-class StateCode(Enum):
-    workcell_ready = 0
-    workcell_working = 1
-    workcell_low_material = 2
-    workcell_low_product = 3
-    workcell_function_error = 4
-
-
-from TransitCenter import TransitCenter
+from StorageCenter import TransitCenter
 from WorkCell import WorkCell
+
+
+
 
 plt.rcParams["font.sans-serif"] = ["SimHei"]  # 显示中文标签
 plt.rcParams["axes.unicode_minus"] = False
@@ -50,7 +43,6 @@ def edge_weight_init(raw_array):
     for value in np.unique(raw_array):
         count = np.count_nonzero(raw_array == value)
         value_counts[value] = count
-    total_count = len(raw_array)
     normalized_value = {}
     for value, count in value_counts.items():
         ratio = 1 / count if count != 0 else 0
@@ -65,8 +57,8 @@ def gen_pos(node_lists: List[List], nodes):
     """产生工作单元和搬运中心的位置坐标
 
     Args:
-        node_list (_type_): _description_
-        node_type_array (_type_): _description_
+        node_lists:
+        nodes: _description_
 
     Raises:
         SystemExit: _description_
@@ -120,7 +112,7 @@ class EnvRun:
         # 生成物流运输中心代号和中心存储物料的对应关系
         self.id_center: np.ndarray = np.zeros((self.center_num, 2), dtype=int)
         # 初始化工作中心
-        # 这个初始化的顺序和工作单元的id顺序也是一致
+        # 这个初始化的顺序和工作单元的id顺序也是一致的
         for function_list in self.function_matrix:
             self.work_center_list.append(WorkCenter(function_list, self.function_num))
         self.function_group = self.get_function_group()
@@ -131,11 +123,11 @@ class EnvRun:
             for i in range(self.function_num):
                 # 函数返回值的是funcid
                 # where返回的是tuple，需要提取第一项
-                indices = np.where(fl == i)[0]
+                indices: np.ndarray = np.where(fl == i)[0]
                 # indices是工作中心中工作单元列表的index，不是id
                 # 反正同时只能有一个工作中心工作，所以就取第一个就行了
                 if len(indices) > 0:
-                    self.product_capacity[i] += work_center.get_cell_speed(indices[0])
+                    self.product_capacity[i] += work_center.get_cell_speed(int(indices[0]))
 
         # 根据生产能力和最大步数计算生产目标数量
         # 根据水桶效应，选择最低的生产能力环节代表
@@ -213,7 +205,6 @@ class EnvRun:
         graph.add_nodes_from([i for i in range(count)])
         graph.add_edges_from(process_edge)
         # if count==sum(size):
-        logger.info(f"{count},{sum(size)}")
         nn = [
             [i for i in range(size[0])],
             [i for i in range(size[0], size[0] + size[1])],
@@ -380,7 +371,7 @@ class EnvRun:
             _funcs: int = work_center.get_func()
             _products = work_center.get_product()
             # 取出所有物品，放入center中
-            self.storage_list[_funcs].recive_product(_products)
+            self.storage_list[_funcs].receive_product(_products)
             # 当前步全部的product数量
             products[_funcs] += _products
             # 转移产品，清空workcell库存
@@ -395,8 +386,8 @@ class EnvRun:
             for _func in id_funcs:
                 # 第一位是cellid，第二位是functionid
                 assert isinstance(_func, np.ndarray)
-                _func_id: int = _func[1]
-                _cell_id: int = _func[0]
+                _func_id: int = int(_func[1])
+                _cell_id: int = int(_func[0])
                 # 如果功能为0就不能运送了，如果功能为最后一个也不能运送走了
                 if _func_id == 0:
                     pass
@@ -411,7 +402,7 @@ class EnvRun:
                     products[id_funcs[:, 1] - 1] * ratio[id_funcs[:, 0]].tolist()
             )
             material_list = list(map(int, material_list))
-            work_center.recive_material(material_list)
+            work_center.receive_material(material_list)
             # # 看看当前id在flat里边排第几个，然后把对应权重进行计算
             # collect = flatt[torch.where(work_cell.cell_id == flat_id)[0].item()]
             # # int会导致有盈余，但是至少不会发生没办法转移的情况
@@ -467,7 +458,7 @@ class EnvRun:
         if self.episode_step >= self.episode_step_max:
             self.reward -= 5
             self.done = 1
-        # 完成任务目标
+        # 实现任务目标
         elif self.storage_list[-1].get_product_num() > self.product_goal:
             self.reward += 5
             self.done = 1
@@ -492,7 +483,7 @@ class EnvRun:
             b.append(center.get_state())
         work_center_states = torch.stack(b).to(self.device)
 
-        self.obs_states: Dict[str, torch.Tensor] = {
+        obs_states: Dict[str, torch.Tensor] = {
             "cell": work_cell_states,
             "center": work_center_states,
             "storage": storage_states,
@@ -500,7 +491,7 @@ class EnvRun:
         # 保证obsstates和edgeindex都转到cuda上
 
         return (
-            self.obs_states,
+            obs_states,
             self.edge_index,
             self.reward,
             self.done,
@@ -541,7 +532,6 @@ class EnvRun:
         return grouped_indices
 
     def reset(self):
-        self.total_products = np.zeros(self.function_num)
         self.step_products = np.zeros(self.function_num)
         self.reward = 0
         self.done = 0

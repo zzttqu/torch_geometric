@@ -1,5 +1,5 @@
 import torch
-from envClass import StateCode
+from model.StateCode import *
 
 
 class TransitCenter:
@@ -14,7 +14,7 @@ class TransitCenter:
         self.state = StateCode.workcell_working
         self.product_num = 0
 
-    def recive_product(self, num: int) -> int:
+    def receive_product(self, num: int) -> int:
         self.product_num += num
         return self.product_num
 
@@ -31,9 +31,9 @@ class TransitCenter:
     def get_state(self):
         # 改用生产进度作为表征
         # id归一化
-        produce_prograss = self.product_num / self.goal
+        produce_progress = self.product_num / self.goal
         product_id_norm = self.product_id / self.max_func
-        return torch.tensor([product_id_norm, produce_prograss], dtype=torch.float32)
+        return torch.tensor([product_id_norm, produce_progress], dtype=torch.float32)
 
     def read_state(self):
         """ 可视化状态 """

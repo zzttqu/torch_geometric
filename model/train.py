@@ -1,34 +1,32 @@
-import networkx as nx
 import numpy as np
 import torch
 from envClass import EnvRun
 from matplotlib import pyplot as plt
 from torch.utils.tensorboard.writer import SummaryWriter
 
-
-def show(graph):
-    # 可视化
-    node_states = nx.get_node_attributes(graph, "state")
-    node_function = nx.get_node_attributes(graph, "function")
-    nodes = nx.nodes(graph)
-    edges = nx.edges(graph)
-    node_labels = {}
-    edge_labels = {}
-    pos = {}
-    for node in nodes:
-        # 这里只用\n就可以换行了
-        node_labels[
-            node
-        ] = f"{node}节点：\n 状态：{node_states[node]} \n 功能：{node_function[node]}"
-        pos[node] = (node_function, node)
-
-    # print(node_labels)
-    pos = nx.spring_layout(graph)
-    nx.draw_networkx_nodes(graph, pos)
-    nx.draw_networkx_labels(graph, pos, node_labels)
-    # nx.draw_networkx_edges(graph, pos, connectionstyle="arc3,rad=0.2")
-    nx.draw_networkx_edges(graph, pos)
-    plt.show()
+# def show(graph):
+#     # 可视化
+#     node_states = nx.get_node_attributes(graph, "state")
+#     node_function = nx.get_node_attributes(graph, "function")
+#     nodes = nx.nodes(graph)
+#     edges = nx.edges(graph)
+#     node_labels = {}
+#     edge_labels = {}
+#     pos = {}
+#     for node in nodes:
+#         # 这里只用\n就可以换行了
+#         node_labels[
+#             node
+#         ] = f"{node}节点：\n 状态：{node_states[node]} \n 功能：{node_function[node]}"
+#         pos[node] = (node_function, node)
+#
+#     # print(node_labels)
+#     pos = nx.spring_layout(graph)
+#     nx.draw_networkx_nodes(graph, pos)
+#     nx.draw_networkx_labels(graph, pos, node_labels)
+#     # nx.draw_networkx_edges(graph, pos, connectionstyle="arc3,rad=0.2")
+#     nx.draw_networkx_edges(graph, pos)
+#     plt.show()
 
 
 if __name__ == "__main__":
@@ -75,7 +73,7 @@ if __name__ == "__main__":
     # 如果不可视化节点就不用取返回值graph
     # 加入tensorboard
     writer = SummaryWriter(log_dir="logs/train")
-    edge_index = env.build_edge()
+    env.build_edge()
 
     # 加载之前的
 
@@ -176,8 +174,7 @@ if __name__ == "__main__":
             writer.add_scalar("loss", loss, total_step)
         if dones == 1:
             print("=================")
-            # 因为步数是先+1，所以是从1开始演变的1,2,3,4,5,6,7,8,9,10
-            print(f"总步数：{total_step}，本次循环步数为：{episode_step}，奖励为{ reward:.3f}")
+            print(f"总步数：{total_step}，本次循环步数为：{episode_step}，奖励为{reward:.3f}")
             writer.add_scalar("reward", reward, total_step)
             with open("./log.csv", "a", newline="") as csvfile:
                 csv_writer = csv.writer(csvfile)

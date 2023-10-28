@@ -53,7 +53,7 @@ class WorkCenter:
             material_edge = None
         return center_edge, product_edge, material_edge  # type: ignore
 
-    def recive_material(self, materials: List[int]):
+    def receive_material(self, materials: List[int]):
         # 如果为int说明这个center只有一个0号节点，也就直接给0功能节点加数值就行了
 
         # materials如果是0号就只是int，需要判断
@@ -61,7 +61,7 @@ class WorkCenter:
         # 这个应该可以改成类似查表的，用cellid直接查在list中的位置
 
         for cell, material in zip(self.workcell_list, materials):
-            cell.recive_material(material)
+            cell.receive_material(material)
 
     # def move_product(self, products_list: List[int]):
     #     for cell in self.workcell_list:
@@ -106,8 +106,8 @@ class WorkCenter:
     def get_all_cell_id(self) -> List[int]:
         return self.all_cell_id
 
-    def get_cell_speed(self, indexs: int) -> int:
-        speed = self.workcell_list[indexs].get_speed()
+    def get_cell_speed(self, indexes: int) -> int:
+        speed = self.workcell_list[indexes].get_speed()
         return speed
 
     def get_all_cell_state(self):
@@ -132,8 +132,6 @@ class WorkCenter:
         return torch.tensor(
             [
                 func_norm,
-                #                self.speed,
-                #                self.product,
             ],
             dtype=torch.float32,
         )

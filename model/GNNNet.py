@@ -19,14 +19,10 @@ from torch_geometric.nn import (
     # 转为异构图
     to_hetero,
 )
-from torch_geometric.datasets import OGB_MAG
 import torch
 from torch import nn
 import torch.nn.functional as F
-from torch_geometric.data import Data, Batch, HeteroData
-from torch_geometric.loader import DataLoader
-import torch_geometric.transforms as T
-
+from torch_geometric.data import HeteroData
 
 """embedding = MetaPath2Vec(
     edge_index_dict=edge_dic,
@@ -36,6 +32,8 @@ import torch_geometric.transforms as T
     metapath=meta,
 )
 embedding.state_dict"""
+
+
 # dataset = OGB_MAG(root="./data")
 # data = dataset[0]
 # print(data.num_node_features)
@@ -107,12 +105,12 @@ class GNNNet(nn.Module):
 
 class HGTNet(nn.Module):
     def __init__(
-        self,
-        action_dim: int,
-        data: HeteroData,
-        hidden_channels=64,
-        num_layers=2,
-        action_choice=2,
+            self,
+            action_dim: int,
+            data: HeteroData,
+            hidden_channels=64,
+            num_layers=2,
+            action_choice=2,
     ):
         super().__init__()
         # 将节点映射为一个四维向量
@@ -142,9 +140,9 @@ class HGTNet(nn.Module):
         # self.bn2 = nn.BatchNorm1d(64)
 
     def forward(
-        self,
-        x_dict: Dict[str, torch.Tensor],
-        edge_index_dict: Dict[str, torch.Tensor],
+            self,
+            x_dict: Dict[str, torch.Tensor],
+            edge_index_dict: Dict[str, torch.Tensor],
     ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor]:
         """
         前向传播，tensorboard不支持tuple类型的输入，需要单独的字符串作为字典索引

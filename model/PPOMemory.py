@@ -10,7 +10,7 @@ class PPOMemory:
         device,
     ):
         self.node_states = [{} for _ in range(batch_size)]
-        self.edge_indexs = [{} for _ in range(batch_size)]
+        self.edge_indexes = [{} for _ in range(batch_size)]
         # 这里的actions用字典来存不同类型的动作
         self.total_actions = [{} for _ in range(batch_size)]
         self.log_probs = [torch.zeros(0) for _ in range(batch_size)]
@@ -30,16 +30,16 @@ class PPOMemory:
         done: int,
         total_action: Dict[str, torch.Tensor],
         log_probs: torch.Tensor,
-        eposide_step: int = 0,
+        episode_step: int = 0,
     ):
         self.node_states[self.count] = node_state
         self.total_actions[self.count] = total_action
         self.log_probs[self.count] = log_probs
-        self.edge_indexs[self.count] = edge_index
+        self.edge_indexes[self.count] = edge_index
         self.values[self.count] = value
         self.rewards[self.count] = reward
         self.dones[self.count] = done
-        self.time_step[self.count] = eposide_step
+        self.time_step[self.count] = episode_step
         self.count += 1
 
     def generate_batches(
@@ -70,7 +70,7 @@ class PPOMemory:
         self.count = 0
         return (
             self.node_states,
-            self.edge_indexs,
+            self.edge_indexes,
             self.values,
             self.rewards,
             self.dones,
