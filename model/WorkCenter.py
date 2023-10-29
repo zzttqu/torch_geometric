@@ -1,7 +1,9 @@
 from typing import List, Tuple
-
+from model.WorkCell import WorkCell
 import numpy as np
 import torch
+from loguru import logger
+from model.StateCode import StateCode
 
 
 # 这个类是用来定义加工中心的，一个加工中心包括多个加工单元，但同一时间只能有一个加工单元工作
@@ -9,7 +11,6 @@ class WorkCenter:
     next_id = 0
 
     def __init__(self, function_list: np.ndarray, max_func_num) -> None:
-        from WorkCell import WorkCell
 
         self.id = WorkCenter.next_id
         self.max_func_num = max_func_num
@@ -61,6 +62,7 @@ class WorkCenter:
         # 这个应该可以改成类似查表的，用cellid直接查在list中的位置
 
         for cell, material in zip(self.workcell_list, materials):
+            assert isinstance(cell, WorkCell)
             cell.receive_material(material)
 
     # def move_product(self, products_list: List[int]):
@@ -77,7 +79,6 @@ class WorkCenter:
             for i, cell in enumerate(self.workcell_list):
                 if i == action - 1:
                     state = cell.work(1)
-                    from envClass import StateCode
 
                     if state == StateCode.workcell_working:
                         self.working_cell = cell

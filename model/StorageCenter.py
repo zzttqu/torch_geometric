@@ -10,7 +10,7 @@ class TransitCenter:
         self.goal = goal
         self.cell_id = TransitCenter.next_id
         TransitCenter.next_id += 1
-        self.product_id = product_id
+        self.product_id = int(product_id)
         self.state = StateCode.workcell_working
         self.product_num = 0
 

@@ -1,13 +1,14 @@
 from datetime import datetime
 
 import torch
-from envClass import EnvRun
+
 from torch.utils.tensorboard.writer import SummaryWriter
 from loguru import logger
 from torch_geometric.data import HeteroData
 
 from model.GNNAgent import Agent
 from model.PPOMemory import PPOMemory
+from model.envClass import EnvRun
 
 
 class Train:
@@ -50,17 +51,7 @@ class Train:
             episode_step_max=episode_step_max,
             product_goal_scale=0.3,
         )
-        # 初始化memory
-        self.memory = PPOMemory(
-            batch_size,
-            self.device,
-        )
-        self.agent = Agent(
-            batch_size=batch_size,
-            n_epochs=self.n_epochs,
-            init_data=self.hetero_data,
-        )
-
+        # 初始化metadata
         obs_states, edge_index, reward, dones, _ = self.env.get_obs()
         logger.info(f"加工能力为{self.env.product_capacity}")
         # 构建metaData
@@ -72,6 +63,17 @@ class Train:
         for key, _value in edge_index.items():
             node1, node2 = key.split("_to_")
             self.hetero_data[(f"{node1}", f"{key}", f"{node2}")].edge_index = _value
+        # 初始化memory
+        self.memory = PPOMemory(
+            batch_size,
+            self.device,
+        )
+        self.agent = Agent(
+            batch_size=batch_size,
+            n_epochs=self.n_epochs,
+            init_data=self.hetero_data,
+        )
+
         if self.tensorboard_log:
             self.writer = SummaryWriter(log_dir="logs/train")
             obs_states, edge_index, reward, dones, _ = self.env.get_obs()
@@ -232,7 +234,7 @@ class Train:
             if self.total_step % 500 == 0:
                 self.agent.save_model("model_" + str(self.total_step) + ".pth")
 
-            return self.env.read_state()
+            return self.env.online_state()
         # 神经网络要输出每个工作站的工作，功能和传输与否
         self.agent.save_model("last_model.pth")
         # 清理缓存，卸载模型，保留环境

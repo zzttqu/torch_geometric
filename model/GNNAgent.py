@@ -3,8 +3,8 @@ from typing import Dict, List, Tuple
 
 import torch
 import torch.nn.functional as F
-from GNNNet import HGTNet
-from PPOMemory import PPOMemory
+from model.GNNNet import HGTNet
+from model.PPOMemory import PPOMemory
 from torch.distributions import Categorical
 from torch.utils.data import BatchSampler, SequentialSampler
 from torch_geometric.data import HeteroData
@@ -12,14 +12,14 @@ from torch_geometric.data import HeteroData
 
 class Agent:
     def __init__(
-        self,
-        batch_size,
-        n_epochs,
-        init_data: HeteroData,
-        clip=0.2,
-        lr=3e-4,
-        gamma=0.99,
-        gae_lambda=0.95,
+            self,
+            batch_size,
+            n_epochs,
+            init_data: HeteroData,
+            clip=0.2,
+            lr=3e-4,
+            gamma=0.99,
+            gae_lambda=0.95,
     ):
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         # self.work_cell_num = work_cell_num
@@ -54,18 +54,18 @@ class Agent:
         self.metadata = self.undirect_data.metadata()
 
     def get_value(
-        self,
-        state: Dict[str, torch.Tensor],
-        edge_index: Dict[str, torch.Tensor],
+            self,
+            state: Dict[str, torch.Tensor],
+            edge_index: Dict[str, torch.Tensor],
     ) -> torch.Tensor:
         _, value = self.network(state, edge_index)
         return value
 
     def get_action(
-        self,
-        state: Dict[str, torch.Tensor],
-        edge_index: Dict[str, torch.Tensor],
-        all_action: Dict[str, torch.Tensor] = None,  # type: ignore
+            self,
+            state: Dict[str, torch.Tensor],
+            edge_index: Dict[str, torch.Tensor],
+            all_action: Dict[str, torch.Tensor] = None,  # type: ignore
     ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor]:
         # hetero_data = T.ToUndirected()(hetero_data)
 
@@ -95,10 +95,10 @@ class Agent:
         return all_action, log_probs
 
     def get_batch_values(
-        self,
-        node: List[Dict[str, torch.Tensor]],
-        edge: List[Dict[str, torch.Tensor]],
-        mini_batch_size,
+            self,
+            node: List[Dict[str, torch.Tensor]],
+            edge: List[Dict[str, torch.Tensor]],
+            mini_batch_size,
     ):
         all_values = []
         for i in range(mini_batch_size):
@@ -108,11 +108,11 @@ class Agent:
         return all_values
 
     def get_batch_actions_probs(
-        self,
-        mini_batch_size,
-        node: List[Dict[str, torch.Tensor]],
-        edge: List[Dict[str, torch.Tensor]],
-        action_list: List[Dict[str, torch.Tensor]],
+            self,
+            mini_batch_size,
+            node: List[Dict[str, torch.Tensor]],
+            edge: List[Dict[str, torch.Tensor]],
+            action_list: List[Dict[str, torch.Tensor]],
     ):
         all_log_probs = []
         for i in range(mini_batch_size):
@@ -134,12 +134,12 @@ class Agent:
         self.network.save_model(name)
 
     def learn(
-        self,
-        ppo_memory: PPOMemory,
-        last_node_state,
-        last_done,
-        edge_index,
-        mini_batch_size,
+            self,
+            ppo_memory: PPOMemory,
+            last_node_state,
+            last_done,
+            edge_index,
+            mini_batch_size,
     ):
         (
             nodes,
@@ -168,13 +168,13 @@ class Agent:
                         next_nonterminal = 1.0 - dones[t + 1]
                         next_values = values[t + 1]
                     delta = (
-                        rewards[t]
-                        + self.gamma * next_values * next_nonterminal
-                        - values[t]
+                            rewards[t]
+                            + self.gamma * next_values * next_nonterminal
+                            - values[t]
                     )
                     last_gae_lam = (
-                        delta
-                        + self.gamma * self.gae_lambda * next_nonterminal * last_gae_lam
+                            delta
+                            + self.gamma * self.gae_lambda * next_nonterminal * last_gae_lam
                     )
                     advantages[t] = last_gae_lam
             # 规范化
@@ -187,7 +187,7 @@ class Agent:
         for _ in range(self.n_epochs):
             # 这里是设置minibatch，也就是送入图神经网络的大小
             for index in BatchSampler(
-                SequentialSampler(range(self.batch_size)), mini_batch_size, False
+                    SequentialSampler(range(self.batch_size)), mini_batch_size, False
             ):
                 # batch_time = datetime.now()
                 mini_nodes = [nodes[i] for i in index]

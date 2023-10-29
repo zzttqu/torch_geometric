@@ -7,13 +7,13 @@ class WorkCell:
     next_id = 0
 
     def __init__(
-        self,
-        function_id,
-        work_center_id,
-        max_func,
-        speed=6,
-        materials=6,
-        products=0,
+            self,
+            function_id,
+            work_center_id,
+            max_func,
+            speed=6,
+            materials=6,
+            products=0,
     ):
         super().__init__()
         # 需要有当前这个工作单元每个功能的备件，每个功能生产效率
@@ -28,7 +28,7 @@ class WorkCell:
         self.health = 100
         self.state = StateCode.workcell_ready
 
-    def recive_material(self, num: int):
+    def receive_material(self, num: int):
         """_summary_
 
         Args:
@@ -90,8 +90,8 @@ class WorkCell:
             self.state = StateCode.workcell_low_material
         # 不缺货就变为ready状态
         elif (
-            self.materials >= self.speed
-            and self.state == StateCode.workcell_low_material
+                self.materials >= self.speed
+                and self.state == StateCode.workcell_low_material
         ):
             self.state = StateCode.workcell_ready
 
@@ -130,7 +130,7 @@ class WorkCell:
         )
 
     def read_state(self):
-        return [self.function, self.state.value, self.speed, int(self.materials)]
+        return [int(self.function), int(self.state.value), int(self.speed), int(self.materials)]
 
     # 功能id
     def get_function(self):

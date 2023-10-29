@@ -1,15 +1,15 @@
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Any
 
 import networkx as nx
 import numpy as np
 import torch
-from WorkCenter import WorkCenter
+from model.WorkCenter import WorkCenter
 from loguru import logger
 from matplotlib import pyplot as plt
 from torch_geometric.data import HeteroData
 
-from StorageCenter import TransitCenter
-from WorkCell import WorkCell
+from model.StorageCenter import TransitCenter
+from model.WorkCell import WorkCell
 
 plt.rcParams["font.sans-serif"] = ["SimHei"]  # 显示中文标签
 plt.rcParams["axes.unicode_minus"] = False
@@ -97,6 +97,7 @@ class EnvRun:
         self.function_num = function_num
         self.center_num = function_num
         self.center_state_num = 2
+        self.read_edge = []
         # 随机生成一个2*n的矩阵，每列对应一个工作中心F
         self.function_matrix = select_functions(
             0,
@@ -155,6 +156,54 @@ class EnvRun:
         # 初始化边
         self.build_edge()
 
+    def process_raw_data(self, raw_edge_index, raw_state):
+        process_edge = []
+        process_states = []
+        size = []
+        count = 0
+        # 处理state
+        for _key, _value in raw_state.items():
+            size.append(len(_value))
+            # 按照顺序一个一个处理成字典和元组形式，state是一行的数据
+            for i, state in enumerate(_value):
+                # 根据键值不同设置不同的属性
+                # cell的function指的是其生成的产品id
+                # json字符串的话，process_state是一个数组一个是一个字典，包括id，name，category，
+                # value(如果是center就是存货量，cell就是功能吧)
+                if isinstance(state, list):
+                    state = list(map(int, state))
+                else:
+                    state = int(state)
+                if _key == "cell":
+                    # f"{i}:\n 状态:{state[1]}\n功能:{state[0]}\n原料:{state[3]}"
+                    process_states.append(
+                        {"id": count, "category": 0, "name": f"工作单元{i}", "material": state[3], "state": state[1],
+                         "function": state[0]})
+                elif _key == "center":
+                    # f"{i}\n产品:{state}"
+                    process_states.append({"id": count, "category": 1, "name": f"工作中心{i}", "function": state})
+                elif _key == "storage":
+                    # f"{i}:\n产品:{state[0]}\n数量:{state[1]}"
+                    process_states.append({"id": count, "category": 2, "name": f"产品中心{i}", "function": state[0],
+                                           "product_num": state[1]})
+                count += 1
+        # 建立边
+        for _key, _edge in raw_edge_index.items():
+            node1, node2 = _key.split("_to_")
+            edge_T = _edge.T.tolist()
+            if node1 == "center" and node2 == "storage":
+                for __edge in edge_T:
+                    process_edge.append(
+                        {"source": __edge[0] + size[0], "target": __edge[1] + size[0] + size[1]}
+                    )
+            elif node1 == "cell" and node2 == "center":
+                for __edge in edge_T:
+                    process_edge.append({"source": __edge[0], "target": __edge[1] + size[0]})
+            elif node1 == "storage" and node2 == "cell":
+                for __edge in edge_T:
+                    process_edge.append({"source": __edge[0] + size[0] + size[1], "target": __edge[1]})
+        return {"nodes": process_states, "edges": process_edge}
+
     # TODO 修改为适配当前的可视化
     def show_graph(self, step):
         # norm_data: Data = data.to_homogeneous()
@@ -201,6 +250,7 @@ class EnvRun:
                     process_edge.append((__edge[0] + size[0] + size[1], __edge[1]))
         graph = nx.DiGraph()
         graph.add_nodes_from([i for i in range(count)])
+        self.read_edge = process_edge
         graph.add_edges_from(process_edge)
         # if count==sum(size):
         nn = [
@@ -471,13 +521,19 @@ class EnvRun:
             self.episode_step,
         )
 
+    def online_state(self) -> dict[str, list[dict[str, int | Any] | dict[str, int | Any] | dict[str, int | Any]] | list[
+        dict[str, str | int] | dict[str, str | int | list[int]] | dict[str, str | int]]]:
+        raw_state = self.read_state()
+        a = self.process_raw_data(self.edge_index, raw_state)
+        return a
+
     def read_state(self):
         a = []
         for work_center in self.work_center_list:
             a += work_center.read_all_cell_state()
         b = []
         for center in self.work_center_list:
-            b.append(center.read_state())
+            b.append(int(center.read_state()))
         c = []
         for storage in self.storage_list:
             c.append(storage.read_state())
