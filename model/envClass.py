@@ -7,13 +7,9 @@ from WorkCenter import WorkCenter
 from loguru import logger
 from matplotlib import pyplot as plt
 from torch_geometric.data import HeteroData
-from torch_geometric.utils import to_networkx
 
 from StorageCenter import TransitCenter
 from WorkCell import WorkCell
-
-
-
 
 plt.rcParams["font.sans-serif"] = ["SimHei"]  # 显示中文标签
 plt.rcParams["axes.unicode_minus"] = False
@@ -156,6 +152,8 @@ class EnvRun:
         logger.info(f"目标生产数量:{self.product_goal}")
 
         self.episode_step_max = episode_step_max
+        # 初始化边
+        self.build_edge()
 
     # TODO 修改为适配当前的可视化
     def show_graph(self, step):
@@ -259,21 +257,21 @@ class EnvRun:
         plt.show()
         plt.close()
         return
-        process_edge = []
-        node = []
-        hetero_data = HeteroData()
-        # 节点信息
-        for key, _value in self.obs_states.items():
-            hetero_data[key].x = _value
-            # 边信息
-        for key, _value in self.edge_index.items():
-            node1, node2 = key.split("_to_")
-            hetero_data[(f"{node1}", f"{key}", f"{node2}")].edge_index = _value
-        graph: nx.Graph = to_networkx(data=hetero_data, to_undirected=False)
-        for key in self.edge_index.keys():
-            graph.add_edges_from([self.edge_index[key]])
-        nx.draw(graph, with_labels=True)
-        plt.show()
+        # process_edge = []
+        # node = []
+        # hetero_data = HeteroData()
+        # # 节点信息
+        # for key, _value in self.obs_states.items():
+        #     hetero_data[key].x = _value
+        #     # 边信息
+        # for key, _value in self.edge_index.items():
+        #     node1, node2 = key.split("_to_")
+        #     hetero_data[(f"{node1}", f"{key}", f"{node2}")].edge_index = _value
+        # graph: nx.Graph = to_networkx(data=hetero_data, to_undirected=False)
+        # for key in self.edge_index.keys():
+        #     graph.add_edges_from([self.edge_index[key]])
+        # nx.draw(graph, with_labels=True)
+        # plt.show()
         # 可视化
         # graph = nx.DiGraph()
         # for node in self.work_cell_list:
@@ -328,31 +326,6 @@ class EnvRun:
         )
 
         return self.edge_index
-
-        # 生成边
-        # region
-        for work_cell in self.work_cell_list:
-            for center in self.storage_list:
-                cell_fun_id = work_cell.function
-                product_id = center.product_id
-                # 边信息
-                # 从生产到中转
-                if cell_fun_id == product_id:
-                    self.edge_index["work_cell_to_center"].append(
-                        [work_cell._id, center.cell_id]
-                    )
-                # 从中转到下一步
-                if product_id == cell_fun_id - 1:
-                    self.edge_index["center_to_work_cell"].append(
-                        [center.cell_id, work_cell._id]
-                    )
-        for key, value in self.edge_index.items():
-            value = np.array(value)
-            self.edge_index[key] = torch.tensor(value, dtype=torch.int64).T.to(
-                self.device
-            )
-        # self.edge_index = torch.tensor(np.array(graph.edges()), dtype=torch.int64).T
-        # endregion
 
     def deliver_centers_material(self, workcell_get_material: np.ndarray):
         # 计算有同一功能有几个节点要接收
