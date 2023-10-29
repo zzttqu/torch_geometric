@@ -30,4 +30,6 @@ class ModelT:
         logger.info(a)
         # 我觉得可以处理一下，比如
         # a = {'state': '训练了一步成功'}
-        return JsonResponse(a, safe=False)
+        obj = JsonResponse(a, safe=False)
+        # obj['Access-Control-Allow-Origin'] = 'http://localhost:8080'
+        return obj

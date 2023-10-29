@@ -21,8 +21,8 @@ from App.views import *
 model_T = ModelT()
 urlpatterns = [
     path('index/', model_T.index),
-    path('login/', model_T.init_train),
-    path('train/', model_T.train),
+    path('api/init/', model_T.init_train),
+    path('api/train/', model_T.train),
     # path('index/', include("App.urls")),
     path('admin/', admin.site.urls),
 ]

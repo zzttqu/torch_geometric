@@ -177,7 +177,7 @@ class EnvRun:
                 if _key == "cell":
                     # f"{i}:\n 状态:{state[1]}\n功能:{state[0]}\n原料:{state[3]}"
                     process_states.append(
-                        {"id": count, "category": 0, "name": f"工作单元{i}", "material": state[3], "state": state[1],
+                        {"id": count, "category": 0, "name": f"工作单元{i}", "material_num": state[3], "state": state[1],
                          "function": state[0]})
                 elif _key == "center":
                     # f"{i}\n产品:{state}"
