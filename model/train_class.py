@@ -163,11 +163,11 @@ class Train:
         total_time = (datetime.now() - self.init_time).seconds // 60
         logger.info(f"总计用时：{total_time}分钟，运行{self.total_step}步，学习{self.learn_num}次")
 
-    def train_online(self, wait):
+    def train_online(self, save):
         """
         区别就是每调用一次只走一步
         Args:
-            wait:
+            save:
 
         Returns:
 
@@ -176,6 +176,8 @@ class Train:
 
         if self.load_model:
             self.agent.load_model("last_model.pth")
+        if save:
+            self.agent.save_model("last_model.pth")
 
         now_time = datetime.now()
 
@@ -234,7 +236,7 @@ class Train:
             if self.total_step % 500 == 0:
                 self.agent.save_model("model_" + str(self.total_step) + ".pth")
 
-            return self.env.online_state()
+            return [self.total_step, self.env.online_state()]
         # 神经网络要输出每个工作站的工作，功能和传输与否
         self.agent.save_model("last_model.pth")
         # 清理缓存，卸载模型，保留环境
