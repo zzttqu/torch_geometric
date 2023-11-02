@@ -163,11 +163,12 @@ class Train:
         total_time = (datetime.now() - self.init_time).seconds // 60
         logger.info(f"总计用时：{total_time}分钟，运行{self.total_step}步，学习{self.learn_num}次")
 
-    def train_online(self, save):
+    def train_online(self, step, stop=False):
         """
         区别就是每调用一次只走一步
         Args:
-            save:
+            step:
+            stop:
 
         Returns:
 
@@ -176,14 +177,15 @@ class Train:
 
         if self.load_model:
             self.agent.load_model("last_model.pth")
-        if save:
-            self.agent.save_model("last_model.pth")
+            # if save:
+        #     self.agent.save_model("last_model.pth")
+        #     yield
 
         now_time = datetime.now()
 
         # 只要没step，都是初始状态的obs
         obs_states, edge_index, reward, dones, _ = self.env.get_obs()
-        if self.total_step < self.init_step + self.max_steps:
+        for step in range(step):
             self.total_step += 1
             self.agent.network.eval()
             with torch.no_grad():
@@ -221,14 +223,12 @@ class Train:
                     mini_batch_size=self.batch_size // 2,
                 )
                 learn_time = (datetime.now() - now_time).seconds
-                print(f"第{self.learn_num}次学习，学习用时：{learn_time}秒")
+                logger.info(f"第{self.learn_num}次学习，学习用时：{learn_time}秒")
                 self.agent.save_model("last_model.pth")
-                now_time = datetime.now()
                 if self.tensorboard_log:
                     self.writer.add_scalar("loss", loss, self.total_step)
             if dones == 1:
-                print("=================")
-                print(f"总步数：{self.total_step}，本次循环步数为：{episode_step}，奖励为{reward:.3f}")
+                logger.info(f"总步数：{self.total_step}，本次循环步数为：{episode_step}，奖励为{reward:.3f}")
                 if self.tensorboard_log:
                     self.writer.add_scalar("reward", reward, self.total_step)
                 self.env.reset()
@@ -236,13 +236,9 @@ class Train:
             if self.total_step % 500 == 0:
                 self.agent.save_model("model_" + str(self.total_step) + ".pth")
 
-            return [self.total_step, self.env.online_state()]
-        # 神经网络要输出每个工作站的工作，功能和传输与否
-        self.agent.save_model("last_model.pth")
+            yield [self.total_step, self.env.online_state()]
         # 清理缓存，卸载模型，保留环境
-        torch.cuda.empty_cache()
-        # del agent
-        # del memory
-        total_time = (datetime.now() - self.init_time).seconds // 60
-        logger.info(f"总计用时：{total_time}分钟，运行{self.total_step}步，学习{self.learn_num}次")
-        return "finish"
+        # torch.cuda.empty_cache()
+        # total_time = (datetime.now() - self.init_time).seconds // 60
+        # logger.info(f"总计用时：{total_time}分钟，运行{self.total_step}步，学习{self.learn_num}次")
+        # return "finish"

@@ -177,7 +177,8 @@ class EnvRun:
                 if _key == "cell":
                     # f"{i}:\n 状态:{state[1]}\n功能:{state[0]}\n原料:{state[3]}"
                     process_states.append(
-                        {"id": count, "category": 0, "name": f"工作单元{i}", "material_num": state[3], "state": state[1],
+                        {"id": count, "category": 0, "name": f"工作单元{i}", "material_num": state[3],
+                         "state": state[1],
                          "function": state[0]})
                 elif _key == "center":
                     # f"{i}\n产品:{state}"
@@ -498,9 +499,9 @@ class EnvRun:
         # 按cellid排序，因为要构造数据结构，其实不用排序，因为本来就是按顺序生成的。。。。
         # sort_state = sorted(a, key=lambda x: x[0])
         work_cell_states = torch.stack(a).to(self.device)
-
-        for storage in self.storage_list:
-            storage_states[storage.cell_id] = storage.get_state()
+        # 这里会因为cell_id的自增出问题
+        for i, storage in enumerate(self.storage_list):
+            storage_states[i] = storage.get_state()
         b = []
         for center in self.work_center_list:
             b.append(center.get_state())
