@@ -211,7 +211,7 @@ class EnvRun:
         process_label = {}
         process_edge = []
         raw_dict = self.read_state()
-        # 这个size是有多少个worcell，主要是为了重新编号
+        # 这个size是有多少个workcell，主要是为了重新编号
         size = []
         # 总节点数量
         count = 0
@@ -458,13 +458,13 @@ class EnvRun:
 
         # 生产有奖励，根据产品级别加分
         products_reward = 0
-        for i, strorage in enumerate(self.storage_list):
+        for i, storage in enumerate(self.storage_list):
             # 库存数量/该产品生产能力，当生产最后一个类别的时候不计
             if i == len(self.storage_list):
                 break
             products_reward += (
                     -0.002
-                    * strorage.get_product_num()
+                    * storage.get_product_num()
                     / self.product_capacity[i]
                 # * (i)
                 # / self.function_num

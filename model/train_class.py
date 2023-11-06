@@ -215,6 +215,7 @@ class Train:
             if self.memory.count == self.batch_size:
                 self.learn_num += 1
                 self.agent.network.train()
+                yield "training"
                 loss = self.agent.learn(
                     self.memory,
                     last_node_state=obs_states,
@@ -224,7 +225,7 @@ class Train:
                 )
                 learn_time = (datetime.now() - now_time).seconds
                 logger.info(f"第{self.learn_num}次学习，学习用时：{learn_time}秒")
-                self.agent.save_model("last_model.pth")
+                # self.agent.save_model("last_model.pth")
                 if self.tensorboard_log:
                     self.writer.add_scalar("loss", loss, self.total_step)
             if dones == 1:
