@@ -35,10 +35,10 @@ class Agent:
         self.undirect_data = init_data
         # 如果为异质图
         assert init_data is not None, "init_data是异质图必需的"
-        self.update_heterodata(init_data)
+        # self.update_heterodata(init_data)
         self.network = HGTNet(
             2,
-            self.undirect_data,
+            init_data,
         ).to(self.device)
         # 使用to_hetro相当于变了一个模型，还得todevice
         """self.network = to_hetero(self.network, self.metadata, aggr="sum").to(
@@ -98,7 +98,7 @@ class Agent:
             self,
             node: List[Dict[str, torch.Tensor]],
             edge: List[Dict[str, torch.Tensor]],
-            mini_batch_size,
+            mini_batch_size:int,
     ):
         all_values = []
         for i in range(mini_batch_size):

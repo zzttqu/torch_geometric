@@ -1,19 +1,19 @@
 import torch
 
 from model.StateCode import *
+from typing import ClassVar
 
 
 class WorkCell:
-    next_id = 0
+    next_id: ClassVar = 0
 
     def __init__(
             self,
-            function_id,
-            work_center_id,
-            max_func,
+            function_id: int,
+            work_center_id: int,
+            max_func: int,
             speed=6,
             materials=6,
-            products=0,
     ):
         super().__init__()
         # 需要有当前这个工作单元每个功能的备件，每个功能生产效率
@@ -24,13 +24,13 @@ class WorkCell:
         self.max_func = max_func
         self.speed = speed
         self.materials = materials
-        self.products = products
+        self.products = 0
         self.health = 100
         self.state = StateCode.workcell_ready
 
     def receive_material(self, num: int):
-        """_summary_
-
+        """
+        接收产品数量
         Args:
             num (int): 接受原料，但是如果功能为0则忽略
         """
@@ -40,16 +40,20 @@ class WorkCell:
         # 接收原材料
         self.materials += num
 
-    def send_product(self):
+    def send_product(self) -> int:
         """
-        转移生产出来的产品
+        转移生产出来的产品数量
+        Returns:
+            当前节拍生产的产品数量
         """
         current_product = self.products
         self.products = 0
         return current_product
 
     def func_err(self):
-        """工作中心是否因为错误启动工作单元而报错"""
+        """
+        工作单元报错
+        """
         self.state = StateCode.workcell_function_error
 
     def work(self, action: int) -> StateCode:
@@ -80,7 +84,9 @@ class WorkCell:
         return self.state
 
     def state_check(self):
-        """检测目前工作单元状态，检测原料是否够生产"""
+        """
+        检测目前工作单元状态，检测原料是否够生产
+        """
         # 低健康度
         # if self.health < 50:
         #      = None
@@ -96,6 +102,10 @@ class WorkCell:
             self.state = StateCode.workcell_ready
 
     def reset_state(self):
+        """
+        重置工作单元状态
+
+        """
         self.state = StateCode.workcell_ready
         # 给一个基础的原料
         self.materials = self.speed
@@ -103,8 +113,8 @@ class WorkCell:
 
     # 状态空间
     def get_state(self) -> torch.Tensor:
-        """获取工作单元状态
-
+        """
+        获取工作单元状态，规范化后的
         Returns:
             torch.Tensor: 第一项是工作单元id
             第二项是工作单元隶属的工作中心id
@@ -129,7 +139,12 @@ class WorkCell:
             dtype=torch.float32,
         )
 
-    def read_state(self):
+    def read_state(self) -> list[int]:
+        """
+        读取可读状态
+        Returns:
+            可读状态
+        """
         return [int(self.function), int(self.state.value), int(self.speed), int(self.materials)]
 
     # 功能id

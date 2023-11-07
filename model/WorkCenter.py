@@ -4,13 +4,20 @@ import numpy as np
 import torch
 from loguru import logger
 from model.StateCode import StateCode
+from typing import ClassVar
 
 
 # 这个类是用来定义加工中心的，一个加工中心包括多个加工单元，但同一时间只能有一个加工单元工作
 class WorkCenter:
-    next_id = 0
+    next_id: ClassVar = 0
 
-    def __init__(self, function_list: np.ndarray, max_func_num) -> None:
+    def __init__(self, function_list: np.ndarray, max_func_num):
+        """
+        工作中心初始化
+        Args:
+            function_list: 该工作中心所具有的功能列表，例如【0,1】
+            max_func_num: 最大功能数，用于规范化
+        """
 
         self.id = WorkCenter.next_id
         self.max_func_num = max_func_num
@@ -28,6 +35,15 @@ class WorkCenter:
         self.all_cell_id = [workcell.get_id() for workcell in self.workcell_list]
 
     def build_edge(self, id_center) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        创建该工作中心的边信息
+        Args:
+            id_center: 产品中心的id列表
+
+        Returns:
+            分成三类的边
+
+        """
         # 建立一个workcenter内部节点的联系
         _edge = []
         # 从cell到center
@@ -52,12 +68,15 @@ class WorkCenter:
             material_edge = torch.tensor(_edge1, dtype=torch.long).T
         else:
             material_edge = None
-        return center_edge, product_edge, material_edge  # type: ignore
+        return center_edge, product_edge, material_edge
 
     def receive_material(self, materials: List[int]):
-        # 如果为int说明这个center只有一个0号节点，也就直接给0功能节点加数值就行了
+        """
+        接收原材料产品
+        Args:
+            materials: 该工作中心接收的原材料产品列表
+        """
 
-        # materials如果是0号就只是int，需要判断
         # 这个material是全部的
         # 这个应该可以改成类似查表的，用cellid直接查在list中的位置
 
@@ -70,23 +89,28 @@ class WorkCenter:
     #         products_list[cell.get_function()] = cell.send_product()
 
     def work(self, action: int):
-        # 如果同时工作的单元数量大于1，就会报错，惩罚就是当前步无法工作
+        """
+        加工
+        Args:
+            action: 加工动作，0或需要工作的工作单元在workcell_list中的位置
+        """
         # 这里目前改为了工作中心选择哪个工作单元工作
+        # 如果是0，就是全部
         if action == 0:
             for cell in self.workcell_list:
-                state = cell.work(0)
+                cell.work(0)
         else:
             for i, cell in enumerate(self.workcell_list):
                 if i == action - 1:
                     state = cell.work(1)
-
+                    # 如果正常工作则修改work_center的状态
                     if state == StateCode.workcell_working:
                         self.working_cell = cell
                         self.func = cell.get_function()
                         self.speed = cell.get_speed()
                         self.product = cell.get_products()
                 else:
-                    state = cell.work(0)
+                    cell.work(0)
 
     def send_product(self):
         self.working_cell.send_product()

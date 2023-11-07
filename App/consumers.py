@@ -12,7 +12,7 @@ from loguru import logger
 class TrainConsumer(WebsocketConsumer):
     def __init__(self, *args, **kwargs):
         super().__init__(args, kwargs)
-        self.train_handle: Train = None
+        self.train_handle: Train | None = None
 
     def websocket_connect(self, message):
         """
