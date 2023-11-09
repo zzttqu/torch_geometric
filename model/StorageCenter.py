@@ -3,7 +3,7 @@ from model.StateCode import *
 from typing import ClassVar
 
 
-class TransitCenter:
+class StorageCenter:
     next_id: ClassVar = 0
 
     def __init__(self, product_id: int, goal: int, max_func: int):
@@ -16,8 +16,8 @@ class TransitCenter:
         """
         self.max_func = max_func
         self.goal = goal
-        self.cell_id = TransitCenter.next_id
-        TransitCenter.next_id += 1
+        self.cell_id = StorageCenter.next_id
+        StorageCenter.next_id += 1
         self.product_id = int(product_id)
         self.state = StateCode.workcell_working
         self.product_num = 0

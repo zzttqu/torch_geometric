@@ -49,7 +49,7 @@ class Train:
             function_num=function_num,
             device=self.device,
             episode_step_max=episode_step_max,
-            product_goal_scale=0.3,
+            product_goal_scale=0.25,
         )
         # 初始化metadata
         obs_states, edge_index, reward, dones, _ = self.env.get_obs()
@@ -243,3 +243,10 @@ class Train:
         # total_time = (datetime.now() - self.init_time).seconds // 60
         # logger.info(f"总计用时：{total_time}分钟，运行{self.total_step}步，学习{self.learn_num}次")
         # return "finish"
+
+import os
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+if __name__ == '__main__':
+    a = Train(2, 2, 64, load_model=False)
+    for i in a.train_online(64):
+        print(i)

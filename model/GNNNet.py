@@ -106,7 +106,7 @@ class GNNNet(nn.Module):
 class HGTNet(nn.Module):
     def __init__(
             self,
-            action_dim: int,
+
             data: HeteroData,
             hidden_channels=64,
             num_layers=2,
@@ -115,12 +115,7 @@ class HGTNet(nn.Module):
         super().__init__()
         # 将节点映射为一个四维向量
         self.encoders = torch.nn.ModuleDict()
-
-        # 还是先embedding再linear
         for node_type in data.node_types:
-            self.encoders[f"{node_type}_embedding"] = nn.Embedding(
-                data.num_node_features[node_type], hidden_channels
-            )
             self.encoders[f"{node_type}_linear"] = nn.Linear(
                 data.num_node_features[node_type], hidden_channels
             )

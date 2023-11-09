@@ -1,4 +1,7 @@
-from typing import List, Tuple
+from typing import List, Tuple, Generator, Any
+
+from numpy import ndarray, dtype
+
 from model.WorkCell import WorkCell
 import numpy as np
 import torch
@@ -22,12 +25,11 @@ class WorkCenter:
         self.id = WorkCenter.next_id
         self.max_func_num = max_func_num
         WorkCenter.next_id += 1
-        self.workcell_list: List[WorkCell] = []
-        self.function_list: np.ndarray = function_list
-
         # 构建workcell
-        for f in function_list:
-            self.workcell_list.append(WorkCell(f, self.id, self.max_func_num))
+        self.workcell_list: List[WorkCell] = [WorkCell(f, self.id, self.max_func_num) for f in function_list]
+        self.function_list: np.ndarray = function_list
+        # for f in function_list:
+        #     self.workcell_list.append(WorkCell(f, self.id, self.max_func_num))
         self.func = self.workcell_list[0].get_function()
         self.speed = self.workcell_list[0].get_speed()
         self.product = 0
@@ -116,11 +118,10 @@ class WorkCenter:
         self.working_cell.send_product()
         self.product = 0
 
-    def get_all_cellid_func(self) -> List:
-        a = []
-        for workcell in self.workcell_list:
-            a.append([workcell.get_id(), workcell.get_function()])
-        return a
+    def get_all_cellid_func(self) -> ndarray[Any, dtype[Any]]:
+        id_array = [np.array((workcell.get_id(), workcell.get_function())) for workcell in self.workcell_list]
+        id_arrays = np.stack(id_array,dtype=int)
+        return id_arrays
 
     def get_all_funcs(self) -> np.ndarray:
         return self.function_list

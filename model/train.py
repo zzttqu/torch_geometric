@@ -1,8 +1,14 @@
+from datetime import datetime
+
 import numpy as np
 import torch
 from envClass import EnvRun
 from matplotlib import pyplot as plt
 from torch.utils.tensorboard.writer import SummaryWriter
+from loguru import logger
+from torch_geometric.data import HeteroData
+from model.GNNAgent import Agent
+from model.PPOMemory import PPOMemory
 
 # def show(graph):
 #     # 可视化
@@ -78,8 +84,7 @@ if __name__ == "__main__":
     # 加载之前的
 
     obs_states, edge_index, reward, dones, _ = env.get_obs()
-    print(env.read_state())
-    raise SystemExit
+
     # print(f"初始化状态为{obs_states}")
     # print(f"初始化边为{edge_index}")
     logger.info(f"加工能力为{env.product_capacity}")
@@ -176,18 +181,18 @@ if __name__ == "__main__":
             print("=================")
             print(f"总步数：{total_step}，本次循环步数为：{episode_step}，奖励为{reward:.3f}")
             writer.add_scalar("reward", reward, total_step)
-            with open("./log.csv", "a", newline="") as csvfile:
-                csv_writer = csv.writer(csvfile)
-                csv_writer.writerow([total_step, f"{reward:.3f}"])
+            # with open("./log.csv", "a", newline="") as csvfile:
+            #     csv_writer = csv.writer(csvfile)
+            #     csv_writer.writerow([total_step, f"{reward:.3f}"])
             env.reset()
             obs_states, edge_index, _, _, _ = env.get_obs()
         if total_step % 500 == 0:
             agent.save_model("model_" + str(total_step) + ".pth")
 
-    # 神经网络要输出每个工作站的工作，功能和传输与否
-    agent.save_model("last_model.pth")
-    total_time = (datetime.now() - init_time).seconds // 60
-    with open("./log.csv", "a", newline="") as csvfile:
-        csv_writer = csv.writer(csvfile)
-        csv_writer.writerow([total_step, f"{reward:.3f}"])
-    print(f"总计用时：{total_time}分钟，运行{total_step}步，学习{learn_num}次")
+    # # 神经网络要输出每个工作站的工作，功能和传输与否
+    # agent.save_model("last_model.pth")
+    # total_time = (datetime.now() - init_time).seconds // 60
+    # with open("./log.csv", "a", newline="") as csvfile:
+    #     csv_writer = csv.writer(csvfile)
+    #     csv_writer.writerow([total_step, f"{reward:.3f}"])
+    # print(f"总计用时：{total_time}分钟，运行{total_step}步，学习{learn_num}次")

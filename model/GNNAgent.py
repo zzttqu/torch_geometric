@@ -1,6 +1,7 @@
 import os
 from typing import Dict, List, Tuple
 
+from loguru import logger
 import torch
 import torch.nn.functional as F
 from model.GNNNet import HGTNet
@@ -31,13 +32,11 @@ class Agent:
 
         self.clip = clip
 
-        self.metadata = init_data.metadata()
         self.undirect_data = init_data
         # 如果为异质图
         assert init_data is not None, "init_data是异质图必需的"
         # self.update_heterodata(init_data)
         self.network = HGTNet(
-            2,
             init_data,
         ).to(self.device)
         # 使用to_hetro相当于变了一个模型，还得todevice
@@ -46,12 +45,12 @@ class Agent:
         )"""
         self.optimizer = torch.optim.Adam(self.network.parameters(), lr=lr, eps=1e-5)
 
-    def update_heterodata(self, data: HeteroData):
-        """更新heterodata"""
-        # 去掉无向边
-        # self.undirect_data = T.ToUndirected()(data)
-        # metadata函数第一个返回值是节点列表，第二个返回值是边列表
-        self.metadata = self.undirect_data.metadata()
+    # def update_heterodata(self, data: HeteroData):
+    #     """更新heterodata"""
+    #     # 去掉无向边
+    #     # self.undirect_data = T.ToUndirected()(data)
+    #     # metadata函数第一个返回值是节点列表，第二个返回值是边列表
+    #     self.metadata = self.undirect_data.metadata()
 
     def get_value(
             self,
@@ -68,7 +67,6 @@ class Agent:
             all_action: Dict[str, torch.Tensor] = None,  # type: ignore
     ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor]:
         # hetero_data = T.ToUndirected()(hetero_data)
-
         all_logits, _ = self.network(state, edge_index)
         assert isinstance(all_logits, dict), "必须是字典类型"
         # 第一项是功能动作，第二项是是否接受上一级运输
@@ -98,7 +96,7 @@ class Agent:
             self,
             node: List[Dict[str, torch.Tensor]],
             edge: List[Dict[str, torch.Tensor]],
-            mini_batch_size:int,
+            mini_batch_size: int,
     ):
         all_values = []
         for i in range(mini_batch_size):

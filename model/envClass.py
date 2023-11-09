@@ -1,4 +1,4 @@
-from typing import List, Dict, Tuple, Any
+from typing import List, Dict, Tuple
 
 import networkx as nx
 import numpy as np
@@ -6,10 +6,11 @@ import torch
 from model.WorkCenter import WorkCenter
 from loguru import logger
 from matplotlib import pyplot as plt
-from torch_geometric.data import HeteroData
+# from torch_geometric.data import HeteroData
 
-from model.StorageCenter import TransitCenter
-from model.WorkCell import WorkCell
+from model.StorageCenter import StorageCenter
+
+# from model.WorkCell import WorkCell
 
 plt.rcParams["font.sans-serif"] = ["SimHei"]  # 显示中文标签
 plt.rcParams["axes.unicode_minus"] = False
@@ -77,6 +78,56 @@ def gen_pos(node_lists: List[List], nodes):
     return pos
 
 
+def process_raw_data(raw_edge_index, raw_state)->dict:
+    process_edge = []
+    process_states = []
+    size = []
+    count = 0
+    # 处理state
+    for _key, _value in raw_state.items():
+        size.append(len(_value))
+        # 按照顺序一个一个处理成字典和元组形式，state是一行的数据
+        for i, state in enumerate(_value):
+            # 根据键值不同设置不同的属性
+            # cell的function指的是其生成的产品id
+            # json字符串的话，process_state是一个数组一个是一个字典，包括id，name，category，
+            # value(如果是center就是存货量，cell就是功能吧)
+            if isinstance(state, list):
+                state = list(map(int, state))
+            else:
+                state = int(state)
+            if _key == "cell":
+                # f"{i}:\n 状态:{state[1]}\n功能:{state[0]}\n原料:{state[3]}"
+                process_states.append(
+                    {"id": count, "category": 0, "name": f"工作单元{i}", "material_num": state[3],
+                     "state": state[1],
+                     "function": state[0]})
+            elif _key == "center":
+                # f"{i}\n产品:{state}"
+                process_states.append({"id": count, "category": 1, "name": f"工作中心{i}", "function": state})
+            elif _key == "storage":
+                # f"{i}:\n产品:{state[0]}\n数量:{state[1]}"
+                process_states.append({"id": count, "category": 2, "name": f"产品中心{i}", "function": state[0],
+                                       "product_num": state[1]})
+            count += 1
+    # 建立边
+    for _key, _edge in raw_edge_index.items():
+        node1, node2 = _key.split("_to_")
+        edge_T = _edge.T.tolist()
+        if node1 == "center" and node2 == "storage":
+            for __edge in edge_T:
+                process_edge.append(
+                    {"source": __edge[0] + size[0], "target": __edge[1] + size[0] + size[1]}
+                )
+        elif node1 == "cell" and node2 == "center":
+            for __edge in edge_T:
+                process_edge.append({"source": __edge[0], "target": __edge[1] + size[0]})
+        elif node1 == "storage" and node2 == "cell":
+            for __edge in edge_T:
+                process_edge.append({"source": __edge[0] + size[0] + size[1], "target": __edge[1]})
+    return {"nodes": process_states, "edges": process_edge}
+
+
 class EnvRun:
     def __init__(
             self,
@@ -93,7 +144,7 @@ class EnvRun:
         self.work_center_num = work_center_num
         self.work_cell_num = self.work_center_num * fun_per_center
         self.func_per_center = fun_per_center
-        self.work_center_list: List[WorkCenter] = []
+
         self.function_num = function_num
         self.center_num = function_num
         self.center_state_num = 2
@@ -105,13 +156,11 @@ class EnvRun:
             work_center_num,
             fun_per_center,
         )
-        self.work_cell_list: List[WorkCell] = []
-        # 生成物流运输中心代号和中心存储物料的对应关系
-        self.id_center: np.ndarray = np.zeros((self.center_num, 2), dtype=int)
         # 初始化工作中心
         # 这个初始化的顺序和工作单元的id顺序也是一致的
-        for function_list in self.function_matrix:
-            self.work_center_list.append(WorkCenter(function_list, self.function_num))
+        self.work_center_list: list[WorkCenter] = [WorkCenter(self.function_matrix[i], fun_per_center) for i in
+                                                   range(work_center_num)]
+
         self.function_group = self.get_function_group()
         # 各级别生产能力，这个应该排除同一个节点拥有两个相同单元
         self.product_capacity = [0 for _ in range(self.function_num)]
@@ -137,12 +186,14 @@ class EnvRun:
         else:
             self.product_goal = desire_product_goal
         # 初始化集散中心
-        self.storage_list: List[TransitCenter] = []
+        self.storage_list: list[StorageCenter] = [StorageCenter(i, self.product_goal, self.function_num) for i in
+                                                  range(self.center_num)]
+        # 生成物流运输中心代号和中心存储物料的对应关系
+        self.center_product: np.ndarray = np.zeros((self.center_num, 2), dtype=int)
+        # 这里其实是把第一位是center的id，第二位是product的id
         for i in range(function_num):
-            self.storage_list.append(
-                TransitCenter(i, self.product_goal, self.function_num)
-            )
-            self.id_center[i] = i
+            self.center_product[i, 0] = self.storage_list[i].cell_id
+            self.center_product[i, 1] = i
         # 产品数量
         self.step_products = np.zeros(function_num)
         # 一次循环的step数量
@@ -156,56 +207,6 @@ class EnvRun:
         # 初始化边
         self.build_edge()
 
-    def process_raw_data(self, raw_edge_index, raw_state):
-        process_edge = []
-        process_states = []
-        size = []
-        count = 0
-        # 处理state
-        for _key, _value in raw_state.items():
-            size.append(len(_value))
-            # 按照顺序一个一个处理成字典和元组形式，state是一行的数据
-            for i, state in enumerate(_value):
-                # 根据键值不同设置不同的属性
-                # cell的function指的是其生成的产品id
-                # json字符串的话，process_state是一个数组一个是一个字典，包括id，name，category，
-                # value(如果是center就是存货量，cell就是功能吧)
-                if isinstance(state, list):
-                    state = list(map(int, state))
-                else:
-                    state = int(state)
-                if _key == "cell":
-                    # f"{i}:\n 状态:{state[1]}\n功能:{state[0]}\n原料:{state[3]}"
-                    process_states.append(
-                        {"id": count, "category": 0, "name": f"工作单元{i}", "material_num": state[3],
-                         "state": state[1],
-                         "function": state[0]})
-                elif _key == "center":
-                    # f"{i}\n产品:{state}"
-                    process_states.append({"id": count, "category": 1, "name": f"工作中心{i}", "function": state})
-                elif _key == "storage":
-                    # f"{i}:\n产品:{state[0]}\n数量:{state[1]}"
-                    process_states.append({"id": count, "category": 2, "name": f"产品中心{i}", "function": state[0],
-                                           "product_num": state[1]})
-                count += 1
-        # 建立边
-        for _key, _edge in raw_edge_index.items():
-            node1, node2 = _key.split("_to_")
-            edge_T = _edge.T.tolist()
-            if node1 == "center" and node2 == "storage":
-                for __edge in edge_T:
-                    process_edge.append(
-                        {"source": __edge[0] + size[0], "target": __edge[1] + size[0] + size[1]}
-                    )
-            elif node1 == "cell" and node2 == "center":
-                for __edge in edge_T:
-                    process_edge.append({"source": __edge[0], "target": __edge[1] + size[0]})
-            elif node1 == "storage" and node2 == "cell":
-                for __edge in edge_T:
-                    process_edge.append({"source": __edge[0] + size[0] + size[1], "target": __edge[1]})
-        return {"nodes": process_states, "edges": process_edge}
-
-    # TODO 修改为适配当前的可视化
     def show_graph(self, step):
         # norm_data: Data = data.to_homogeneous()
         process_label = {}
@@ -357,7 +358,7 @@ class EnvRun:
         # 连接在workcenter中生成的边
         for work_center in self.work_center_list:
             center_edge, product_edge, material_edge = work_center.build_edge(
-                id_center=self.id_center
+                id_center=self.center_product
             )
             # 需要按列拼接
             self.edge_index[center1_index] = torch.cat(
@@ -401,25 +402,25 @@ class EnvRun:
             # 转移产品，清空workcell库存
             work_center.send_product()
         self.step_products = products
+        # 处理原料
         # 根据是否接收物料的这个动作空间传递原料
         for work_center in self.work_center_list:
-            id_funcs = np.array(work_center.get_all_cellid_func(), dtype=int)
+            id_funcs = work_center.get_all_cellid_func()
             # 第一列是cellid，第二列是functionid
             # 我就是让他相乘一个系数，如果不分配，这个系数就是0
             # 这里得去掉0功能和最后一个功能
             for _func in id_funcs:
                 # 第一位是cellid，第二位是functionid
+                logger.info(type(_func))
+                logger.info(_func)
                 assert isinstance(_func, np.ndarray)
                 _func_id: int = int(_func[1])
                 _cell_id: int = int(_func[0])
                 # 如果功能为0就不能运送了，如果功能为最后一个也不能运送走了
-                if _func_id == 0:
-                    pass
-                else:
+                if _func_id != 0:
                     self.storage_list[_func_id - 1].send_product(
                         int(products[_func_id - 1] * ratio[_cell_id])
                     )
-            #
             # collect是每个cell的权重
             # 这里注意！！！！，因为funcs要-1才是需要的原料
             material_list = (
@@ -427,17 +428,8 @@ class EnvRun:
             )
             material_list = list(map(int, material_list))
             work_center.receive_material(material_list)
-            # # 看看当前id在flat里边排第几个，然后把对应权重进行计算
-            # collect = flatt[torch.where(work_cell.cell_id == flat_id)[0].item()]
-            # # int会导致有盈余，但是至少不会发生没办法转移的情况
-            # self.center_list[work_cell.function - 1].moveout_product(
-            #     int(products[work_cell.function - 1] * collect))
-            # work_cell.transport(3, int(products[work_cell.function - 1] * collect))
 
     def update_all_work_center(self, workcell_action: np.ndarray):
-        # 先检测workcell是否出现冲突，冲突则报错
-        # 按照每个工作中心具有的工作单元的数量进行折叠
-
         for action, work_center in zip(workcell_action, self.work_center_list):
             work_center.work(int(action))
 
@@ -490,22 +482,20 @@ class EnvRun:
     def get_obs(
             self,
     ) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor], float, int, int]:
-        storage_states = torch.zeros(
-            (self.center_num, self.center_state_num), dtype=torch.float
-        ).to(self.device)
-        a = []
-        for work_center in self.work_center_list:
-            a += work_center.get_all_cell_state()
+        work_cell_state_list = [cell for work_center in self.work_center_list for cell in
+                                work_center.get_all_cell_state()]
+        # for work_center in self.work_center_list:
+        #     a += work_center.get_all_cell_state()
         # 按cellid排序，因为要构造数据结构，其实不用排序，因为本来就是按顺序生成的。。。。
         # sort_state = sorted(a, key=lambda x: x[0])
-        work_cell_states = torch.stack(a).to(self.device)
+        work_cell_states = torch.stack(work_cell_state_list).to(self.device)
         # 这里会因为cell_id的自增出问题
-        for i, storage in enumerate(self.storage_list):
-            storage_states[i] = storage.get_state()
-        b = []
-        for center in self.work_center_list:
-            b.append(center.get_state())
-        work_center_states = torch.stack(b).to(self.device)
+        storage_state_list = [storage.get_state() for storage in self.storage_list]
+        storage_states = torch.stack(storage_state_list).to(self.device)
+        work_center_state_list = [center.get_state() for center in self.work_center_list]
+        # for center in self.work_center_list:
+        #     work_center_state_list.append(center.get_state())
+        work_center_states = torch.stack(work_center_state_list).to(self.device)
 
         obs_states: Dict[str, torch.Tensor] = {
             "cell": work_cell_states,
@@ -522,22 +512,25 @@ class EnvRun:
             self.episode_step,
         )
 
-    def online_state(self) -> dict[str, list[dict[str, int | Any] | dict[str, int | Any] | dict[str, int | Any]] | list[
-        dict[str, str | int] | dict[str, str | int | list[int]] | dict[str, str | int]]]:
+    def online_state(self):
         raw_state = self.read_state()
-        a = self.process_raw_data(self.edge_index, raw_state)
-        return a
+        return process_raw_data(self.edge_index, raw_state)
 
     def read_state(self):
-        a = []
-        for work_center in self.work_center_list:
-            a += work_center.read_all_cell_state()
-        b = []
-        for center in self.work_center_list:
-            b.append(int(center.read_state()))
-        c = []
-        for storage in self.storage_list:
-            c.append(storage.read_state())
+        # a = []
+        # for work_center in self.work_center_list:
+        #     a += work_center.read_all_cell_state()
+        # b = []
+        # for center in self.work_center_list:
+        #     b.append(int(center.read_state()))
+        # c = []
+        # for storage in self.storage_list:
+        #     c.append(storage.read_state())
+        a = [cell for work_center in self.work_center_list for cell in work_center.read_all_cell_state()]
+
+        b = [int(center.read_state()) for center in self.work_center_list]
+
+        c = [storage.read_state() for storage in self.storage_list]
         return {
             "cell": a,
             "center": b,
@@ -545,12 +538,12 @@ class EnvRun:
         }
 
     def get_function_group(self):
-        work_function = []
-        for work_center in self.work_center_list:
-            work_function += work_center.get_all_cellid_func()
-        # 排序
-        sort_func = sorted(work_function, key=lambda x: x[0])
-        work_function = np.array(sort_func).T
+        work_function = [cell for work_center in self.work_center_list for cell in work_center.get_all_cellid_func()]
+        # for work_center in self.work_center_list:
+        #     work_function += work_center.get_all_cellid_func()
+        # 排序,不需要
+        # sort_func = sorted(work_function, key=lambda x: x[0])
+        work_function = np.array(work_function).T
         # 针对function的分类
         unique_labels = np.unique(work_function[1])
         # 如果直接用where的话，返回的就是符合要求的index，
@@ -558,7 +551,6 @@ class EnvRun:
         grouped_indices = [
             np.where(work_function[1] == label) for label in unique_labels
         ]
-        # 因为功能0是从原材料是无穷无尽的，所以不需要考虑不需要改变
         return grouped_indices
 
     def reset(self):
