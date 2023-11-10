@@ -248,5 +248,4 @@ import os
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 if __name__ == '__main__':
     a = Train(2, 2, 64, load_model=False)
-    for i in a.train_online(64):
-        print(i)
+    a.train_local()

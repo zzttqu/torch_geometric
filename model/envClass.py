@@ -411,8 +411,6 @@ class EnvRun:
             # 这里得去掉0功能和最后一个功能
             for _func in id_funcs:
                 # 第一位是cellid，第二位是functionid
-                logger.info(type(_func))
-                logger.info(_func)
                 assert isinstance(_func, np.ndarray)
                 _func_id: int = int(_func[1])
                 _cell_id: int = int(_func[0])
