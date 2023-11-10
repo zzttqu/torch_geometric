@@ -49,7 +49,7 @@ class Train:
             function_num=function_num,
             device=self.device,
             episode_step_max=episode_step_max,
-            product_goal_scale=0.25,
+            product_goal_scale=0.2,
         )
         # 初始化metadata
         obs_states, edge_index, reward, dones, _ = self.env.get_obs()
@@ -247,5 +247,5 @@ class Train:
 import os
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 if __name__ == '__main__':
-    a = Train(2, 2, 64, load_model=False)
+    a = Train(2, 2, 64*10, load_model=False)
     a.train_local()

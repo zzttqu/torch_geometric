@@ -12,8 +12,17 @@ from model.StorageCenter import StorageCenter
 
 # from model.WorkCell import WorkCell
 
-plt.rcParams["font.sans-serif"] = ["SimHei"]  # 显示中文标签
-plt.rcParams["axes.unicode_minus"] = False
+# plt.rcParams["font.sans-serif"] = ["SimHei"]  # 显示中文标签
+# plt.rcParams["axes.unicode_minus"] = False
+import warnings
+
+
+def deprecated(func):
+    def wrapper(*args, **kwargs):
+        warnings.warn("Call to deprecated function.", category=DeprecationWarning)
+        return func(*args, **kwargs)
+
+    return wrapper
 
 
 def select_functions(start, end, work_center_num, fun_per_center):
@@ -34,6 +43,7 @@ def select_functions(start, end, work_center_num, fun_per_center):
     return numbers.reshape(-1, fun_per_center)
 
 
+@deprecated
 def edge_weight_init(raw_array):
     # 示例二维数组
     value_counts = {}
@@ -50,6 +60,7 @@ def edge_weight_init(raw_array):
     return torch.tensor(normalized_array)
 
 
+@deprecated
 def gen_pos(node_lists: List[List], nodes):
     """产生工作单元和搬运中心的位置坐标
 
@@ -78,7 +89,7 @@ def gen_pos(node_lists: List[List], nodes):
     return pos
 
 
-def process_raw_data(raw_edge_index, raw_state)->dict:
+def process_raw_data(raw_edge_index, raw_state) -> dict:
     process_edge = []
     process_states = []
     size = []
@@ -207,6 +218,7 @@ class EnvRun:
         # 初始化边
         self.build_edge()
 
+    @deprecated
     def show_graph(self, step):
         # norm_data: Data = data.to_homogeneous()
         process_label = {}
