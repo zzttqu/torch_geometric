@@ -228,24 +228,25 @@ class Train:
                 # self.agent.save_model("last_model.pth")
                 if self.tensorboard_log:
                     self.writer.add_scalar("loss", loss, self.total_step)
+            if self.total_step % 500 == 0:
+                self.agent.save_model("model_" + str(self.total_step) + ".pth")
+            yield [self.total_step, self.env.online_state(), reward]
             if dones == 1:
                 logger.info(f"总步数：{self.total_step}，本次循环步数为：{episode_step}，奖励为{reward:.3f}")
                 if self.tensorboard_log:
                     self.writer.add_scalar("reward", reward, self.total_step)
                 self.env.reset()
                 obs_states, edge_index, _, _, _ = self.env.get_obs()
-            if self.total_step % 500 == 0:
-                self.agent.save_model("model_" + str(self.total_step) + ".pth")
-
-            yield [self.total_step, self.env.online_state()]
         # 清理缓存，卸载模型，保留环境
         # torch.cuda.empty_cache()
         # total_time = (datetime.now() - self.init_time).seconds // 60
         # logger.info(f"总计用时：{total_time}分钟，运行{self.total_step}步，学习{self.learn_num}次")
         # return "finish"
 
+
 import os
+
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 if __name__ == '__main__':
-    a = Train(2, 2, 64*10, load_model=False)
+    a = Train(2, 2, 64 * 10, load_model=False)
     a.train_local()

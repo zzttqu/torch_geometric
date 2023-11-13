@@ -60,8 +60,9 @@ class TrainConsumer(WebsocketConsumer):
                     self.send(text_data=json.dumps({'status': 'training'}))
                 else:
                     # 慢一点看效果
-                    time.sleep(0.5)
-                    step_result = {'status': 'running', 'step': step_message[0], 'state': step_message[1]}
+                    # time.sleep(0.5)
+                    step_result = {'status': 'running', 'step': step_message[0], 'state': step_message[1],
+                                   'reward': step_message[2]}
                     self.send(text_data=json.dumps(step_result))
             # 迭代完成后
             self.send(text_data=json.dumps({'status': 'finish'}))
