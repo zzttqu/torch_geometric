@@ -66,8 +66,8 @@ class TrainConsumer(WebsocketConsumer):
                     self.send(text_data=json.dumps(step_result))
             # 迭代完成后
             self.send(text_data=json.dumps({'status': 'finish'}))
-            del self.train_handle
-            torch.cuda.empty_cache()
+
+            self.close()
         elif data['action'] == 'init' and self.train_handle is not None:
             self.send(text_data=json.dumps({'status': 'init failed'}))
         elif data['action'] == 'stop':
@@ -86,3 +86,27 @@ class TrainConsumer(WebsocketConsumer):
         # if self.train_handle is not None:
         #     self.train_handle.train_online(True)
         raise StopConsumer()
+
+    def init_train(self, func_num, center_num, step_num):
+        func_num = 2
+        center_num = 2
+        step_num = 10
+        self.train_handle = Train(func_num, center_num, load_model=False)
+        json_str = json.dumps({'status': 'init success'})
+        self.send(text_data=json_str)
+        # 只要开始，就不允许停止训练，必须完成所有step
+        # 这是一个生成器
+        a = self.train_handle.train_online(step_num, False)
+        for step_message in a:
+            if step_message == 'training':
+                self.send(text_data=json.dumps({'status': 'training'}))
+            else:
+                # 慢一点看效果
+                # time.sleep(0.5)
+                step_result = {'status': 'running', 'step': step_message[0], 'state': step_message[1],
+                               'reward': step_message[2]}
+                self.send(text_data=json.dumps(step_result))
+        # 迭代完成后
+        self.send(text_data=json.dumps({'status': 'finish'}))
+        del self.train_handle
+        torch.cuda.empty_cache()

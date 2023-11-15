@@ -17,13 +17,12 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 
-from App.consumers import TrainConsumer
 from App.views import *
 
-model_T = ModelT()
+
 urlpatterns = [
-    path('index/', model_T.index),
-    path('api/init/', model_T.init_train),
+    path('index/', index),
+    path('api/init/', init_train),
     # path('api/train/', model_T.train),
     # path('index/', include("App.urls")),
     path('admin/', admin.site.urls),

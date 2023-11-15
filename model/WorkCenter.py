@@ -36,7 +36,7 @@ class WorkCenter:
         self.working_cell = self.workcell_list[0]
         self.all_cell_id = [workcell.get_id() for workcell in self.workcell_list]
 
-    def build_edge(self, id_center) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def build_edge(self, id_center, center_init_id, cell_init_id) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         创建该工作中心的边信息
         Args:
@@ -50,7 +50,7 @@ class WorkCenter:
         _edge = []
         # 从cell到center
         for cell in self.workcell_list:
-            _edge.append((cell.get_id(), self.id))
+            _edge.append((cell.get_id() - cell_init_id, self.get_id() - center_init_id))
         center_edge = torch.tensor(_edge, dtype=torch.long).squeeze().T
         # 从center到storage
         _edge = []
@@ -61,10 +61,10 @@ class WorkCenter:
                 # _center是一个长度为2的数组，第一位是center的id，第二位是product的id
                 # 从center到storage
                 if cell.get_function() == _center[1]:
-                    _edge.append((self.get_id(), _center[0]))
+                    _edge.append((self.get_id() - center_init_id, _center[0]))
                 # 从storage到center
                 elif cell.get_function() - 1 == _center[1]:
-                    _edge1.append((_center[0], cell.get_id()))
+                    _edge1.append((_center[0], cell.get_id() - cell_init_id))
         product_edge = torch.tensor(_edge, dtype=torch.long).squeeze().T
         if len(_edge1) > 0:
             material_edge = torch.tensor(_edge1, dtype=torch.long).T
@@ -120,7 +120,7 @@ class WorkCenter:
 
     def get_all_cellid_func(self) -> ndarray[Any, dtype[Any]]:
         id_array = [np.array((workcell.get_id(), workcell.get_function())) for workcell in self.workcell_list]
-        id_arrays = np.stack(id_array,dtype=int)
+        id_arrays = np.stack(id_array, dtype=int)
         return id_arrays
 
     def get_all_funcs(self) -> np.ndarray:

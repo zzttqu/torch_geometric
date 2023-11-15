@@ -4,11 +4,12 @@ import networkx as nx
 import numpy as np
 import torch
 from model.WorkCenter import WorkCenter
+from model.WorkCell import WorkCell
+from model.StorageCenter import StorageCenter
 from loguru import logger
 from matplotlib import pyplot as plt
 # from torch_geometric.data import HeteroData
 
-from model.StorageCenter import StorageCenter
 
 # from model.WorkCell import WorkCell
 
@@ -155,6 +156,10 @@ class EnvRun:
         self.work_center_num = work_center_num
         self.work_cell_num = self.work_center_num * fun_per_center
         self.func_per_center = fun_per_center
+        # 取得三个类型的初始id，要不然edge_index会因为没有对应节点而报错
+        self.center_init_id = WorkCenter.next_id
+        self.work_cell_init_id = WorkCell.next_id
+        self.storage_init_it = StorageCenter.next_id
 
         self.function_num = function_num
         self.center_num = function_num
@@ -203,7 +208,7 @@ class EnvRun:
         self.center_product: np.ndarray = np.zeros((self.center_num, 2), dtype=int)
         # 这里其实是把第一位是center的id，第二位是product的id
         for i in range(function_num):
-            self.center_product[i, 0] = self.storage_list[i].cell_id
+            self.center_product[i, 0] = self.storage_list[i].cell_id - self.center_init_id
             self.center_product[i, 1] = i
         # 产品数量
         self.step_products = np.zeros(function_num)
@@ -370,7 +375,7 @@ class EnvRun:
         # 连接在workcenter中生成的边
         for work_center in self.work_center_list:
             center_edge, product_edge, material_edge = work_center.build_edge(
-                id_center=self.center_product
+                id_center=self.center_product, center_init_id=self.center_init_id, cell_init_id=self.work_cell_init_id
             )
             # 需要按列拼接
             self.edge_index[center1_index] = torch.cat(
