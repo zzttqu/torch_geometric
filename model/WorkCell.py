@@ -12,12 +12,14 @@ class WorkCell:
             function_id: int,
             work_center_id: int,
             max_func: int,
+            _id: int,
             speed=6,
             materials=6,
     ):
         super().__init__()
         # 需要有当前这个工作单元每个功能的备件，每个功能生产效率
-        self._id = WorkCell.next_id
+        # self._id = WorkCell.next_id
+        self._id = _id
         self.work_center_id = work_center_id
         WorkCell.next_id += 1
         self.function = function_id

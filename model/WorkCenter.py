@@ -14,7 +14,7 @@ from typing import ClassVar
 class WorkCenter:
     next_id: ClassVar = 0
 
-    def __init__(self, function_list: np.ndarray, max_func_num):
+    def __init__(self, _id: int, function_list: np.ndarray, _id_list: np.ndarray, max_func_num):
         """
         工作中心初始化
         Args:
@@ -22,11 +22,13 @@ class WorkCenter:
             max_func_num: 最大功能数，用于规范化
         """
 
-        self.id = WorkCenter.next_id
+        # self._id = WorkCenter.next_id
+        self._id = _id
         self.max_func_num = max_func_num
         WorkCenter.next_id += 1
         # 构建workcell
-        self.workcell_list: List[WorkCell] = [WorkCell(f, self.id, self.max_func_num) for f in function_list]
+        self.workcell_list: List[WorkCell] = [WorkCell(int(f), int(_id), self._id, self.max_func_num) for f, _id in
+                                              zip(function_list, _id_list)]
         self.function_list: np.ndarray = function_list
         # for f in function_list:
         #     self.workcell_list.append(WorkCell(f, self.id, self.max_func_num))
@@ -36,7 +38,7 @@ class WorkCenter:
         self.working_cell = self.workcell_list[0]
         self.all_cell_id = [workcell.get_id() for workcell in self.workcell_list]
 
-    def build_edge(self, id_center, center_init_id, cell_init_id) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def build_edge(self, id_center) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         创建该工作中心的边信息
         Args:
@@ -50,7 +52,7 @@ class WorkCenter:
         _edge = []
         # 从cell到center
         for cell in self.workcell_list:
-            _edge.append((cell.get_id() - cell_init_id, self.get_id() - center_init_id))
+            _edge.append((cell.get_id(), self.get_id()))
         center_edge = torch.tensor(_edge, dtype=torch.long).squeeze().T
         # 从center到storage
         _edge = []
@@ -61,10 +63,10 @@ class WorkCenter:
                 # _center是一个长度为2的数组，第一位是center的id，第二位是product的id
                 # 从center到storage
                 if cell.get_function() == _center[1]:
-                    _edge.append((self.get_id() - center_init_id, _center[0]))
+                    _edge.append((self.get_id(), _center[0]))
                 # 从storage到center
                 elif cell.get_function() - 1 == _center[1]:
-                    _edge1.append((_center[0], cell.get_id() - cell_init_id))
+                    _edge1.append((_center[0], cell.get_id()))
         product_edge = torch.tensor(_edge, dtype=torch.long).squeeze().T
         if len(_edge1) > 0:
             material_edge = torch.tensor(_edge1, dtype=torch.long).T
@@ -127,7 +129,7 @@ class WorkCenter:
         return self.function_list
 
     def get_id(self):
-        return self.id
+        return self._id
 
     def get_all_cell_id(self) -> List[int]:
         return self.all_cell_id

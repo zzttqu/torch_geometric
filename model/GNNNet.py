@@ -106,7 +106,6 @@ class GNNNet(nn.Module):
 class HGTNet(nn.Module):
     def __init__(
             self,
-
             data: HeteroData,
             hidden_channels=64,
             num_layers=2,

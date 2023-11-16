@@ -4,7 +4,6 @@ import networkx as nx
 import numpy as np
 import torch
 from model.WorkCenter import WorkCenter
-from model.WorkCell import WorkCell
 from model.StorageCenter import StorageCenter
 from loguru import logger
 from matplotlib import pyplot as plt
@@ -157,25 +156,29 @@ class EnvRun:
         self.work_cell_num = self.work_center_num * fun_per_center
         self.func_per_center = fun_per_center
         # 取得三个类型的初始id，要不然edge_index会因为没有对应节点而报错
-        self.center_init_id = WorkCenter.next_id
-        self.work_cell_init_id = WorkCell.next_id
-        self.storage_init_it = StorageCenter.next_id
+        # self.center_init_id = WorkCenter.next_id
+        # self.work_cell_init_id = WorkCell.next_id
+        # self.storage_init_it = StorageCenter.next_id
 
         self.function_num = function_num
         self.center_num = function_num
         self.center_state_num = 2
         self.read_edge = []
-        # 随机生成一个2*n的矩阵，每列对应一个工作中心F
-        self.function_matrix = select_functions(
+        # 随机生成一个func_per*center_num的矩阵，每列对应一个工作中心
+        function_matrix = select_functions(
             0,
             function_num - 1,
             work_center_num,
             fun_per_center,
         )
         # 初始化工作中心
+        # TODO 生成一个顺序，然后给workcenter和workcell赋值
+        # 计算一下有多少个工作单元，然后生成id列表
+        cell_num = function_matrix.size
+        cell_id_list = np.arange(cell_num).reshape(-1, function_num)
         # 这个初始化的顺序和工作单元的id顺序也是一致的
-        self.work_center_list: list[WorkCenter] = [WorkCenter(self.function_matrix[i], fun_per_center) for i in
-                                                   range(work_center_num)]
+        self.work_center_list: list[WorkCenter] = [WorkCenter(i, f, _id, fun_per_center) for i, f, _id in
+                                                   enumerate(zip(function_matrix, cell_id_list))]
 
         self.function_group = self.get_function_group()
         # 各级别生产能力，这个应该排除同一个节点拥有两个相同单元
@@ -208,7 +211,7 @@ class EnvRun:
         self.center_product: np.ndarray = np.zeros((self.center_num, 2), dtype=int)
         # 这里其实是把第一位是center的id，第二位是product的id
         for i in range(function_num):
-            self.center_product[i, 0] = self.storage_list[i].cell_id - self.center_init_id
+            self.center_product[i, 0] = self.storage_list[i].get_id()
             self.center_product[i, 1] = i
         # 产品数量
         self.step_products = np.zeros(function_num)
@@ -375,8 +378,7 @@ class EnvRun:
         # 连接在workcenter中生成的边
         for work_center in self.work_center_list:
             center_edge, product_edge, material_edge = work_center.build_edge(
-                id_center=self.center_product, center_init_id=self.center_init_id, cell_init_id=self.work_cell_init_id
-            )
+                id_center=self.center_product)
             # 需要按列拼接
             self.edge_index[center1_index] = torch.cat(
                 [self.edge_index[center1_index], center_edge], dim=1

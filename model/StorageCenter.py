@@ -16,11 +16,15 @@ class StorageCenter:
         """
         self.max_func = max_func
         self.goal = goal
-        self.cell_id = StorageCenter.next_id
+        # self._id = StorageCenter.next_id
+        self._id = int(product_id)
         StorageCenter.next_id += 1
         self.product_id = int(product_id)
         self.state = StateCode.workcell_working
         self.product_num = 0
+
+    def get_id(self) -> int:
+        return self._id
 
     def receive_product(self, num: int) -> None:
         """

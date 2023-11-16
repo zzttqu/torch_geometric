@@ -2,7 +2,7 @@ from datetime import datetime
 
 import torch
 
-from torch.utils.tensorboard.writer import SummaryWriter
+
 from loguru import logger
 from torch_geometric.data import HeteroData
 
@@ -75,6 +75,7 @@ class Train:
         )
 
         if self.tensorboard_log:
+            from torch.utils.tensorboard.writer import SummaryWriter
             self.writer = SummaryWriter(log_dir="logs/train")
             obs_states, edge_index, reward, dones, _ = self.env.get_obs()
             # 添加计算图
