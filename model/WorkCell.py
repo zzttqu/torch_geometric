@@ -2,7 +2,7 @@ import torch
 
 from model.StateCode import *
 from typing import ClassVar
-
+from loguru import logger
 
 class WorkCell:
     next_id: ClassVar = 0
@@ -10,9 +10,9 @@ class WorkCell:
     def __init__(
             self,
             function_id: int,
+            _id: int,
             work_center_id: int,
             max_func: int,
-            _id: int,
             speed=6,
             materials=6,
     ):
@@ -21,7 +21,7 @@ class WorkCell:
         # self._id = WorkCell.next_id
         self._id = _id
         self.work_center_id = work_center_id
-        WorkCell.next_id += 1
+        # WorkCell.next_id += 1
         self.function = function_id
         self.max_func = max_func
         self.speed = speed

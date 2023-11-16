@@ -53,7 +53,14 @@ class WorkCenter:
         # 从cell到center
         for cell in self.workcell_list:
             _edge.append((cell.get_id(), self.get_id()))
-        center_edge = torch.tensor(_edge, dtype=torch.long).squeeze().T
+        # 如果是高维的，需要单独处理.T不行，必须是.t()
+
+        center_edge: torch.Tensor = torch.tensor(_edge, dtype=torch.long)
+
+        # emmm如果是一维的，两种方法都不行，必须增加一个维度
+        if center_edge.dim() == 1:
+            center_edge = center_edge.unsqueeze(0).t()
+        center_edge = center_edge.t()
         # 从center到storage
         _edge = []
         _edge1 = []
@@ -67,9 +74,15 @@ class WorkCenter:
                 # 从storage到center
                 elif cell.get_function() - 1 == _center[1]:
                     _edge1.append((_center[0], cell.get_id()))
-        product_edge = torch.tensor(_edge, dtype=torch.long).squeeze().T
+        product_edge = torch.tensor(_edge, dtype=torch.long)
+        if product_edge.dim() == 1:
+            product_edge = product_edge.unsqueeze(0)
+        product_edge = product_edge.t()
         if len(_edge1) > 0:
-            material_edge = torch.tensor(_edge1, dtype=torch.long).T
+            material_edge = torch.tensor(_edge1, dtype=torch.long)
+            if material_edge.dim() == 1:
+                material_edge = material_edge.unsquueze(0)
+            material_edge = material_edge.t()
         else:
             material_edge = None
         return center_edge, product_edge, material_edge

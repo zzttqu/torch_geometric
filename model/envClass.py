@@ -178,7 +178,7 @@ class EnvRun:
         cell_id_list = np.arange(cell_num).reshape(-1, function_num)
         # 这个初始化的顺序和工作单元的id顺序也是一致的
         self.work_center_list: list[WorkCenter] = [WorkCenter(i, f, _id, fun_per_center) for i, f, _id in
-                                                   enumerate(zip(function_matrix, cell_id_list))]
+                                                   zip(range(self.work_center_num), function_matrix, cell_id_list)]
 
         self.function_group = self.get_function_group()
         # 各级别生产能力，这个应该排除同一个节点拥有两个相同单元
