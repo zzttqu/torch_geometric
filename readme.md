@@ -30,3 +30,4 @@
 ## 生成requirements.txt
 * 需要忽略虚拟空间
 * pipreqs ./ --encoding UTF-8 --ignore ".venv"
+* pipreqs --ignore .venv --force --encoding=utf-8
