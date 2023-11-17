@@ -34,6 +34,9 @@ def init_train(func_num, center_num, step_num):
     train_consumer = TrainConsumer()
     train_consumer.init_train(func_num, center_num, step_num)
 
+
+def show_vue(request):
+    return render(request, 'index.html')
 # def train(request):
 #     a = {'state': '初始化成功'}
 #     obj = JsonResponse(a, safe=False)

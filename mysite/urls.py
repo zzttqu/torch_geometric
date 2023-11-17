@@ -18,12 +18,12 @@ from django.contrib import admin
 from django.urls import path, include
 
 from App.views import *
-
+from django.views.generic import TemplateView
 
 urlpatterns = [
-    path('index/', index),
-    path('api/init/', init_train),
-    # path('api/train/', model_T.train),
-    # path('index/', include("App.urls")),
-    path('admin/', admin.site.urls),
+    path('', TemplateView.as_view(template_name='index.html'), name='index'),
+    # path('api/init/', init_train),
+    # # path('api/train/', model_T.train),
+    # # path('index/', include("App.urls")),
+    # path('admin/', admin.site.urls),
 ]
