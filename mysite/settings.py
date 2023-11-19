@@ -39,7 +39,6 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     # cors
     'corsheaders',
-
     #     定义自己的应用
     'App'
 ]
