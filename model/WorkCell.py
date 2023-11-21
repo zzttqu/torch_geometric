@@ -24,7 +24,7 @@ class WorkCell:
         self.work_center_id = work_center_id
         # WorkCell.next_id += 1
         self.function = function_id
-        self.max_func = max_func
+        self.max_func = 2 if max_func <= 1 else max_func
         self.speed = speed
         self.materials = materials
         self.products = 0

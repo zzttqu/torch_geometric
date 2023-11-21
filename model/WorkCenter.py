@@ -14,20 +14,20 @@ from typing import ClassVar
 class WorkCenter:
     next_id: ClassVar = 0
 
-    def __init__(self, _id: int, function_list: np.ndarray, _id_list: np.ndarray,func_per_center, max_func_num):
+    def __init__(self, _id: int, function_list: np.ndarray, _id_list: np.ndarray, max_func):
         """
         工作中心初始化
         Args:
             function_list: 该工作中心所具有的功能列表，例如【0,1】
-            max_func_num: 最大功能数，用于规范化
+            max_func: 最大功能数，用于规范化
         """
 
         # self._id = WorkCenter.next_id
         self._id = _id
-        self.max_func_num = max_func_num
+        self.max_func = 2 if max_func <= 1 else max_func
         WorkCenter.next_id += 1
         # 构建workcell
-        self.workcell_list: List[WorkCell] = [WorkCell(int(f), int(_id), self._id, self.max_func_num) for f, _id in
+        self.workcell_list: List[WorkCell] = [WorkCell(int(f), int(_id), self._id, self.max_func) for f, _id in
                                               zip(function_list, _id_list)]
         self.function_list: np.ndarray = function_list
         # for f in function_list:
@@ -169,7 +169,7 @@ class WorkCenter:
         return
 
     def get_state(self):
-        func_norm = self.get_func() / (self.max_func_num - 1)
+        func_norm = self.get_func() / (self.max_func - 1)
         return torch.tensor(
             [
                 func_norm,

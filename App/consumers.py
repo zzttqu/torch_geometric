@@ -41,7 +41,7 @@ class TrainConsumer(WebsocketConsumer):
             func_num = 2
             center_num = 2
             step_num = 10
-            fun_per_center = 2
+            func_per_center = 2
             # 判断是否发送过来了这两个键
             if 'func_num' in data:
                 func_num = int(data['func_num'])
@@ -49,11 +49,11 @@ class TrainConsumer(WebsocketConsumer):
                 center_num = int(data['center_num'])
             if 'step_num' in data:
                 step_num = int(data['step_num'])
-            if 'fun_per_center' in data:
-                fun_per_center = int(data['fun_per_center'])
+            if 'func_per_center' in data:
+                func_per_center = int(data['func_per_center'])
             # 反复初始化Train会导致cell_id一直自增
-            # logger.info(f"传递参数为：{func_num},{center_num},{step_num}")
-            self.train_handle = Train(func_num, center_num, load_model=False)
+            # logger.info(f"传递参数为：{func_num},{center_num},{step_num},{func_per_center}")
+            self.train_handle = Train(func_num, center_num, func_per_center=func_per_center, load_model=False)
             json_str = json.dumps({'status': 'init success'})
             self.send(text_data=json_str)
             # 只要开始，就不允许停止训练，必须完成所有step

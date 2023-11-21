@@ -18,7 +18,7 @@ class Train:
     def __init__(self,
                  function_num,
                  work_center_num,
-                 fun_per_center=2,
+                 func_per_center=2,
                  max_steps=0,
                  episode_step_max=32, n_epochs=8,
                  batch_size=32,
@@ -45,7 +45,7 @@ class Train:
         # 初始化环境
         self.env = EnvRun(
             work_center_num=work_center_num,
-            fun_per_center=fun_per_center,
+            fun_per_center=func_per_center,
             function_num=function_num,
             device=self.device,
             episode_step_max=episode_step_max,
@@ -186,7 +186,7 @@ class Train:
 
         # 只要没step，都是初始状态的obs
         obs_states, edge_index, reward, dones, _ = self.env.get_obs()
-        logger.info((obs_states, edge_index))
+        # logger.info((obs_states, edge_index))
         for step in range(step):
             self.total_step += 1
             self.agent.network.eval()

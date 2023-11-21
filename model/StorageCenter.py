@@ -14,7 +14,7 @@ class StorageCenter:
             goal: 目标生产数量，用于规范化
             max_func: 最大功能数，用于规范化
         """
-        self.max_func = max_func
+        self.max_func = 2 if max_func <= 1 else max_func
         self.goal = goal
         # self._id = StorageCenter.next_id
         self._id = int(product_id)
@@ -56,7 +56,7 @@ class StorageCenter:
         # 改用生产进度作为表征
         # id归一化
         produce_progress = self.product_num / self.goal
-        product_id_norm = self.product_id / (self.max_func-1)
+        product_id_norm = self.product_id / (self.max_func - 1)
         return torch.tensor([product_id_norm, produce_progress], dtype=torch.float32)
 
     def read_state(self) -> list[int]:
