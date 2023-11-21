@@ -4,6 +4,7 @@ from model.StateCode import *
 from typing import ClassVar
 from loguru import logger
 
+
 class WorkCell:
     next_id: ClassVar = 0
 
@@ -127,7 +128,7 @@ class WorkCell:
         # 归一化speed和materials
         speed_norm = 1
         materials_norm = self.materials / self.speed
-        func_norm = self.function / self.max_func
+        func_norm = self.function / (self.max_func - 1)
         state_norm = self.state.value / len(StateCode)
         return torch.tensor(
             [

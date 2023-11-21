@@ -14,7 +14,7 @@ from typing import ClassVar
 class WorkCenter:
     next_id: ClassVar = 0
 
-    def __init__(self, _id: int, function_list: np.ndarray, _id_list: np.ndarray, max_func_num):
+    def __init__(self, _id: int, function_list: np.ndarray, _id_list: np.ndarray,func_per_center, max_func_num):
         """
         工作中心初始化
         Args:
@@ -48,7 +48,7 @@ class WorkCenter:
             分成三类的边
 
         """
-        # 建立一个workcenter内部节点的联系
+        # 建立一个work-center内部节点的联系
         _edge = []
         # 从cell到center
         for cell in self.workcell_list:
@@ -169,7 +169,7 @@ class WorkCenter:
         return
 
     def get_state(self):
-        func_norm = self.get_func() / self.max_func_num
+        func_norm = self.get_func() / (self.max_func_num - 1)
         return torch.tensor(
             [
                 func_norm,
