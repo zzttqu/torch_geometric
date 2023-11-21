@@ -175,12 +175,16 @@ class EnvRun:
         # TODO 生成一个顺序，然后给workcenter和workcell赋值
         # 计算一下有多少个工作单元，然后生成id列表
         cell_num = function_matrix.size
-        # 这里需要reshape成和func_num一样的行数，要不然zip会报错
-        cell_id_list = np.arange(cell_num).reshape(function_num, -1)
+        # 这里需要reshape成和function_matrix，要不然zip会报错
+        cell_id_list = np.arange(cell_num).reshape(function_matrix.shape)
         # 这个初始化的顺序和工作单元的id顺序也是一致的
         self.work_center_list: list[WorkCenter] = [WorkCenter(i, f, _id, fun_per_center, self.function_num) for
                                                    i, f, _id in
                                                    zip(range(self.work_center_num), function_matrix, cell_id_list)]
+        logger.info(self.work_center_num)
+        logger.info(function_matrix)
+        logger.info(cell_id_list)
+        logger.info(function_num)
         self.function_group = self.get_function_group()
         # 各级别生产能力，这个应该排除同一个节点拥有两个相同单元
         self.product_capacity = [0 for _ in range(self.function_num)]

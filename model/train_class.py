@@ -186,7 +186,7 @@ class Train:
 
         # 只要没step，都是初始状态的obs
         obs_states, edge_index, reward, dones, _ = self.env.get_obs()
-        # logger.info((obs_states, edge_index))
+        logger.info((obs_states, edge_index))
         for step in range(step):
             self.total_step += 1
             self.agent.network.eval()
