@@ -227,12 +227,13 @@ class Train:
                 )
                 learn_time = (datetime.now() - now_time).seconds
                 logger.info(f"第{self.learn_num}次学习，学习用时：{learn_time}秒")
+                now_time = datetime.now()
                 # self.agent.save_model("last_model.pth")
                 if self.tensorboard_log:
                     self.writer.add_scalar("loss", loss, self.total_step)
             if self.total_step % 500 == 0:
                 self.agent.save_model("model_" + str(self.total_step) + ".pth")
-            yield [self.total_step, self.env.online_state(), reward]
+            yield [self.total_step, self.env.online_state(), reward, dones]
             if dones == 1:
                 logger.info(f"总步数：{self.total_step}，本次循环步数为：{episode_step}，奖励为{reward:.3f}")
                 if self.tensorboard_log:
@@ -246,9 +247,9 @@ class Train:
         # return "finish"
 
 
-import os
-
-os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+# import os
+#
+# os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 if __name__ == '__main__':
     a = Train(2, 2, 64 * 10, load_model=False)
     a.train_local()

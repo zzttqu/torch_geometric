@@ -463,6 +463,7 @@ class EnvRun:
         self.update_all_work_center(all_action["center"].numpy())
 
         # 额定扣血
+        # 暂时删去
         stable_reward = (
                 -0.05
                 * self.work_cell_num
@@ -476,29 +477,32 @@ class EnvRun:
             # 库存数量/该产品生产能力，当生产最后一个类别的时候不计
             if i == len(self.storage_list):
                 break
-            products_reward += (
-                    -0.002
-                    * storage.get_product_num()
-                    / self.product_capacity[i]
-                # * (i)
-                # / self.function_num
-            )
+            # 只有库存过大的时候才会扣血
+            if storage.get_product_num() > self.product_capacity[i] * 2:
+                # logger.info(f"{i}号库存{storage.get_product_num()}，生产能力{self.product_capacity[i]}")
+                products_reward += (
+                        -0.02
+                        * storage.get_product_num()
+                        / self.product_capacity[i]
+                    # * (i)
+                    # / self.function_num
+                )
         # 最终产物肯定要大大滴加分
-        products_reward += 0.05 * self.step_products[-1] / self.product_capacity[-1]
+        products_reward += 0.5 * self.step_products[-1] / self.product_capacity[-1]
         # 最终产物奖励，要保证这个产物奖励小于扣血
         goal_reward = self.storage_list[-1].get_product_num() / self.product_goal * 0.01
-        self.reward += stable_reward
-        self.reward += goal_reward
+        # self.reward += stable_reward
+        # self.reward += goal_reward
         self.reward += products_reward
         self.done = 0
         self.episode_step += 1
         # 相等的时候刚好是episode，就是1,2,3,4，4如果是max，那等于4的时候就应该跳出了
         if self.episode_step >= self.episode_step_max:
-            self.reward -= 5
+            # self.reward -= 5
             self.done = 1
         # 实现任务目标
         elif self.storage_list[-1].get_product_num() > self.product_goal:
-            self.reward += 5
+            self.reward += 0.5
             self.done = 1
 
     def get_obs(

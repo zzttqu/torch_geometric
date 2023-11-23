@@ -42,6 +42,7 @@ class TrainConsumer(WebsocketConsumer):
             center_num = 2
             step_num = 10
             func_per_center = 2
+            episode_step_max = 32
             # 判断是否发送过来了这两个键
             if 'func_num' in data:
                 func_num = int(data['func_num'])
@@ -51,23 +52,34 @@ class TrainConsumer(WebsocketConsumer):
                 step_num = int(data['step_num'])
             if 'func_per_center' in data:
                 func_per_center = int(data['func_per_center'])
+            if 'episode_step_max' in data:
+                episode_step_max = int(data['episode_step_max'])
             # 反复初始化Train会导致cell_id一直自增
             # logger.info(f"传递参数为：{func_num},{center_num},{step_num},{func_per_center}")
-            self.train_handle = Train(func_num, center_num, func_per_center=func_per_center, load_model=False)
+            self.train_handle = Train(func_num, center_num, func_per_center=func_per_center,
+                                      episode_step_max=episode_step_max,
+                                      load_model=True)
             json_str = json.dumps({'status': 'init success'})
             self.send(text_data=json_str)
             # 只要开始，就不允许停止训练，必须完成所有step
             # 这是一个生成器
             a = self.train_handle.train_online(step_num, False)
+            episode = 0
             for step_message in a:
                 if step_message == 'training':
-                    self.send(text_data=json.dumps({'status': 'training'}))
+                    step_result = {'status': 'training'}
+                elif step_message[3] == 1:
+                    episode += 1
+                    step_result = {'status': 'episode_done', 'step': step_message[0],
+                                   'reward': step_message[2], 'episode': episode}
                 else:
                     # 慢一点看效果
                     # time.sleep(0.5)
                     step_result = {'status': 'running', 'step': step_message[0], 'state': step_message[1],
                                    'reward': step_message[2]}
-                    self.send(text_data=json.dumps(step_result))
+
+                self.send(text_data=json.dumps(step_result))
+            self.train_handle.agent.save_model("last_model.pth")
             # 迭代完成后
             self.send(text_data=json.dumps({'status': 'finish'}))
 
