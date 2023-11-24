@@ -23,6 +23,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torch_geometric.data import HeteroData
+from loguru import logger
 
 """embedding = MetaPath2Vec(
     edge_index_dict=edge_dic,
@@ -114,13 +115,17 @@ class HGTNet(nn.Module):
         super().__init__()
         # 将节点映射为一个四维向量
         self.encoders = torch.nn.ModuleDict()
+        node_features_dict = data.num_node_features
         for node_type in data.node_types:
             self.encoders[f"{node_type}_linear"] = nn.Linear(
                 data.num_node_features[node_type], hidden_channels
             )
         self.conv_list = torch.nn.ModuleList()
-        for _ in range(num_layers):
-            conv = HANConv(hidden_channels, hidden_channels, data.metadata(), heads=2)
+        for i in range(num_layers):
+            if i == 0:
+                conv = HANConv(node_features_dict, hidden_channels, data.metadata(), heads=2)
+            else:
+                conv = HANConv(hidden_channels, hidden_channels, data.metadata(), heads=2)
             self.conv_list.append(conv)
         self.lin0 = nn.Linear(hidden_channels, hidden_channels)
         # 这里先写死了吧，应该需要根据需求进行设置
@@ -146,11 +151,11 @@ class HGTNet(nn.Module):
             node1, node2 = key.split("_to_")
             norm_edge_index_dict[f"{node1}", f"{key}", f"{node2}"] = _value
         # 根据node type分别传播，这里由于改了inputdim，还不能直接去掉encoder层
-        # TODO 修改一下不用encoder层？
-        x_dict = {
-            node_type: F.leaky_relu(self.encoders[f"{node_type}_linear"](x))
-            for node_type, x in x_dict.items()
-        }
+        # 目前不用encoder层
+        # x_dict = {
+        #     node_type: F.leaky_relu(self.encoders[f"{node_type}_linear"](x))
+        #     for node_type, x in x_dict.items()
+        # }
         # x_dict = {
         #     node_type: F.leaky_relu(self.encoders[f"{node_type}_linear"](x))
         #     for node_type, x in x_dict.items()
