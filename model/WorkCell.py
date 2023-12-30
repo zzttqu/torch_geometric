@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 
 from model.StateCode import *
@@ -6,6 +7,9 @@ from loguru import logger
 
 
 class WorkCell:
+    """
+    WorkCell 工作单元作为虚构的最小的可重构单位，只能执行一种功能
+    """
     next_id: ClassVar = 0
 
     def __init__(
@@ -14,15 +18,24 @@ class WorkCell:
             _id: int,
             work_center_id: int,
             max_func: int,
-            speed=6,
+            speed: int,
             materials=6,
     ):
-        super().__init__()
+
+        """
+        WorkCell 初始化函数
+        Args:
+            function_id:功能id，对应产品，也对应其所用时间
+            _id:自身id
+            work_center_id:上级id
+            max_func:最大功能数量，用语归一化
+            speed:生产速度，单位时间/每个半成品
+            materials:原料数量
+        """
         # 需要有当前这个工作单元每个功能的备件，每个功能生产效率
         # self._id = WorkCell.next_id
         self._id = _id
         self.work_center_id = work_center_id
-        # WorkCell.next_id += 1
         self.function = function_id
         self.max_func = 2 if max_func <= 1 else max_func
         self.speed = speed

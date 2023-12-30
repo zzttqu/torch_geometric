@@ -123,16 +123,16 @@ for _ in range(50):
 #         # 其实应该也计算各个产品用的时间更重要
 #         process_using_time[i] += time0[i][j] / (resource_allocation_ratios[i][j] * RMT_units[i])
 class GeneticAlgorithm:
-    def __init__(self, population_num, generation, order, process_time, RMT_units):
+    def __init__(self, population_num, generation, order, process_speed, rmt_units):
         # 既然不用这个单元种类，那他的占用时间就按0算咯
         #  [[5, 10, 15, 20, 12], [8, 12, 18, 0, 12], [3, 6, 0, 10, 8]]
-        self.process_time = process_time
+        self.process_speed = process_speed
         # orders = [[10, 20, 4], [60, 5, 5], [20, 10, 15]]
         self.order = order
-        self.RMT_units = RMT_units
+        self.RMT_units = rmt_units
         self.population_num = population_num
         self.generation = generation
-        self.process_num = len(process_time[0])
+        self.process_num = len(process_speed[0])
         self.process_list = [i for i in range(self.process_num)]
         self.product_num = len(order)
         self.population = np.zeros((self.population_num, self.product_num, self.process_num))
@@ -142,7 +142,7 @@ class GeneticAlgorithm:
         self.best_solution = []
         self.best_fitness = 0
         self.shortest_time = 0
-        self.eta_total_time = np.zeros((self.process_num, self.product_num), dtype=np.int32)
+        self.eta_total_time = np.zeros((self.process_num, self.product_num), dtype=np.float32)
         self.init_order()
 
     def init_order(self):
@@ -152,7 +152,10 @@ class GeneticAlgorithm:
             # 每行是一个工序，每列是一个产品
             for _process_id, _time in enumerate(self.eta_total_time):
                 assert isinstance(_time, np.ndarray)
-                _time[_product_id] = self.order[_product_id] * self.process_time[_product_id][_process_id]
+                if self.process_speed[_product_id][_process_id] != 0:
+                    _time[_product_id] = self.order[_product_id] / self.process_speed[_product_id][_process_id]
+                else:
+                    _time[_product_id] = 0
         # time0 = total_time[0]
         # 第0个订单每个产品每个工序的用时
         # logger.info(self.eta_total_time)
@@ -182,15 +185,21 @@ class GeneticAlgorithm:
         raw_process_units = self.population * self.RMT_units[np.newaxis, :, np.newaxis]
         # 确保每个工序至少有一个单位，保证最小值大于1，然后再四舍五入取整，不能取整，计算的就不准了
         process_units = np.maximum(raw_process_units, 0.1)
+        _process_units = np.round(np.maximum(raw_process_units, 1))
 
         # 计算产品使用时间
-        # logger.info(self.eta_total_time[np.newaxis, :, :] / process_units)
-        product_using_time = np.sum(self.eta_total_time[np.newaxis, :, :] / process_units, axis=(1, 2))
-        # logger.info(product_using_time)
+        process_speed = self.process_speed.T
+        # logger.info(self.eta_total_time)
+        # logger.info(process_units * process_speed)
+        # 需要忽略nan
+        raw_fitness = np.nansum(self.eta_total_time[np.newaxis, :, :] / (process_units * process_speed),
+                                axis=(1, 2))
+
+        # logger.info(raw_fitness)
 
         # 计算适应度
-        self.fitness = 10 - product_using_time / 1e2
-        self.time = product_using_time
+        self.fitness = 10 - raw_fitness / 1e2
+        self.time = np.nansum(self.eta_total_time[np.newaxis, :, :] / _process_units, axis=(1, 2))
 
         """
         # 这里只能计算当前个体的优势
@@ -280,15 +289,16 @@ class GeneticAlgorithm:
 def main():
     # 既然不用这个单元种类，那他的占用时间就按0算咯
 
-    process_time = [[5, 10, 15, 20, 12], [8, 12, 18, 0, 12], [3, 6, 0, 10, 8]]
-    orders = [[10, 20, 4], [60, 5, 5], [20, 10, 15]]
+    process_speed = np.array([[5, 10, 15, 20, 12], [8, 12, 18, np.nan, 12], [3, 6, np.nan, 10, 8]])
+    orders = [[100, 200, 400], [60, 50, 50], [200, 100, 105]]
+    rmt_units = np.array([16, 10, 10, 15, 10])
     orders_num = len(orders)
     # 100种群数量100次演变从1300ms压缩到400ms
     pop_num = 100
     generation = 50
-    rmt_units = np.array([16, 10, 10, 15, 10])
+
     _init_time = datetime.now()
-    ga = GeneticAlgorithm(pop_num, generation, orders[0], process_time, rmt_units)
+    ga = GeneticAlgorithm(pop_num, generation, orders[0], process_speed, rmt_units)
     short_time, solution = ga.evolve()
     unit_num = np.round(solution * rmt_units[:, np.newaxis])
     logger.info(f"最优解时间：{short_time:.2f}，最优解：{unit_num}")
