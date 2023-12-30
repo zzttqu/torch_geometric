@@ -301,6 +301,10 @@ def main():
     ga = GeneticAlgorithm(pop_num, generation, orders[0], process_speed, rmt_units)
     short_time, solution = ga.evolve()
     unit_num = np.round(solution * rmt_units[:, np.newaxis])
+    _end_time = datetime.now()
+    cost_second = (_end_time - _init_time).seconds
+    cost_micro = (_end_time - _init_time).microseconds
+    ms_time = cost_second * 1000 + cost_micro / 1000
     logger.info(f"最优解时间：{short_time:.2f}，最优解：{unit_num}")
 
     # logger.info(f"遗传算法求解最优解耗时：{cost_second}秒:{cost_micro / 1000:.2f}毫秒")
