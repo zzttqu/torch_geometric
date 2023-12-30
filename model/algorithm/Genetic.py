@@ -3,7 +3,7 @@ from typing import Tuple
 from loguru import logger
 import numpy as np
 from datetime import datetime
-import matplotlib.pyplot as plt
+
 import cProfile
 
 np.set_printoptions(suppress=True)
@@ -123,13 +123,13 @@ for _ in range(50):
 #         # 其实应该也计算各个产品用的时间更重要
 #         process_using_time[i] += time0[i][j] / (resource_allocation_ratios[i][j] * RMT_units[i])
 class GeneticAlgorithm:
-    def __init__(self, population_num, generation, order, process_time):
+    def __init__(self, population_num, generation, order, process_time, RMT_units):
         # 既然不用这个单元种类，那他的占用时间就按0算咯
         #  [[5, 10, 15, 20, 12], [8, 12, 18, 0, 12], [3, 6, 0, 10, 8]]
         self.process_time = process_time
         # orders = [[10, 20, 4], [60, 5, 5], [20, 10, 15]]
         self.order = order
-        self.RMT_units = np.array([16, 10, 10, 15, 10])
+        self.RMT_units = RMT_units
         self.population_num = population_num
         self.generation = generation
         self.process_num = len(process_time[0])
@@ -141,7 +141,7 @@ class GeneticAlgorithm:
         self.time = np.zeros(self.population_num)
         self.best_solution = []
         self.best_fitness = 0
-        self.shortest_time = []
+        self.shortest_time = 0
         self.eta_total_time = np.zeros((self.process_num, self.product_num), dtype=np.int32)
         self.init_order()
 
@@ -180,8 +180,8 @@ class GeneticAlgorithm:
         # 使用了数组广播，不用显式循环，再次加速！
         # 这个就是逐元素相乘，不是矩阵乘法
         raw_process_units = self.population * self.RMT_units[np.newaxis, :, np.newaxis]
-        # 确保每个工序至少有一个单位，保证最小值大于1，然后再四舍五入取整
-        process_units = np.round(np.maximum(raw_process_units, 1))
+        # 确保每个工序至少有一个单位，保证最小值大于1，然后再四舍五入取整，不能取整，计算的就不准了
+        process_units = np.maximum(raw_process_units, 0.1)
 
         # 计算产品使用时间
         # logger.info(self.eta_total_time[np.newaxis, :, :] / process_units)
@@ -258,7 +258,7 @@ class GeneticAlgorithm:
             self.select()
             self.best_solution = self.population[np.where(self.fitness == self.fitness.max())[0][0]]
             self.best_fitness = self.fitness.max()
-            self.shortest_time.append(self.time.min())
+            self.shortest_time = self.time.min()
             new_pops = []
             # 遗传变异
             for _ in range(self.population_num // 2):
@@ -274,109 +274,35 @@ class GeneticAlgorithm:
         # logger.info(
         #     # 最优解：{self.best_solution}，最优解适应度：{self.best_fitness: .2f}
         #     f"最优解时间：{self.shortest_time[-1]:.2f}")
-        return self.shortest_time
+        return self.shortest_time, self.best_solution
 
 
 def main():
     # 既然不用这个单元种类，那他的占用时间就按0算咯
-    #  [[5, 10, 15, 20, 12], [8, 12, 18, 0, 12], [3, 6, 0, 10, 8]]
-    init_time = datetime.now()
+
     process_time = [[5, 10, 15, 20, 12], [8, 12, 18, 0, 12], [3, 6, 0, 10, 8]]
     orders = [[10, 20, 4], [60, 5, 5], [20, 10, 15]]
     orders_num = len(orders)
     # 100种群数量100次演变从1300ms压缩到400ms
-    pop_num = 10
-    test_round = 5
+    pop_num = 100
     generation = 50
-    si_time = np.zeros((orders_num, test_round))
-    width = 0.4
-    for i in range(orders_num):
-        ga = GeneticAlgorithm(pop_num, generation, orders[i], process_time)
-        pp = ga.eta_total_time.T
-        plt.subplot(3, orders_num, i + 1)
-        x = np.arange(5)
-        plt.bar(x, pp[0], width=width, label='产品1')
-        plt.bar(x, pp[1], width=width, label='产品2', bottom=pp[0])
-        plt.bar(x, pp[2], width=width, label='产品3', bottom=pp[0] + pp[1])
-        max_v = pp.T.sum(axis=1).max()
-        plt.ylim(0, max_v + max_v / 10)
-        # 在每个方块上边写上数值
-        for j, product in enumerate(pp.T):
-            if product[0] != 0:
-                plt.text(j, product[0] / 2, str(product[0]), ha='center', va='center', color='black', fontweight='bold')
-            if product[1] != 0:
-                plt.text(j, product[0] + product[1] / 2, str(product[1]), ha='center', va='center', color='black',
-                         fontweight='bold')
-            if product[2] != 0:
-                plt.text(j, product[0] + product[1] + product[2] / 2, str(product[2]), ha='center', va='center',
-                         color='black', fontweight='bold')
-            plt.text(j, product[0] + product[1] + product[2] + max_v / 20, str(sum(product)), ha='center', va='center',
-                     color='black', fontweight='bold')
-        plt.xticks(x, [f'工序{i}' for i in range(1, 6)])
-        plt.legend()
-        plt.title(f'订单{i + 1}工时统计')
+    rmt_units = np.array([16, 10, 10, 15, 10])
+    _init_time = datetime.now()
+    ga = GeneticAlgorithm(pop_num, generation, orders[0], process_time, rmt_units)
+    short_time, solution = ga.evolve()
+    unit_num = np.round(solution * rmt_units[:, np.newaxis])
+    logger.info(f"最优解时间：{short_time:.2f}，最优解：{unit_num}")
 
-    for j in range(test_round):
-        pop_num = (j + 1) * 10
-        init_time = datetime.now()
-        for i in range(orders_num):
-            _init_time = datetime.now()
-            ga = GeneticAlgorithm(pop_num, generation, orders[i], process_time)
-            short_time = ga.evolve()
-
-            plt.subplot(3, orders_num, orders_num + i + 1)
-            plt.title(f"订单{i + 1}")
-            plt.xlabel("迭代次数")
-            plt.ylabel("所用总时间步")
-            plt.plot(short_time, label=f"种群为{pop_num}")
-            plt.legend()
-
-            _end_time = datetime.now()
-            _cost_micro = (_end_time - _init_time).microseconds
-            _cost_second = (_end_time - _init_time).seconds
-            _ms_time = _cost_second * 1000 + _cost_micro / 1000
-            si_time[i, j] = _ms_time
-        end_time = datetime.now()
-        cost_micro = (end_time - init_time).microseconds
-        cost_second = (end_time - init_time).seconds
-        ms_time = cost_second * 1000 + cost_micro / 1000
-        # logger.info(f"遗传算法求解最优解耗时：{cost_second}秒:{cost_micro / 1000:.2f}毫秒")
-        # logger.info(f"种群数量{pop_num}遗传算法求解最优解耗时：{ms_time:.2f}毫秒")
-
-    for q in range(orders_num):
-        plt.subplot(3, orders_num, orders_num * 2 + q + 1)
-        plt.title(f"订单{q + 1}")
-        plt.xlabel("种群数量/个")
-        plt.ylabel("所用时间/ms")
-        x = [f'{i}' for i in range(10, 51, 10)]
-        # 同一个i是同一个generation
-        plt.bar(x, si_time[q], width=width)
-
-    # for i in range(orders_num):
-    #     ga = GeneticAlgorithm(50, 50, orders[i], process_time)
-    #     short_time = ga.evolve()
-    #     plt.subplot(2, orders_num, i + 1 + orders_num)
-    #     plt.title(f"种群为50订单{i + 1}")
-    #     plt.xlabel("迭代次数")
-    #     plt.ylabel("所用时间")
-    #     plt.plot(short_time)
-    plt.tight_layout()
-    plt.show()
-
-
-# end_time = datetime.now()
-# cost_micro = (end_time - init_time).microseconds
-# cost_second = (end_time - init_time).seconds
-# # logger.info(f"遗传算法求解最优解耗时：{cost_second}秒:{cost_micro / 1000:.2f}毫秒")
-# logger.info(f"遗传算法求解最优解耗时：{cost_second * 1000 + cost_micro / 1000:.2f}毫秒")
+    # logger.info(f"遗传算法求解最优解耗时：{cost_second}秒:{cost_micro / 1000:.2f}毫秒")
+    # logger.info(f"种群数量{pop_num}遗传算法求解最优解耗时：{ms_time:.2f}毫秒")
 
 
 if __name__ == '__main__':
-    plt.rcParams['figure.dpi'] = 200
-    plt.rcParams['figure.figsize'] = (16, 10)
-    # 设置字体以便正确显示中文
-    plt.rcParams['font.sans-serif'] = ['FangSong']
-    # 正确显示连字符
-    plt.rcParams['axes.unicode_minus'] = False
+    # plt.rcParams['figure.dpi'] = 200
+    # plt.rcParams['figure.figsize'] = (16, 10)
+    # # 设置字体以便正确显示中文
+    # plt.rcParams['font.sans-serif'] = ['FangSong']
+    # # 正确显示连字符
+    # plt.rcParams['axes.unicode_minus'] = False
     main()
     # cProfile.run('main()', sort='cumulative')
