@@ -14,7 +14,7 @@ from typing import ClassVar
 class WorkCenter:
     next_id: ClassVar = 0
 
-    def __init__(self, _id: int, function_list: np.ndarray, speed_list, _id_list: np.ndarray, max_func):
+    def __init__(self, _id: int, function_list: np.ndarray, speed_list, init_func, _id_list: np.ndarray, max_func):
         """
         工作中心初始化
         Args:
@@ -28,13 +28,15 @@ class WorkCenter:
         self.max_func = 2 if max_func <= 1 else max_func
         WorkCenter.next_id += 1
         # 构建workcell
-        self.workcell_list: List[WorkCell] = [WorkCell(int(f), int(_id), self._id, self.max_func, self.speed) for f, _id
+        self.workcell_list: List[WorkCell] = [WorkCell(int(f), int(_id), self._id, self.max_func, self.speed[f]) for
+                                              f, _id
                                               in
                                               zip(function_list, _id_list)]
         self.function_list: np.ndarray = function_list
         # for f in function_list:
         #     self.workcell_list.append(WorkCell(f, self.id, self.max_func_num))
         self.func = self.workcell_list[0].get_function()
+        self.func = init_func
         self.speed = self.workcell_list[0].get_speed()
         self.product = 0
         self.working_cell = self.workcell_list[0]

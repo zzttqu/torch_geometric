@@ -152,13 +152,11 @@ class EnvRun:
     ):
         self.device = device
         self.edge_index: Dict[str, torch.Tensor] = {}
+        # 这里应该是对各个工作单元进行配置了
+        work_center_init_func = np.array([[1, 2, 3], [2, 5, 5], [2, 0, 4]])
         self.work_center_num = work_center_num
         self.work_cell_num = self.work_center_num * fun_per_center
         self.func_per_center = fun_per_center
-        # 取得三个类型的初始id，要不然edge_index会因为没有对应节点而报错
-        # self.center_init_id = WorkCenter.next_id
-        # self.work_cell_init_id = WorkCell.next_id
-        # self.storage_init_it = StorageCenter.next_id
 
         self.function_num = function_num
         self.center_num = function_num
@@ -181,10 +179,7 @@ class EnvRun:
         self.work_center_list: list[WorkCenter] = [WorkCenter(i, f, _id, self.function_num) for
                                                    i, f, _id in
                                                    zip(range(self.work_center_num), function_matrix, cell_id_list)]
-        # logger.info(self.work_center_num)
-        # logger.info(function_matrix)
-        # logger.info(cell_id_list)
-        # logger.info(function_num)
+
         self.function_group = self.get_function_group()
         # 各级别生产能力，这个应该排除同一个节点拥有两个相同单元
         self.product_capacity = [0 for _ in range(self.function_num)]
