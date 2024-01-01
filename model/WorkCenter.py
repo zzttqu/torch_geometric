@@ -14,7 +14,7 @@ from typing import ClassVar
 class WorkCenter:
     next_id: ClassVar = 0
 
-    def __init__(self, _id: int, category: int, speed_list: np.ndarray[int], init_func, _id_list: np.ndarray,
+    def __init__(self, _id: int, category: int, speed_list: np.ndarray[int], init_func, cell_id_list: np.ndarray,
                  max_func):
         """
         工作中心初始化
@@ -28,13 +28,14 @@ class WorkCenter:
         self._id = _id
         self.max_func = 2 if max_func <= 1 else max_func
         self.category = category
-        WorkCenter.next_id += 1
-        # 波浪线是取反，计数非nan元素个数
+        # 计数含nan元素个数
         self.func_num = np.count_nonzero(speed_list)
+        self.no_nan_func_num = np.count_nonzero(speed_list[~np.isnan(speed_list)])
+        func_list = np.arange(self.func_num)
         # 构建workcell
         self.workcell_list: List[WorkCell] = [
-            WorkCell(index, max_func, value) if not np.isnan(value) else None for
-            index, value in enumerate(speed_list)]
+            WorkCell(func, self.func_num, speed, _id=cell_id) if not np.isnan(speed) else None for
+            func, speed, cell_id in zip(func_list, speed_list, cell_id_list)]
         # 这个是工作中心属于第几道工序
         self.category = category
         self.func = init_func
@@ -53,6 +54,7 @@ class WorkCenter:
             分成三类的边
 
         """
+        """
         # 建立一个work-center内部节点的联系
         _edge = []
         # 从cell到center
@@ -66,11 +68,17 @@ class WorkCenter:
         if center_edge.dim() == 1:
             center_edge = center_edge.unsqueeze(0).t()
         center_edge = center_edge.t()
-        # 从center到storage
+        """
+
+        # 从cell到storage
+        # TODO 修改为numpy新建边数组哦
+        _edge_array = np.zeros((self.no_nan_func_num * 2, 2), dtype=np.int32)
         _edge = []
         _edge1 = []
         # 建立上下游联系
         for cell in self.workcell_list:
+            if cell is None:
+                continue
             for _center in id_center:
                 # _center是一个长度为2的数组，第一位是center的id，第二位是product的id
                 # 从center到storage
@@ -142,9 +150,6 @@ class WorkCenter:
         id_array = [np.array((workcell.get_id(), workcell.get_function())) for workcell in self.workcell_list]
         id_arrays = np.stack(id_array, dtype=int)
         return id_arrays
-
-    def get_all_funcs(self) -> np.ndarray:
-        return self.function_list
 
     def get_id(self):
         return self._id
