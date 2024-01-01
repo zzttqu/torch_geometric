@@ -318,5 +318,8 @@ if __name__ == '__main__':
     # plt.rcParams['font.sans-serif'] = ['FangSong']
     # # 正确显示连字符
     # plt.rcParams['axes.unicode_minus'] = False
-    main()
+    # main()
+    a = np.arange(5, 10)
+    b = [v for i, v in enumerate(a)]
+    logger.info(b)
     # cProfile.run('main()', sort='cumulative')

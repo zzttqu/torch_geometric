@@ -15,10 +15,9 @@ class WorkCell:
     def __init__(
             self,
             function_id: int,
-            _id: int,
-            work_center_id: int,
             max_func: int,
             speed: int,
+            _id: int = 0,
             materials=6,
     ):
 
@@ -27,7 +26,6 @@ class WorkCell:
         Args:
             function_id:功能id，对应产品，也对应其所用时间
             _id:自身id
-            work_center_id:上级id
             max_func:最大功能数量，用语归一化
             speed:生产速度，单位时间/每个半成品
             materials:原料数量
@@ -35,7 +33,6 @@ class WorkCell:
         # 需要有当前这个工作单元每个功能的备件，每个功能生产效率
         # self._id = WorkCell.next_id
         self._id = _id
-        self.work_center_id = work_center_id
         self.function = function_id
         self.max_func = 2 if max_func <= 1 else max_func
         self.speed = speed

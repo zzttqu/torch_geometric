@@ -14,32 +14,33 @@ from typing import ClassVar
 class WorkCenter:
     next_id: ClassVar = 0
 
-    def __init__(self, _id: int, function_list: np.ndarray, speed_list, init_func, _id_list: np.ndarray, max_func):
+    def __init__(self, _id: int, category: int, speed_list: np.ndarray[int], init_func, _id_list: np.ndarray,
+                 max_func):
         """
         工作中心初始化
         Args:
-            function_list: 该工作中心所具有的功能列表，例如【0,1】
-            speed_list: 该工作中心所具有的功能的速度列表，例如【10,20】单位：半成品数量/单位时间
+            category: 该工作中心位于第几道工序
+            speed_list: 该工作中心所具有的功能的速度列表，例如【10,20,30】单位：半成品数量/单位时间
             max_func: 最大功能数，用于规范化
         """
 
         # self._id = WorkCenter.next_id
         self._id = _id
         self.max_func = 2 if max_func <= 1 else max_func
+        self.category = category
         WorkCenter.next_id += 1
+        # 波浪线是取反，计数非nan元素个数
+        self.func_num = np.count_nonzero(speed_list)
         # 构建workcell
-        self.workcell_list: List[WorkCell] = [WorkCell(int(f), int(_id), self._id, self.max_func, self.speed[f]) for
-                                              f, _id
-                                              in
-                                              zip(function_list, _id_list)]
-        self.function_list: np.ndarray = function_list
-        # for f in function_list:
-        #     self.workcell_list.append(WorkCell(f, self.id, self.max_func_num))
-        self.func = self.workcell_list[0].get_function()
+        self.workcell_list: List[WorkCell] = [
+            WorkCell(index, max_func, value) if not np.isnan(value) else None for
+            index, value in enumerate(speed_list)]
+        # 这个是工作中心属于第几道工序
+        self.category = category
         self.func = init_func
-        self.speed = self.workcell_list[0].get_speed()
+        self.speed = speed_list[init_func]
         self.product = 0
-        self.working_cell = self.workcell_list[0]
+        self.working_cell = self.workcell_list[init_func]
         self.all_cell_id = [workcell.get_id() for workcell in self.workcell_list]
 
     def build_edge(self, id_center) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
