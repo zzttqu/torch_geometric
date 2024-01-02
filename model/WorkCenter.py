@@ -1,7 +1,6 @@
-from typing import List, Tuple, Generator, Any
+from typing import List, Tuple, Generator, Any, Union
 
 from numpy import ndarray, dtype
-
 from model.WorkCell import WorkCell
 import numpy as np
 import torch
@@ -44,11 +43,11 @@ class WorkCenter:
         self.working_cell = self.workcell_list[init_func]
         self.all_cell_id = [workcell.get_id() for workcell in self.workcell_list]
 
-    def build_edge(self, id_center) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def build_edge(self, storage_list: Union[torch.Tensor, np.ndarray]) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         创建该工作中心的边信息
         Args:
-            id_center: 产品中心的id列表
+            storage_list: 产品中心的id列表
 
         Returns:
             分成三类的边
@@ -69,36 +68,53 @@ class WorkCenter:
             center_edge = center_edge.unsqueeze(0).t()
         center_edge = center_edge.t()
         """
+        _cell2storage_list = [(cell.get_id(), _storage_id) for cell in self.workcell_list if cell is not None for
+                              (_storage_id, _product_id, _category_id) in storage_list if
+                              cell.get_function() == _product_id and self.category == _category_id]
+        _storage2cell_list = [(_storage_id, cell.get_id()) for cell in self.workcell_list if cell is not None for
+                              (_storage_id, _product_id, _category_id) in storage_list if
+                              cell.get_function() == _product_id and self.category - 1 == _category_id]
 
-        # 从cell到storage
-        # TODO 修改为numpy新建边数组哦
-        _edge_array = np.zeros((self.no_nan_func_num * 2, 2), dtype=np.int32)
-        _edge = []
-        _edge1 = []
-        # 建立上下游联系
-        for cell in self.workcell_list:
-            if cell is None:
-                continue
-            for _center in id_center:
-                # _center是一个长度为2的数组，第一位是center的id，第二位是product的id
-                # 从center到storage
-                if cell.get_function() == _center[1]:
-                    _edge.append((self.get_id(), _center[0]))
-                # 从storage到center
-                elif cell.get_function() - 1 == _center[1]:
-                    _edge1.append((_center[0], cell.get_id()))
-        product_edge = torch.tensor(_edge, dtype=torch.long)
-        if product_edge.dim() == 1:
-            product_edge = product_edge.unsqueeze(0)
-        product_edge = product_edge.t()
-        if len(_edge1) > 0:
-            material_edge = torch.tensor(_edge1, dtype=torch.long)
-            if material_edge.dim() == 1:
-                material_edge = material_edge.unsquueze(0)
-            material_edge = material_edge.t()
-        else:
-            material_edge = None
-        return center_edge, product_edge, material_edge
+        _cell2storage_tensor = torch.tensor(_cell2storage_list, dtype=torch.long)
+        _storage2cell_tensor = torch.tensor(_storage2cell_list, dtype=torch.long)
+
+        """
+        _cell2storage_tensor = torch.zeros((self.no_nan_func_num, 2), dtype=torch.long)
+                _storage2cell_tensor = torch.zeros((self.no_nan_func_num, 2), dtype=torch.long)
+                _edge_index = 0
+                _edge_index1 = 0
+                # 建立上下游联系
+                for cell in self.workcell_list:
+                    if cell is None:
+                        continue
+                    for (_storage_id, _product_id, _category_id) in storage_list:
+                        # _storage是一个长度为3的数组，第一位是storage的id，第二位是product的id，第三位是工序id
+                        if cell.get_function() == _product_id and self.category == _category_id:
+                            # 从cell到storage
+                            _cell2storage_tensor[_edge_index, 0] = cell.get_id()
+                            _cell2storage_tensor[_edge_index, 1] = _storage_id
+                            _edge_index += 1
+                        # 从storage到cell
+                        elif cell.get_function() == _product_id and self.category - 1 == _category_id:
+                            # 从storage到cell
+                            _storage2cell_tensor[_edge_index1, 0] = _storage_id
+                            _storage2cell_tensor[_edge_index1, 1] = cell.get_id()
+                            _edge_index1 += 1
+
+                        product_edge = torch.tensor(_edge, dtype=torch.long)
+                if product_edge.dim() == 1:
+                    product_edge = product_edge.unsqueeze(0)
+                product_edge = product_edge.t()
+                if len(_edge1) > 0:
+                    material_edge = torch.tensor(_edge1, dtype=torch.long)
+                    if material_edge.dim() == 1:
+                        material_edge = material_edge.unsquueze(0)
+                    material_edge = material_edge.t()
+                else:
+                    material_edge = None
+                """
+
+        return _cell2storage_tensor, _storage2cell_tensor
 
     def receive_material(self, materials: List[int]):
         """
@@ -114,9 +130,9 @@ class WorkCenter:
             assert isinstance(cell, WorkCell)
             cell.receive_material(material)
 
-    # def move_product(self, products_list: List[int]):
-    #     for cell in self.workcell_list:
-    #         products_list[cell.get_function()] = cell.send_product()
+        # def move_product(self, products_list: List[int]):
+        #     for cell in self.workcell_list:
+        #         products_list[cell.get_function()] = cell.send_product()
 
     def work(self, action: int):
         """

@@ -377,12 +377,9 @@ class EnvRun:
         self.edge_index[material_index] = torch.zeros((2, 0), dtype=torch.long)
         # 连接在workcenter中生成的边
         for work_center in self.work_center_list:
-            center_edge, product_edge, material_edge = work_center.build_edge(
-                id_center=self.center_product)
+            product_edge, material_edge = work_center.build_edge(
+                storage_list=self.center_product)
             # 需要按列拼接
-            self.edge_index[center1_index] = torch.cat(
-                [self.edge_index[center1_index], center_edge], dim=1
-            )
             self.edge_index[product_index] = torch.cat(
                 [self.edge_index[product_index], product_edge], dim=1
             )
