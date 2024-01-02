@@ -152,40 +152,32 @@ class EnvRun:
     ):
         self.device = device
         self.edge_index: Dict[str, torch.Tensor] = {}
+        # 产品订单
+        order = torch.tensor([100, 600, 200])
         # 这里应该是对各个工作单元进行配置了
-        work_center_init_func = np.array([[1, 2, 3], [2, 5, 5], [2, 0, 4]])
-        self.work_center_num = work_center_num
-        self.work_cell_num = self.work_center_num * fun_per_center
-        self.func_per_center = fun_per_center
+        # TODO 工作中心初始化还没有做完
+        work_center_init_func = torch.tensor([[3, 3, 10],
+                                              [2, 2, 6],
+                                              [4, 5, 0],
+                                              [3, 0, 12],
+                                              [2, 3, 5]])
 
-        self.function_num = function_num
-        self.center_num = function_num
-        self.center_state_num = 2
-        self.read_edge = []
-        # 随机生成一个func_per*center_num的矩阵，每列对应一个工作中心
-        function_matrix = select_functions(
-            0,
-            function_num - 1,
-            work_center_num,
-            fun_per_center,
-        )
-        # 初始化工作中心
-        # TODO 生成一个顺序，然后给workcenter和workcell赋值
-        # 计算一下有多少个工作单元，然后生成id列表
-        cell_num = function_matrix.size
-        # 这里需要reshape成和function_matrix，要不然zip会报错
-        cell_id_list = np.arange(cell_num).reshape(function_matrix.shape)
+        speed_list = torch.tensor([[5, 10, 15, 20, 12], [8, 12, 18, torch.nan, 12], [3, 6, torch.nan, 10, 8]])
+
+        self.work_center_list: list[WorkCenter] = []
         # 这个初始化的顺序和工作单元的id顺序也是一致的
-        self.work_center_list: list[WorkCenter] = [WorkCenter(i, f, _id, self.function_num) for
-                                                   i, f, _id in
-                                                   zip(range(self.work_center_num), function_matrix, cell_id_list)]
-
+        for process, products in enumerate(work_center_init_func):
+            for product, num in enumerate(products):
+                for _ in num:
+                    self.work_center_list.append(WorkCenter(1, process, speed_list[:, process], product))
+        self.center_state_num = 2
         self.function_group = self.get_function_group()
+        self.read_edge = []
         # 各级别生产能力，这个应该排除同一个节点拥有两个相同单元
-        self.product_capacity = [0 for _ in range(self.function_num)]
+        self.product_capacity = [0 for _ in range(self.product_num)]
         for work_center in self.work_center_list:
             fl = work_center.get_all_funcs()
-            for i in range(self.function_num):
+            for i in range(self.product_num):
                 # 函数返回值的是funcid
                 # where返回的是tuple，需要提取第一项
                 indices: np.ndarray = np.where(fl == i)[0]
@@ -196,7 +188,6 @@ class EnvRun:
 
         # 根据生产能力和最大步数计算生产目标数量
         # 根据水桶效应，选择最低的生产能力环节代表
-        # TODO 每个工步的生产能力其实是波动的，因为其实是工作中心的生产能力
         desire_product_goal = int(
             product_goal_scale * episode_step_max * min(self.product_capacity)
         )
@@ -204,15 +195,18 @@ class EnvRun:
             self.product_goal = desire_product_goal
         else:
             self.product_goal = desire_product_goal
-        # 初始化集散中心
-        self.storage_list: list[StorageCenter] = [StorageCenter(i, self.product_goal, self.function_num) for i in
-                                                  range(self.center_num)]
-        # 生成物流运输中心代号和中心存储物料的对应关系
-        self.center_product: np.ndarray = np.zeros((self.center_num, 2), dtype=int)
-        # 这里其实是把第一位是center的id，第二位是product的id
-        for i in range(function_num):
-            self.center_product[i, 0] = self.storage_list[i].get_id()
-            self.center_product[i, 1] = i
+
+        # 初始化货架
+        # 货架数量是产品工序和产品类别共同构成的
+        storage_need_tensor = torch.nonzero(~speed_list.isnan(), as_tuple=False)
+        # 根据speed构建storage
+        self.storage_list = [StorageCenter(product.item(), order[product.item()], self.product_num, process.item()) for
+                             product, process in
+                             storage_need_tensor]
+        # 生成货架和半成品的对应关系
+        self.storage_id_relation = torch.tensor(
+            [(storage.get_id(), storage.get_process(), storage.get_category()) for storage in self.storage_list],
+            dtype=torch.int)
         # 产品数量
         self.step_products = np.zeros(function_num)
         # 一次循环的step数量
@@ -367,28 +361,23 @@ class EnvRun:
         #             # 可视化节点需要id不能重复的
         #             graph.add_edge(center.cell_id + self.work_cell_num, work_cell._id)
 
+    # TODO 重写构建边函数
     def build_edge(self) -> Dict[str, torch.Tensor]:
         # center2_index = "center_to_cell"
-        center1_index = "cell_to_center"
-        product_index = "center_to_storage"
+        center1_index = "cell_to_storage"
         material_index = "storage_to_cell"
         self.edge_index[center1_index] = torch.zeros((2, 0), dtype=torch.long)
-        self.edge_index[product_index] = torch.zeros((2, 0), dtype=torch.long)
         self.edge_index[material_index] = torch.zeros((2, 0), dtype=torch.long)
         # 连接在workcenter中生成的边
         for work_center in self.work_center_list:
             product_edge, material_edge = work_center.build_edge(
                 storage_list=self.center_product)
             # 需要按列拼接
-            self.edge_index[product_index] = torch.cat(
-                [self.edge_index[product_index], product_edge], dim=1
-            )
             if material_edge is not None:
                 self.edge_index[material_index] = torch.cat(
                     [self.edge_index[material_index], material_edge], dim=1
                 )
         self.edge_index[center1_index] = self.edge_index[center1_index].to(self.device)
-        self.edge_index[product_index] = self.edge_index[product_index].to(self.device)
         self.edge_index[material_index] = self.edge_index[material_index].to(
             self.device
         )
@@ -405,7 +394,7 @@ class EnvRun:
             else:
                 softmax_value = 0
             ratio[indices] = softmax_value * workcell_get_material[indices]
-        products = np.zeros(self.function_num)
+        products = np.zeros(self.product_num)
         # 处理产品
         for work_center in self.work_center_list:
             # 这个是取出当前正在工作的，因为work如果在前边的话func改变后product对不上号了
@@ -459,7 +448,7 @@ class EnvRun:
         stable_reward = (
                 -0.05
                 * self.work_cell_num
-                / self.function_num
+                / self.product_num
                 * max(self.episode_step / self.episode_step_max, 1 / 2)
         )
 
@@ -569,7 +558,7 @@ class EnvRun:
         return grouped_indices
 
     def reset(self):
-        self.step_products = np.zeros(self.function_num)
+        self.step_products = np.zeros(self.product_num)
         self.reward = 0
         self.done = 0
         self.episode_step = 0

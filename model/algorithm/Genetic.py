@@ -318,8 +318,19 @@ if __name__ == '__main__':
     # plt.rcParams['font.sans-serif'] = ['FangSong']
     # # 正确显示连字符
     # plt.rcParams['axes.unicode_minus'] = False
-    # main()
-    a = np.arange(5, 10)
-    b = [v for i, v in enumerate(a)]
-    logger.info(b)
+    main()
+    # [[3, 3, 10],
+    #                                               [2, 2, 6],
+    #                                               [4, 5, 0],
+    #                                               [3, 0, 12],
+    #                                               [2, 3, 5, ]]
+    # import torch
+    #
+    # speed_list = torch.tensor([[1, 2, 3, 4, 2], [1, torch.nan, 3, 4, 2], [1, 2, torch.nan, 4, 2]])
+    # sum_speed = torch.sum(~speed_list.isnan(), dim=0)
+    #
+    # storage_need_list = torch.nonzero(~speed_list.isnan())
+    #
+    # logger.info(storage_need_list)
+
     # cProfile.run('main()', sort='cumulative')

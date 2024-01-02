@@ -4,9 +4,8 @@ from typing import ClassVar
 
 
 class StorageCenter:
-    next_id: ClassVar = 0
 
-    def __init__(self, product_id: int, goal: int, max_func: int):
+    def __init__(self, product_id: int, goal: int, max_func: int, process: int):
         """
             初始化产品中心
         Args:
@@ -18,13 +17,16 @@ class StorageCenter:
         self.goal = goal
         # self._id = StorageCenter.next_id
         self._id = int(product_id)
-        StorageCenter.next_id += 1
         self.product_id = int(product_id)
+        self.process = process
         self.state = StateCode.workcell_working
         self.product_num = 0
 
     def get_id(self) -> int:
         return self._id
+
+    def get_process(self) -> int:
+        return self.process
 
     def receive_product(self, num: int) -> None:
         """
@@ -58,6 +60,9 @@ class StorageCenter:
         produce_progress = self.product_num / self.goal
         product_id_norm = self.product_id / (self.max_func - 1)
         return torch.tensor([product_id_norm, produce_progress], dtype=torch.float32)
+
+    def get_category(self) -> int:
+        return self.process
 
     def read_state(self) -> list[int]:
         """
