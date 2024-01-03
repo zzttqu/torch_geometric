@@ -164,41 +164,14 @@ class EnvRun:
                                               [2, 3, 5]])
 
         speed_list = torch.tensor([[5, 10, 15, 20, 12], [8, 12, 18, torch.nan, 12], [3, 6, torch.nan, 10, 8]]).T
-        cell_id_list = torch.arange(torch.sum(work_center_init_func, dim=1).item())
         self.work_center_list: list[WorkCenter] = []
         # 第一层解析工序，第二层解析每个工序中的产品，第三层生成工作中心
-        for process, products in enumerate(work_center_init_func):
-            for product, num in enumerate(products):
+        for process, funcs in enumerate(work_center_init_func):
+            for func, num in enumerate(funcs):
                 self.work_center_list.extend([
-                    WorkCenter(process, speed_list[process], product)
+                    WorkCenter(process, speed_list[process], func)
                     for _ in range(0, num)
                 ])
-
-        self.center_state_num = 2
-        self.function_group = self.get_function_group()
-        self.read_edge = []
-        # 各级别生产能力，这个应该排除同一个节点拥有两个相同单元
-        self.product_capacity = [0 for _ in range(self.product_num)]
-        for work_center in self.work_center_list:
-            fl = work_center.get_all_funcs()
-            for i in range(self.product_num):
-                # 函数返回值的是funcid
-                # where返回的是tuple，需要提取第一项
-                indices: np.ndarray = np.where(fl == i)[0]
-                # indices是工作中心中工作单元列表的index，不是id
-                # 反正同时只能有一个工作中心工作，所以就取第一个就行了
-                if len(indices) > 0:
-                    self.product_capacity[i] += work_center.get_cell_speed(int(indices[0]))
-
-        # 根据生产能力和最大步数计算生产目标数量
-        # 根据水桶效应，选择最低的生产能力环节代表
-        desire_product_goal = int(
-            product_goal_scale * episode_step_max * min(self.product_capacity)
-        )
-        if abs(product_goal - desire_product_goal) < 100:
-            self.product_goal = desire_product_goal
-        else:
-            self.product_goal = desire_product_goal
 
         # 初始化货架
         # 货架数量是产品工序和产品类别共同构成的
