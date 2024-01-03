@@ -333,17 +333,7 @@ if __name__ == '__main__':
                                           [2, 3, 5]])
 
     speed_list = torch.tensor([[5, 10, 15, 20, 12], [8, 12, 18, torch.nan, 12], [3, 6, torch.nan, 10, 8]])
-    cell_id_list = torch.sum(torch.sum(work_center_init_func, dim=1) * (~torch.isnan(speed_list)))
+    a = torch.tensor([[0, 4, 0], [-2.6, 4, 0], [+2.6, 4, 0], [+2.6, 4, 1]])
+    b = torch.softmax(a, dim=1)
 
-    logger.info(cell_id_list)
-
-
-    class WorkCell:
-        next_id = 0
-        def __init__(
-                self,
-        ):
-
-            self._id = WorkCell.next_id
-            WorkCell.next_id += 1
-    # cProfile.run('main()', sort='cumulative')
+    logger.info(b)

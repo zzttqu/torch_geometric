@@ -45,13 +45,6 @@ class Agent:
         )"""
         self.optimizer = torch.optim.Adam(self.network.parameters(), lr=lr, eps=1e-5)
 
-    # def update_heterodata(self, data: HeteroData):
-    #     """更新heterodata"""
-    #     # 去掉无向边
-    #     # self.undirect_data = T.ToUndirected()(data)
-    #     # metadata函数第一个返回值是节点列表，第二个返回值是边列表
-    #     self.metadata = self.undirect_data.metadata()
-
     def get_value(
             self,
             state: Dict[str, torch.Tensor],
@@ -68,7 +61,8 @@ class Agent:
     ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor]:
         # hetero_data = T.ToUndirected()(hetero_data)
         all_logits, _ = self.network(state, edge_index)
-        assert isinstance(all_logits, dict), "必须是字典类型"
+        assert isinstance(all_logits, dict), "必须是dict类型"
+        # 这里是GNN的输出，是每个节点一个
         # 第一项是功能动作，第二项是是否接受上一级运输
         # 目前不需要对center进行动作，所以存储后可以不用
 

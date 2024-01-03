@@ -10,7 +10,7 @@ from model.StorageCenter import StorageCenter
 from loguru import logger
 from matplotlib import pyplot as plt
 # from torch_geometric.data import HeteroData
-
+from torch.distributions import Categorical
 
 # from model.WorkCell import WorkCell
 
@@ -164,6 +164,12 @@ class EnvRun:
                                               [2, 3, 5]])
 
         speed_list = torch.tensor([[5, 10, 15, 20, 12], [8, 12, 18, torch.nan, 12], [3, 6, torch.nan, 10, 8]]).T
+        self.process_num = speed_list.shape[0]
+        self.product_num = speed_list.shape[1]
+        self.work_center_num = work_center_init_func.sum()
+        # 每个工序的工作中心数量
+        self.work_center_process = torch.sum(work_center_init_func, dim=1)
+        func_list = torch.tensor([[0, 1, 2], [0, 1, 2], [0, 1, torch.nan], [0, 2, torch.nan], [0, 1, 2]])
         self.work_center_list: list[WorkCenter] = []
         # 第一层解析工序，第二层解析每个工序中的产品，第三层生成工作中心
         for process, funcs in enumerate(work_center_init_func):
@@ -342,24 +348,20 @@ class EnvRun:
 
     # TODO 重写构建边函数
     def build_edge(self) -> Dict[str, torch.Tensor]:
-        # center2_index = "center_to_cell"
-        center1_index = "cell_to_storage"
-        material_index = "storage_to_cell"
-        self.edge_index[center1_index] = torch.zeros((2, 0), dtype=torch.long)
-        self.edge_index[material_index] = torch.zeros((2, 0), dtype=torch.long)
-        # 连接在workcenter中生成的边
+        edge_names = ["center2cell", "storage2cell", "cell2center", "storage2center"]
+
+        for edge_name in edge_names:
+            self.edge_index[edge_name] = torch.zeros((2, 0), dtype=torch.long)
+
         for work_center in self.work_center_list:
-            product_edge, material_edge = work_center.build_edge(
-                storage_list=self.center_product)
-            # 需要按列拼接
-            if material_edge is not None:
-                self.edge_index[material_index] = torch.cat(
-                    [self.edge_index[material_index], material_edge], dim=1
-                )
-        self.edge_index[center1_index] = self.edge_index[center1_index].to(self.device)
-        self.edge_index[material_index] = self.edge_index[material_index].to(
-            self.device
-        )
+            edges = work_center.build_edge(storage_list=self.storage_id_relation)
+
+            for edge_name, edge_data in zip(edge_names, edges):
+                if edge_data is not None:
+                    self.edge_index[edge_name] = torch.cat([self.edge_index[edge_name], edge_data], dim=1)
+
+        for edge_key in self.edge_index.keys():
+            self.edge_index[edge_key] = self.edge_index[edge_key].to(self.device)
 
         return self.edge_index
 
@@ -377,7 +379,7 @@ class EnvRun:
         # 处理产品
         for work_center in self.work_center_list:
             # 这个是取出当前正在工作的，因为work如果在前边的话func改变后product对不上号了
-            _funcs: int = work_center.get_func()
+            _funcs: int = work_center.get_func_list()
             _products = work_center.get_product()
             # 取出所有物品，放入center中
             self.storage_list[_funcs].receive_product(_products)
@@ -411,9 +413,24 @@ class EnvRun:
             material_list = list(map(int, material_list))
             work_center.receive_material(material_list)
 
-    def update_all_work_center(self, workcell_action: np.ndarray):
-        for action, work_center in zip(workcell_action, self.work_center_list):
-            work_center.work(int(action))
+    def update_all_work_center(self, all_action: dict[str, torch.Tensor]):
+        cell_logits = all_action["cell"]
+        center_logits = all_action["center"]
+        # self.work_center_process中记录了各个process的workcenter数量
+        for process, center_num in enumerate(self.work_center_process):
+            ratio = torch.zeros((center_num, self.product_num))
+            for process_index, work_center in enumerate(self.work_center_list[process:(process + 1) * center_num]):
+                cell_slice = cell_logits[work_center.get_all_cell_id()]
+                center_slice = center_logits[work_center.get_id()]
+                center_dist = Categorical(logits=center_slice)
+                cell_dist = Categorical(logits=cell_slice[:, 0])
+                # 这里其实不影响，因为实际上是修改的workcell，但是如果这个工作中心没有这个功能，其实工作单元也没有，那么这个输出的index其实就是celllist的index
+                activate_func = cell_dist.sample().item()
+                # 这里是放置当前工序各个product的分配率
+                ratio[process_index, activate_func] = cell_slice[activate_func, 1]
+                on_or_off = center_dist.sample().item()
+                work_center.work(activate_func, on_or_off)
+            torch.softmax(ratio, dim=1)
 
     def update_all(self, all_action: Dict[str, torch.Tensor]):
         # action按节点类别分开
