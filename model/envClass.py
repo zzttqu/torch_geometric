@@ -164,12 +164,12 @@ class EnvRun:
                                               [2, 3, 5]])
 
         speed_list = torch.tensor([[5, 10, 15, 20, 12], [8, 12, 18, torch.nan, 12], [3, 6, torch.nan, 10, 8]]).T
-        self.process_num = speed_list.shape[0]
-        self.product_num = speed_list.shape[1]
+        self.product_num = order.shape[0]
         self.work_center_num = work_center_init_func.sum()
         # 每个工序的工作中心数量
         self.work_center_process = torch.sum(work_center_init_func, dim=1)
-        func_list = torch.tensor([[0, 1, 2], [0, 1, 2], [0, 1, torch.nan], [0, 2, torch.nan], [0, 1, 2]])
+        self.process_num = torch.sum(~torch.isnan(speed_list), dim=1)
+        func_list = torch.tensor([[0, 1, 2], [0, 1, 2], [0, 1], [0, 2], [0, 1, 2]])
         self.work_center_list: list[WorkCenter] = []
         # 第一层解析工序，第二层解析每个工序中的产品，第三层生成工作中心
         for process, funcs in enumerate(work_center_init_func):
@@ -418,7 +418,9 @@ class EnvRun:
         center_logits = all_action["center"]
         # self.work_center_process中记录了各个process的workcenter数量
         for process, center_num in enumerate(self.work_center_process):
-            ratio = torch.zeros((center_num, self.product_num))
+            # 为了保证不影响softmax，如果是0会导致最后概率不为0，根据每个工序包括的功能数量初始化
+            assert isinstance(center_num, int), "center_num 必须是 int"
+            _ratio = torch.full((self.process_num[process], center_num), -torch.inf)
             for process_index, work_center in enumerate(self.work_center_list[process:(process + 1) * center_num]):
                 cell_slice = cell_logits[work_center.get_all_cell_id()]
                 center_slice = center_logits[work_center.get_id()]
@@ -427,10 +429,19 @@ class EnvRun:
                 # 这里其实不影响，因为实际上是修改的workcell，但是如果这个工作中心没有这个功能，其实工作单元也没有，那么这个输出的index其实就是celllist的index
                 activate_func = cell_dist.sample().item()
                 # 这里是放置当前工序各个product的分配率
-                ratio[process_index, activate_func] = cell_slice[activate_func, 1]
+                _ratio[activate_func, process_index] = cell_slice[activate_func, 1]
                 on_or_off = center_dist.sample().item()
                 work_center.work(activate_func, on_or_off)
-            torch.softmax(ratio, dim=1)
+            # 还需要考虑如果所有的cell都选了一个func就会导致有softmax后的tensor为nan
+            _ratio = torch.softmax(_ratio, dim=1)
+            # 如果有nan就改成0
+            _ratio_without_nan = torch.where(torch.isnan(_ratio), torch.tensor(0.0), _ratio)
+            # 因为center不能同时出现在两个工序中，所以_ratio必定同一列只有一个非0的，所以累加起来就变成center_num长度的数组了，就可以给center赋值了，
+            # 然后交给之后的物料转运
+            ratios = torch.sum(_ratio_without_nan, dim=0)
+            for i, ratio in enumerate(ratios):
+                self.work_center_list[i + int(process * center_num)].set_ratio(ratio)
+
 
     def update_all(self, all_action: Dict[str, torch.Tensor]):
         # action按节点类别分开
