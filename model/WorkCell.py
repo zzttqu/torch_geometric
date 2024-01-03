@@ -10,14 +10,13 @@ class WorkCell:
     """
     WorkCell 工作单元作为虚构的最小的可重构单位，只能执行一种功能
     """
-    next_id: ClassVar = 0
+    _next_id: ClassVar = 0
 
     def __init__(
             self,
             function_id: int,
             max_func: int,
             speed: int,
-            _id: int = 0,
             materials=6,
     ):
 
@@ -25,14 +24,12 @@ class WorkCell:
         WorkCell 初始化函数
         Args:
             function_id:功能id，对应产品，也对应其所用时间
-            _id:自身id
             max_func:最大功能数量，用语归一化
             speed:生产速度，单位时间/每个半成品
             materials:原料数量
         """
         # 需要有当前这个工作单元每个功能的备件，每个功能生产效率
-        # self._id = WorkCell.next_id
-        self._id = _id
+        self._id = WorkCell.get_next_id()
         self.function = function_id
         self.max_func = 2 if max_func <= 1 else max_func
         self.speed = speed
@@ -151,6 +148,16 @@ class WorkCell:
             ],
             dtype=torch.float32,
         )
+
+    @classmethod
+    def get_next_id(cls):
+        current_id = cls._next_id
+        cls._next_id += 1
+        return current_id
+
+    @classmethod
+    def reset_id(cls):
+        cls._next_id = 0
 
     def read_state(self) -> list[int]:
         """

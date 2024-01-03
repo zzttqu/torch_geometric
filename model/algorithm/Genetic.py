@@ -318,19 +318,32 @@ if __name__ == '__main__':
     # plt.rcParams['font.sans-serif'] = ['FangSong']
     # # 正确显示连字符
     # plt.rcParams['axes.unicode_minus'] = False
-    main()
+    # main()
     # [[3, 3, 10],
     #                                               [2, 2, 6],
     #                                               [4, 5, 0],
     #                                               [3, 0, 12],
     #                                               [2, 3, 5, ]]
-    # import torch
-    #
-    # speed_list = torch.tensor([[1, 2, 3, 4, 2], [1, torch.nan, 3, 4, 2], [1, 2, torch.nan, 4, 2]])
-    # sum_speed = torch.sum(~speed_list.isnan(), dim=0)
-    #
-    # storage_need_list = torch.nonzero(~speed_list.isnan())
-    #
-    # logger.info(storage_need_list)
+    import torch
 
+    work_center_init_func = torch.tensor([[3, 3, 10],
+                                          [2, 2, 6],
+                                          [4, 5, 0],
+                                          [3, 0, 12],
+                                          [2, 3, 5]])
+
+    speed_list = torch.tensor([[5, 10, 15, 20, 12], [8, 12, 18, torch.nan, 12], [3, 6, torch.nan, 10, 8]])
+    cell_id_list = torch.sum(torch.sum(work_center_init_func, dim=1) * (~torch.isnan(speed_list)))
+
+    logger.info(cell_id_list)
+
+
+    class WorkCell:
+        next_id = 0
+        def __init__(
+                self,
+        ):
+
+            self._id = WorkCell.next_id
+            WorkCell.next_id += 1
     # cProfile.run('main()', sort='cumulative')

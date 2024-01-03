@@ -11,30 +11,25 @@ from typing import ClassVar
 
 # 这个类是用来定义加工中心的，一个加工中心包括多个加工单元，但同一时间只能有一个加工单元工作
 class WorkCenter:
-    next_id: ClassVar = 0
+    _next_id: ClassVar = 0
 
-    def __init__(self, _id: int, category: int, speed_list: np.ndarray[int], init_func, cell_id_list: np.ndarray,
-                 max_func):
+    def __init__(self, category: int, speed_list: torch.Tensor, init_func: int):
         """
         工作中心初始化
         Args:
             category: 该工作中心位于第几道工序
             speed_list: 该工作中心所具有的功能的速度列表，例如【10,20,30】单位：半成品数量/单位时间
-            max_func: 最大功能数，用于规范化
         """
 
-        # self._id = WorkCenter.next_id
-        self._id = _id
-        self.max_func = 2 if max_func <= 1 else max_func
+        self._id = WorkCenter._next_id
         self.category = category
         # 计数含nan元素个数
-        self.func_num = np.count_nonzero(speed_list)
-        self.no_nan_func_num = np.count_nonzero(speed_list[~np.isnan(speed_list)])
-        func_list = np.arange(self.func_num)
+        self.func_num = torch.count_nonzero(speed_list).item()
+        func_list = torch.arange(self.func_num)
         # 构建workcell
         self.workcell_list: List[WorkCell] = [
-            WorkCell(func, self.func_num, speed, _id=cell_id) if not np.isnan(speed) else None for
-            func, speed, cell_id in zip(func_list, speed_list, cell_id_list)]
+            WorkCell(func, self.func_num, speed) if not torch.isnan(speed) else None for
+            func, speed in zip(func_list, speed_list)]
         # 这个是工作中心属于第几道工序
         self.category = category
         self.func = init_func
@@ -158,6 +153,16 @@ class WorkCenter:
                 else:
                     cell.work(0)
 
+    @classmethod
+    def get_next_id(cls):
+        current_id = cls._next_id
+        cls._next_id += 1
+        return current_id
+
+    @classmethod
+    def reset_id(cls):
+        cls._next_id = 0
+
     def send_product(self):
         self.working_cell.send_product()
         self.product = 0
@@ -195,7 +200,7 @@ class WorkCenter:
         return
 
     def get_state(self):
-        func_norm = self.get_func() / (self.max_func - 1)
+        func_norm = self.get_func() / self.func_num
         return torch.tensor(
             [
                 func_norm,

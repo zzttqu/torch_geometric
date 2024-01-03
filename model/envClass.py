@@ -3,6 +3,8 @@ from typing import List, Dict, Tuple
 import networkx as nx
 import numpy as np
 import torch
+
+from model.WorkCell import WorkCell
 from model.WorkCenter import WorkCenter
 from model.StorageCenter import StorageCenter
 from loguru import logger
@@ -155,21 +157,23 @@ class EnvRun:
         # 产品订单
         order = torch.tensor([100, 600, 200])
         # 这里应该是对各个工作单元进行配置了
-        # TODO 工作中心初始化还没有做完
         work_center_init_func = torch.tensor([[3, 3, 10],
                                               [2, 2, 6],
                                               [4, 5, 0],
                                               [3, 0, 12],
                                               [2, 3, 5]])
 
-        speed_list = torch.tensor([[5, 10, 15, 20, 12], [8, 12, 18, torch.nan, 12], [3, 6, torch.nan, 10, 8]])
-
+        speed_list = torch.tensor([[5, 10, 15, 20, 12], [8, 12, 18, torch.nan, 12], [3, 6, torch.nan, 10, 8]]).T
+        cell_id_list = torch.arange(torch.sum(work_center_init_func, dim=1).item())
         self.work_center_list: list[WorkCenter] = []
-        # 这个初始化的顺序和工作单元的id顺序也是一致的
+        # 第一层解析工序，第二层解析每个工序中的产品，第三层生成工作中心
         for process, products in enumerate(work_center_init_func):
             for product, num in enumerate(products):
-                for _ in num:
-                    self.work_center_list.append(WorkCenter(1, process, speed_list[:, process], product))
+                self.work_center_list.extend([
+                    WorkCenter(process, speed_list[process], product)
+                    for _ in range(0, num)
+                ])
+
         self.center_state_num = 2
         self.function_group = self.get_function_group()
         self.read_edge = []
@@ -559,6 +563,8 @@ class EnvRun:
 
     def reset(self):
         self.step_products = np.zeros(self.product_num)
+        WorkCenter.reset_id()
+        WorkCell.reset_id()
         self.reward = 0
         self.done = 0
         self.episode_step = 0
