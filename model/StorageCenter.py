@@ -4,8 +4,9 @@ from typing import ClassVar
 
 
 class StorageCenter:
+    _next_id = 0
 
-    def __init__(self, product_id: int, goal: int, max_func: int, process: int):
+    def __init__(self, product_id: int, process: int, goal: int, max_func: int):
         """
             初始化产品中心
         Args:
@@ -15,12 +16,21 @@ class StorageCenter:
         """
         self.max_func = 2 if max_func <= 1 else max_func
         self.goal = goal
-        # self._id = StorageCenter.next_id
-        self._id = int(product_id)
+        self._id = StorageCenter.get_next_id()
         self.product_id = int(product_id)
         self.process = process
         self.state = StateCode.workcell_working
         self.product_num = 0
+
+    @classmethod
+    def get_next_id(cls):
+        current_id = cls._next_id
+        cls._next_id += 1
+        return current_id
+
+    @classmethod
+    def reset_id(cls):
+        cls._next_id = 0
 
     def get_id(self) -> int:
         return self._id

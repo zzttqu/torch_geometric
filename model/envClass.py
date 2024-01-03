@@ -172,13 +172,15 @@ class EnvRun:
                     WorkCenter(process, speed_list[process], func)
                     for _ in range(0, num)
                 ])
+        # TODO 加工能力代码
 
         # 初始化货架
         # 货架数量是产品工序和产品类别共同构成的
+        # 这个是找到不为0的元素位置，是一个（2，n）的tensor
         storage_need_tensor = torch.nonzero(~speed_list.isnan(), as_tuple=False)
         # 根据speed构建storage
-        self.storage_list = [StorageCenter(product.item(), order[product.item()], self.product_num, process.item()) for
-                             product, process in
+        self.storage_list = [StorageCenter(product.item(), process.item(), order[product.item()], self.product_num) for
+                             process, product in
                              storage_need_tensor]
         # 生成货架和半成品的对应关系
         self.storage_id_relation = torch.tensor(
@@ -538,6 +540,7 @@ class EnvRun:
         self.step_products = np.zeros(self.product_num)
         WorkCenter.reset_id()
         WorkCell.reset_id()
+        StorageCenter.reset_id()
         self.reward = 0
         self.done = 0
         self.episode_step = 0

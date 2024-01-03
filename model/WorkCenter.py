@@ -73,42 +73,6 @@ class WorkCenter:
         _cell2storage_tensor = torch.tensor(_cell2storage_list, dtype=torch.long)
         _storage2cell_tensor = torch.tensor(_storage2cell_list, dtype=torch.long)
 
-        """
-        _cell2storage_tensor = torch.zeros((self.no_nan_func_num, 2), dtype=torch.long)
-                _storage2cell_tensor = torch.zeros((self.no_nan_func_num, 2), dtype=torch.long)
-                _edge_index = 0
-                _edge_index1 = 0
-                # 建立上下游联系
-                for cell in self.workcell_list:
-                    if cell is None:
-                        continue
-                    for (_storage_id, _product_id, _category_id) in storage_list:
-                        # _storage是一个长度为3的数组，第一位是storage的id，第二位是product的id，第三位是工序id
-                        if cell.get_function() == _product_id and self.category == _category_id:
-                            # 从cell到storage
-                            _cell2storage_tensor[_edge_index, 0] = cell.get_id()
-                            _cell2storage_tensor[_edge_index, 1] = _storage_id
-                            _edge_index += 1
-                        # 从storage到cell
-                        elif cell.get_function() == _product_id and self.category - 1 == _category_id:
-                            # 从storage到cell
-                            _storage2cell_tensor[_edge_index1, 0] = _storage_id
-                            _storage2cell_tensor[_edge_index1, 1] = cell.get_id()
-                            _edge_index1 += 1
-
-                        product_edge = torch.tensor(_edge, dtype=torch.long)
-                if product_edge.dim() == 1:
-                    product_edge = product_edge.unsqueeze(0)
-                product_edge = product_edge.t()
-                if len(_edge1) > 0:
-                    material_edge = torch.tensor(_edge1, dtype=torch.long)
-                    if material_edge.dim() == 1:
-                        material_edge = material_edge.unsquueze(0)
-                    material_edge = material_edge.t()
-                else:
-                    material_edge = None
-                """
-
         return _cell2storage_tensor, _storage2cell_tensor
 
     def receive_material(self, materials: List[int]):
