@@ -25,20 +25,22 @@ class WorkCenter:
         self.category = category
         # 计数含nan元素个数
         self.func_num = torch.count_nonzero(speed_list).item()
-        func_list = torch.arange(self.func_num)
+        self.func_list = torch.arange(self.func_num)
         # 构建workcell
         self.workcell_list: List[WorkCell] = [
-            WorkCell(func, self.func_num, speed) if not torch.isnan(speed) else None for
-            func, speed in zip(func_list, speed_list)]
+            WorkCell(func, self.func_num, speed) for func, speed in zip(self.func_list, speed_list) if
+            not torch.isnan(speed)
+        ]
         # 这个是工作中心属于第几道工序
         self.category = category
-        self.func = init_func
+        self.working_func = init_func
         self.speed = speed_list[init_func]
         self.product = 0
         self.working_cell = self.workcell_list[init_func]
-        self.all_cell_id = [workcell.get_id() for workcell in self.workcell_list]
+        self.all_cell_id = torch.tensor([workcell.get_id() for workcell in self.workcell_list])
 
-    def build_edge(self, storage_list: Union[torch.Tensor, np.ndarray]) -> Tuple[torch.Tensor, torch.Tensor]:
+    def build_edge(self, storage_list: Union[torch.Tensor, np.ndarray]) -> Tuple[
+        torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         创建该工作中心的边信息
         Args:
@@ -48,32 +50,30 @@ class WorkCenter:
             分成三类的边
 
         """
-        """
-        # 建立一个work-center内部节点的联系
-        _edge = []
-        # 从cell到center
-        for cell in self.workcell_list:
-            _edge.append((cell.get_id(), self.get_id()))
-        # 如果是高维的，需要单独处理.T不行，必须是.t()
-
-        center_edge: torch.Tensor = torch.tensor(_edge, dtype=torch.long)
-
-        # emmm如果是一维的，两种方法都不行，必须增加一个维度
-        if center_edge.dim() == 1:
-            center_edge = center_edge.unsqueeze(0).t()
-        center_edge = center_edge.t()
-        """
-        _cell2storage_list = [(cell.get_id(), _storage_id) for cell in self.workcell_list if cell is not None for
-                              (_storage_id, _product_id, _category_id) in storage_list if
-                              cell.get_function() == _product_id and self.category == _category_id]
-        _storage2cell_list = [(_storage_id, cell.get_id()) for cell in self.workcell_list if cell is not None for
+        # 还是得有center作为节点，因为center需要聚合多个cell和下一级storage的信息得出该节点是否工作
+        _cell2center_list = [(cell.get_id(), self._id) for cell in self.workcell_list]
+        _storage2center_list = [(_storage_id, self._id) for
+                                (_storage_id, _product_id, _category_id) in storage_list if
+                                self.category == _category_id]
+        # cell通过storage和center的信息判断启动哪个节点
+        _center2cell_list = [(self._id, cell.get_id()) for cell in self.workcell_list]
+        #                       cell.get_function() == _product_id and self.category == _category_id]
+        _storage2cell_list = [(_storage_id, cell.get_id()) for cell in self.workcell_list for
                               (_storage_id, _product_id, _category_id) in storage_list if
                               cell.get_function() == _product_id and self.category - 1 == _category_id]
+        # _center2storage_list = [(self._id, _storage_id) for
+        #                         (_storage_id, _product_id, _category_id) in storage_list if
+        #                         self.category == _category_id]
 
-        _cell2storage_tensor = torch.tensor(_cell2storage_list, dtype=torch.long)
+        # _cell2storage_list = [(cell.get_id(), _storage_id) for cell in self.workcell_list if cell is not None for
+        #                       (_storage_id, _product_id, _category_id) in storage_list if
+
+        _cell2center_tensor = torch.tensor(_cell2center_list, dtype=torch.long)
+        _storage2center_tensor = torch.tensor(_storage2center_list, dtype=torch.long)
         _storage2cell_tensor = torch.tensor(_storage2cell_list, dtype=torch.long)
+        _center2cell_tensor = torch.tensor(_center2cell_list, dtype=torch.long)
 
-        return _cell2storage_tensor, _storage2cell_tensor
+        return _cell2center_tensor, _storage2center_tensor, _storage2cell_tensor, _center2cell_tensor
 
     def receive_material(self, materials: List[int]):
         """
@@ -93,25 +93,26 @@ class WorkCenter:
         #     for cell in self.workcell_list:
         #         products_list[cell.get_function()] = cell.send_product()
 
-    def work(self, action: int):
+    def work(self, activate_cell: int, on_off: int):
         """
         加工
         Args:
-            action: 加工动作，0或需要工作的工作单元在workcell_list中的位置
+            on_off: 
+            activate_cell: 加工动作，0或需要工作的工作单元在workcell_list中的位置
         """
         # 这里目前改为了工作中心选择哪个工作单元工作
-        # 如果是0，就是全部
-        if action == 0:
+        # 如果是0，就是全部不工作
+        if on_off == 0:
             for cell in self.workcell_list:
                 cell.work(0)
         else:
             for i, cell in enumerate(self.workcell_list):
-                if i == action - 1:
+                if i == activate_cell:
                     state = cell.work(1)
                     # 如果正常工作则修改work_center的状态
                     if state == StateCode.workcell_working:
                         self.working_cell = cell
-                        self.func = cell.get_function()
+                        self.working_func = cell.get_function()
                         self.speed = cell.get_speed()
                         self.product = cell.get_products()
                 else:
@@ -139,7 +140,7 @@ class WorkCenter:
     def get_id(self):
         return self._id
 
-    def get_all_cell_id(self) -> List[int]:
+    def get_all_cell_id(self) -> torch.Tensor:
         return self.all_cell_id
 
     def get_cell_speed(self, indexes: int) -> int:
@@ -152,8 +153,8 @@ class WorkCenter:
     def get_speed(self):
         return self.speed
 
-    def get_func(self):
-        return self.func
+    def get_func_list(self):
+        return self.func_list
 
     def get_product(self):
         return self.product
@@ -164,7 +165,7 @@ class WorkCenter:
         return
 
     def get_state(self):
-        func_norm = self.get_func() / self.func_num
+        func_norm = self.get_func_list() / self.func_num
         return torch.tensor(
             [
                 func_norm,
@@ -173,7 +174,7 @@ class WorkCenter:
         )
 
     def read_state(self):
-        return self.get_func()
+        return self.get_func_list()
 
     def read_all_cell_state(self):
         a = []

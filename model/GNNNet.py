@@ -129,8 +129,8 @@ class HGTNet(nn.Module):
             self.conv_list.append(conv)
         self.lin0 = nn.Linear(hidden_channels, hidden_channels)
         # 这里先写死了吧，应该需要根据需求进行设置
-        # 工作中心一个动作，动作空间为工作单元数量+1，表示启动哪个工作单元，工作单元一个动作，是否接收
-        self.linCenter = nn.Linear(hidden_channels, 3)
+        # 工作中心一个动作，动作空间为工作单元数量+1，表示启动或关闭，工作单元2个动作概率，启动概率和接收与否
+        self.linCenter = nn.Linear(hidden_channels, 2)
         self.linCell = nn.Linear(hidden_channels, 2)
         self.linV = nn.Linear(hidden_channels, 1)
         # self.pool = SoftmaxAggregation(channels=hidden_channels)
@@ -142,13 +142,13 @@ class HGTNet(nn.Module):
             self,
             x_dict: Dict[str, torch.Tensor],
             edge_index_dict: Dict[str, torch.Tensor],
-    ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor]:
+    ) -> Tuple[dict[str, torch.Tensor], torch.Tensor]:
         """
         前向传播，tensorboard不支持tuple类型的输入，需要单独的字符串作为字典索引
         """
         norm_edge_index_dict = {}
         for key, _value in edge_index_dict.items():
-            node1, node2 = key.split("_to_")
+            node1, node2 = key.split("2")
             norm_edge_index_dict[f"{node1}", f"{key}", f"{node2}"] = _value
         # 根据node type分别传播，这里由于改了inputdim，还不能直接去掉encoder层
         # 目前不用encoder层
@@ -172,15 +172,9 @@ class HGTNet(nn.Module):
         x_dict = {
             node_type: F.leaky_relu(self.lin0(x)) for node_type, x in x_dict.items()
         }
-        action = {}
-        for node_type, x in x_dict.items():
-            if node_type == "center":
-                action[node_type] = torch.tanh(self.linCenter(x))
-            elif node_type == "cell":
-                action[node_type] = torch.tanh(self.linCell(x))
-        # action = {
-        #     node_type: torch.tanh(self.linOut(x)) for node_type, x in x_dict.items()
-        # }
+        action = {"cell": torch.tanh(self.linCell(x_dict["cell"])),
+                  "center": torch.tanh(self.linCenter(x_dict["center"]))}
+
         return action, value
 
     def save_model(self, name):
