@@ -25,6 +25,7 @@ class WorkCenter:
         self.category = category
         # 计数含nan元素个数
         self.func_num = torch.count_nonzero(speed_list).item()
+        self.func_list = torch.nonzero(~torch.isnan(speed_list), as_tuple=False).flatten()
         self.func_list = torch.arange(self.func_num)
         # 构建workcell
         self.workcell_list: List[WorkCell] = [
@@ -75,23 +76,14 @@ class WorkCenter:
 
         return _cell2center_tensor, _storage2center_tensor, _storage2cell_tensor, _center2cell_tensor
 
-    def receive_material(self, materials: List[int]):
+    def receive_material(self, materials: int):
         """
         接收原材料产品
         Args:
-            materials: 该工作中心接收的原材料产品列表
+            materials: 该工作中心接收的当前运行功能的原料
         """
 
-        # 这个material是全部的
-        # 这个应该可以改成类似查表的，用cellid直接查在list中的位置
-
-        for cell, material in zip(self.workcell_list, materials):
-            assert isinstance(cell, WorkCell)
-            cell.receive_material(material)
-
-        # def move_product(self, products_list: List[int]):
-        #     for cell in self.workcell_list:
-        #         products_list[cell.get_function()] = cell.send_product()
+        self.workcell_list[self.working_func].receive_material(materials)
 
     def work(self, activate_cell: int, on_off: int):
         """
@@ -127,6 +119,12 @@ class WorkCenter:
     @classmethod
     def reset_id(cls):
         cls._next_id = 0
+
+    def get_process(self):
+        return self.category
+
+    def get_func(self):
+        return self.working_func
 
     def send_product(self):
         self.working_cell.send_product()

@@ -1,3 +1,5 @@
+import math
+
 import torch
 from model.StateCode import *
 from typing import ClassVar
@@ -38,6 +40,9 @@ class StorageCenter:
     def get_process(self) -> int:
         return self.process
 
+    def get_product_id(self) -> int:
+        return self.product_id
+
     def receive_product(self, num: int) -> None:
         """
         从生产中心接收产品
@@ -45,13 +50,15 @@ class StorageCenter:
         """
         self.product_num += num
 
-    def send_product(self, num: int) -> None:
+    def send_product(self, ratio: int) -> int:
         """
         从产品中心向下一级生产中心发送产品
-        :param num: 需要发送产品数量
+        :param ratio: 需要发送产品占比
         :return:
         """
-        self.product_num -= num
+        product = math.floor(self.product_num * ratio)
+        self.product_num -= product
+        return product
 
     def get_product_num(self) -> int:
         """

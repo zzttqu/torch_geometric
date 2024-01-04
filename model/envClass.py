@@ -165,10 +165,10 @@ class EnvRun:
 
         speed_list = torch.tensor([[5, 10, 15, 20, 12], [8, 12, 18, torch.nan, 12], [3, 6, torch.nan, 10, 8]]).T
         self.product_num = order.shape[0]
-        self.work_center_num = work_center_init_func.sum()
+        self.total_center_num = work_center_init_func.sum()
         # 每个工序的工作中心数量
-        self.work_center_process = torch.sum(work_center_init_func, dim=1)
-        self.process_num = torch.sum(~torch.isnan(speed_list), dim=1)
+        self.center_per_process = torch.sum(work_center_init_func, dim=1)
+        self.per_process_num = torch.sum(~torch.isnan(speed_list), dim=1)
         func_list = torch.tensor([[0, 1, 2], [0, 1, 2], [0, 1], [0, 2], [0, 1, 2]])
         self.work_center_list: list[WorkCenter] = []
         # 第一层解析工序，第二层解析每个工序中的产品，第三层生成工作中心
@@ -182,6 +182,7 @@ class EnvRun:
 
         # 初始化货架
         # 货架数量是产品工序和产品类别共同构成的
+        # 不包括没有那道工序的半成品
         # 这个是找到不为0的元素位置，是一个（2，n）的tensor
         storage_need_tensor = torch.nonzero(~speed_list.isnan(), as_tuple=False)
         # 根据speed构建storage
@@ -346,7 +347,6 @@ class EnvRun:
         #             # 可视化节点需要id不能重复的
         #             graph.add_edge(center.cell_id + self.work_cell_num, work_cell._id)
 
-    # TODO 重写构建边函数
     def build_edge(self) -> Dict[str, torch.Tensor]:
         edge_names = ["center2cell", "storage2cell", "cell2center", "storage2center"]
 
@@ -413,15 +413,18 @@ class EnvRun:
             material_list = list(map(int, material_list))
             work_center.receive_material(material_list)
 
-    def update_all_work_center(self, all_action: dict[str, torch.Tensor]):
+    def update(self, all_action: dict[str, torch.Tensor]):
         cell_logits = all_action["cell"]
         center_logits = all_action["center"]
+        center_ratio = torch.zeros(self.total_center_num, dtype=torch.float32)
         # self.work_center_process中记录了各个process的workcenter数量
-        for process, center_num in enumerate(self.work_center_process):
+        center_id = 0
+        # 首先生产
+        for process, center_num in enumerate(self.center_per_process):
             # 为了保证不影响softmax，如果是0会导致最后概率不为0，根据每个工序包括的功能数量初始化
             assert isinstance(center_num, int), "center_num 必须是 int"
-            _ratio = torch.full((self.process_num[process], center_num), -torch.inf)
-            for process_index, work_center in enumerate(self.work_center_list[process:(process + 1) * center_num]):
+            _ratio = torch.full((self.per_process_num[process], center_num), -torch.inf)
+            for process_index, work_center in enumerate(self.work_center_list[center_id:center_id + center_num]):
                 cell_slice = cell_logits[work_center.get_all_cell_id()]
                 center_slice = center_logits[work_center.get_id()]
                 center_dist = Categorical(logits=center_slice)
@@ -432,6 +435,7 @@ class EnvRun:
                 _ratio[activate_func, process_index] = cell_slice[activate_func, 1]
                 on_or_off = center_dist.sample().item()
                 work_center.work(activate_func, on_or_off)
+                work_center.get_product()
             # 还需要考虑如果所有的cell都选了一个func就会导致有softmax后的tensor为nan
             _ratio = torch.softmax(_ratio, dim=1)
             # 如果有nan就改成0
@@ -439,26 +443,32 @@ class EnvRun:
             # 因为center不能同时出现在两个工序中，所以_ratio必定同一列只有一个非0的，所以累加起来就变成center_num长度的数组了，就可以给center赋值了，
             # 然后交给之后的物料转运
             ratios = torch.sum(_ratio_without_nan, dim=0)
-            for i, ratio in enumerate(ratios):
-                self.work_center_list[i + int(process * center_num)].set_ratio(ratio)
+            center_ratio[center_id:center_id + center_num] = ratios
+            # 更新center的id，方便循环内部使用
+            center_id += center_num
+        # 其次运输
+        for storage in self.storage_list:
+            category, func1 = storage.get_category(), storage.get_product_id()
+            for center in self.work_center_list:
+                process, func2 = center.get_process(), center.get_func()
+                if category - 1 == process and func1 == func2:
+                    materials = storage.send_product(center_ratio[center.get_id()])
+                    center.receive_material(materials)
+                elif category == process and func1 == func2:
+                    product = center.send_product()
+                    storage.receive_product(product)
+        # 最后计算奖励
+        self.get_reward()
 
-
-    def update_all(self, all_action: Dict[str, torch.Tensor]):
-        # action按节点类别分开
-
-        # 针对workcenter的
-        self.deliver_centers_material(all_action["cell"].numpy())
-        self.update_all_work_center(all_action["center"].numpy())
-
+    def get_reward(self):
         # 额定扣血
         # 暂时删去
-        stable_reward = (
+        """stable_reward = (
                 -0.05
                 * self.work_cell_num
                 / self.product_num
                 * max(self.episode_step / self.episode_step_max, 1 / 2)
-        )
-
+        )"""
         # 生产有奖励，根据产品级别加分
         products_reward = 0
         for i, storage in enumerate(self.storage_list[:-1]):
