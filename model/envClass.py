@@ -13,7 +13,6 @@ from matplotlib import pyplot as plt
 from torch.distributions import Categorical
 
 # from model.WorkCell import WorkCell
-
 # plt.rcParams["font.sans-serif"] = ["SimHei"]  # 显示中文标签
 # plt.rcParams["axes.unicode_minus"] = False
 import warnings
@@ -25,70 +24,6 @@ def deprecated(func):
         return func(*args, **kwargs)
 
     return wrapper
-
-
-def select_functions(start, end, work_center_num, fun_per_center):
-    num_selections = work_center_num * fun_per_center
-    # 创建一个包含范围内所有数字的列表
-    numbers = np.arange(start, end + 1)
-
-    # 计算还需要额外选取的次数
-    remaining_selections = num_selections - len(numbers)
-
-    # 如果还需要额外选取，就继续随机选取，确保每个数字都被选取至少一次
-    if remaining_selections > 0:
-        additional_selections = np.random.choice(numbers, size=remaining_selections)
-        numbers = np.concatenate((numbers, additional_selections))
-    np.random.shuffle(numbers)
-    # 转变为2个功能一组
-
-    return numbers.reshape(-1, fun_per_center)
-
-
-@deprecated
-def edge_weight_init(raw_array):
-    # 示例二维数组
-    value_counts = {}
-    for value in np.unique(raw_array):
-        count = np.count_nonzero(raw_array == value)
-        value_counts[value] = count
-    normalized_value = {}
-    for value, count in value_counts.items():
-        ratio = 1 / count if count != 0 else 0
-        normalized_value[value] = ratio
-    normalized_array = np.copy(raw_array)
-    for value, ratio in normalized_value.items():
-        normalized_array = np.where(normalized_array == value, ratio, normalized_array)
-    return torch.tensor(normalized_array)
-
-
-@deprecated
-def gen_pos(node_lists: List[List], nodes):
-    """产生工作单元和搬运中心的位置坐标
-
-    Args:
-        node_lists:
-        nodes: _description_
-
-    Raises:
-        SystemExit: _description_
-
-    Returns:
-        _type_: _description_
-    """
-    step = 1
-    x_list = []
-    y_list = []
-    for i, node_list in enumerate(node_lists):
-        x_step = 10 / len(node_list)
-        for j in range(len(node_list)):
-            y_list.append(i * step)
-            x_list.append((j + 0.5) * x_step)
-
-    pos = {}
-    for node, x, y in zip(nodes, x_list, y_list):
-        pos[node] = (x, y)
-    return pos
 
 
 def process_raw_data(raw_edge_index, raw_state) -> dict:
@@ -200,152 +135,10 @@ class EnvRun:
         # 奖励和完成与否
         self.reward = 0
         self.done = 0
-        logger.info(f"目标生产数量:{self.product_goal}")
 
         self.episode_step_max = episode_step_max
         # 初始化边
         self.build_edge()
-
-    @deprecated
-    def show_graph(self, step):
-        # norm_data: Data = data.to_homogeneous()
-        process_label = {}
-        process_edge = []
-        raw_dict = self.read_state()
-        # 这个size是有多少个workcell，主要是为了重新编号
-        size = []
-        # 总节点数量
-        count = 0
-        for _key, _value in raw_dict.items():
-            size.append(len(_value))
-            # 按照顺序一个一个处理成字典和元组形式，state是一行的数据
-            for i, state in enumerate(_value):
-                # 根据键值不同设置不同的属性
-                # cell的function指的是其生成的产品id
-                if isinstance(state, list):
-                    state = list(map(int, state))
-                else:
-                    state = int(state)
-                if _key == "cell":
-                    process_label[
-                        count
-                    ] = f"{i}:\n 状态:{state[1]}\n功能:{state[0]}\n原料:{state[3]}"
-                elif _key == "center":
-                    process_label[count] = f"{i}\n产品:{state}"
-                elif _key == "storage":
-                    process_label[count] = f"{i}:\n产品:{state[0]}\n数量:{state[1]}"
-                count += 1
-        # 建立边
-        for _key, _edge in self.edge_index.items():
-            node1, node2 = _key.split("_to_")
-            edge_T = _edge.T.tolist()
-            if node1 == "center" and node2 == "storage":
-                for __edge in edge_T:
-                    process_edge.append(
-                        (__edge[0] + size[0], __edge[1] + size[0] + size[1])
-                    )
-            elif node1 == "cell" and node2 == "center":
-                for __edge in edge_T:
-                    process_edge.append((__edge[0], __edge[1] + size[0]))
-            elif node1 == "storage" and node2 == "cell":
-                for __edge in edge_T:
-                    process_edge.append((__edge[0] + size[0] + size[1], __edge[1]))
-        graph = nx.DiGraph()
-        graph.add_nodes_from([i for i in range(count)])
-        self.read_edge = process_edge
-        graph.add_edges_from(process_edge)
-        # if count==sum(size):
-        nn = [
-            [i for i in range(size[0])],
-            [i for i in range(size[0], size[0] + size[1])],
-            [i for i in range(size[0] + size[1], size[0] + size[1] + size[2])],
-        ]
-        pos = gen_pos(nn, [i for i in range(count)])
-        plt.figure(figsize=(10, 5))
-        nx.draw_networkx_nodes(
-            graph,
-            pos=pos,
-            nodelist=[i for i in range(size[0])],
-            node_color="white",
-            node_size=500,
-            edgecolors="black",
-            node_shape="s",
-            linewidths=1,
-        )
-        nx.draw_networkx_nodes(
-            graph,
-            pos,
-            nodelist=[i for i in range(size[0], size[0] + size[1])],
-            node_color="white",
-            node_size=500,
-            edgecolors="black",
-            node_shape="s",
-            linewidths=1,
-        )
-        nx.draw_networkx_nodes(
-            graph,
-            pos,
-            nodelist=[i for i in range(size[0] + size[1], size[0] + size[1] + size[2])],
-            node_color="white",
-            node_size=500,
-            edgecolors="blue",
-            node_shape="s",
-            linewidths=1,
-        )
-        nx.draw_networkx_labels(graph, pos=pos, labels=process_label, font_size=6)
-        nx.draw_networkx_edges(
-            graph,
-            pos,
-            edgelist=process_edge,
-            edge_color="black",
-            arrows=True,
-            connectionstyle="arc3,rad=0.12",
-            node_size=500,
-            node_shape="s",
-        )
-        # nx.draw(graph, with_labels=True)
-
-        plt.savefig(f"./graph/{step}.png", dpi=500, bbox_inches="tight")
-        plt.show()
-        plt.close()
-        return
-        # process_edge = []
-        # node = []
-        # hetero_data = HeteroData()
-        # # 节点信息
-        # for key, _value in self.obs_states.items():
-        #     hetero_data[key].x = _value
-        #     # 边信息
-        # for key, _value in self.edge_index.items():
-        #     node1, node2 = key.split("_to_")
-        #     hetero_data[(f"{node1}", f"{key}", f"{node2}")].edge_index = _value
-        # graph: nx.Graph = to_networkx(data=hetero_data, to_undirected=False)
-        # for key in self.edge_index.keys():
-        #     graph.add_edges_from([self.edge_index[key]])
-        # nx.draw(graph, with_labels=True)
-        # plt.show()
-        # 可视化
-        # graph = nx.DiGraph()
-        # for node in self.work_cell_list:
-        #     graph.add_node(node._id, working=node.get_function())
-        # for center in self.center_list:
-        #     graph.add_node(
-        #         center.cell_id + self.work_cell_num, product=center.product_id
-        #     )
-        # # 生成边
-        # for work_cell in self.work_cell_list:
-        #     for center in self.center_list:
-        #         cell_fun_id = work_cell.function
-        #         product_id = center.product_id
-        #         # 边信息
-        #         # 从生产到中转
-        #         if cell_fun_id == product_id:
-        #             # 可视化节点需要id不能重复的
-        #             graph.add_edge(work_cell._id, center.cell_id + self.work_cell_num)
-        #         # 从中转到下一步
-        #         if product_id == cell_fun_id - 1:
-        #             # 可视化节点需要id不能重复的
-        #             graph.add_edge(center.cell_id + self.work_cell_num, work_cell._id)
 
     def build_edge(self) -> Dict[str, torch.Tensor]:
         edge_names = ["center2cell", "storage2cell", "cell2center", "storage2center"]
@@ -364,54 +157,6 @@ class EnvRun:
             self.edge_index[edge_key] = self.edge_index[edge_key].to(self.device)
 
         return self.edge_index
-
-    def deliver_centers_material(self, workcell_get_material: np.ndarray):
-        # 计算有同一功能有几个节点要接收
-        # 这个是每个id的cell的分配数量
-        ratio = np.zeros(self.work_cell_num)
-        for indices in self.function_group:
-            if workcell_get_material[indices].sum() != 0:
-                softmax_value = 1 / (workcell_get_material[indices].sum())
-            else:
-                softmax_value = 0
-            ratio[indices] = softmax_value * workcell_get_material[indices]
-        products = np.zeros(self.product_num)
-        # 处理产品
-        for work_center in self.work_center_list:
-            # 这个是取出当前正在工作的，因为work如果在前边的话func改变后product对不上号了
-            _funcs: int = work_center.get_func_list()
-            _products = work_center.get_product()
-            # 取出所有物品，放入center中
-            self.storage_list[_funcs].receive_product(_products)
-            # 当前步全部的product数量
-            products[_funcs] += _products
-            # 转移产品，清空workcell库存
-            work_center.send_product()
-        self.step_products = products
-        # 处理原料
-        # 根据是否接收物料的这个动作空间传递原料
-        for work_center in self.work_center_list:
-            id_funcs = work_center.get_all_cellid_func()
-            # 第一列是cellid，第二列是functionid
-            # 我就是让他相乘一个系数，如果不分配，这个系数就是0
-            # 这里得去掉0功能和最后一个功能
-            for _func in id_funcs:
-                # 第一位是cellid，第二位是functionid
-                assert isinstance(_func, np.ndarray)
-                _func_id: int = int(_func[1])
-                _cell_id: int = int(_func[0])
-                # 如果功能为0就不能运送了，如果功能为最后一个也不能运送走了
-                if _func_id != 0:
-                    self.storage_list[_func_id - 1].send_product(
-                        int(products[_func_id - 1] * ratio[_cell_id])
-                    )
-            # collect是每个cell的权重
-            # 这里注意！！！！，因为funcs要-1才是需要的原料
-            material_list = (
-                    products[id_funcs[:, 1] - 1] * ratio[id_funcs[:, 0]].tolist()
-            )
-            material_list = list(map(int, material_list))
-            work_center.receive_material(material_list)
 
     def update(self, all_action: dict[str, torch.Tensor]):
         cell_logits = all_action["cell"]
@@ -559,6 +304,69 @@ class EnvRun:
             "storage": c,
         }
 
+    def reset(self):
+        self.step_products = np.zeros(self.product_num)
+        WorkCenter.reset_id()
+        WorkCell.reset_id()
+        StorageCenter.reset_id()
+        self.reward = 0
+        self.done = 0
+        self.episode_step = 0
+        for center in self.work_center_list:
+            center.reset_state()
+        for center in self.storage_list:
+            center.product_num = 0
+
+    """    @deprecated
+    def deliver_centers_material(self, workcell_get_material: np.ndarray):
+        # 计算有同一功能有几个节点要接收
+        # 这个是每个id的cell的分配数量
+        ratio = np.zeros(self.work_cell_num)
+        for indices in self.function_group:
+            if workcell_get_material[indices].sum() != 0:
+                softmax_value = 1 / (workcell_get_material[indices].sum())
+            else:
+                softmax_value = 0
+            ratio[indices] = softmax_value * workcell_get_material[indices]
+        products = np.zeros(self.product_num)
+        # 处理产品
+        for work_center in self.work_center_list:
+            # 这个是取出当前正在工作的，因为work如果在前边的话func改变后product对不上号了
+            _funcs: int = work_center.get_func_list()
+            _products = work_center.get_product()
+            # 取出所有物品，放入center中
+            self.storage_list[_funcs].receive_product(_products)
+            # 当前步全部的product数量
+            products[_funcs] += _products
+            # 转移产品，清空workcell库存
+            work_center.send_product()
+        self.step_products = products
+        # 处理原料
+        # 根据是否接收物料的这个动作空间传递原料
+        for work_center in self.work_center_list:
+            id_funcs = work_center.get_all_cellid_func()
+            # 第一列是cellid，第二列是functionid
+            # 我就是让他相乘一个系数，如果不分配，这个系数就是0
+            # 这里得去掉0功能和最后一个功能
+            for _func in id_funcs:
+                # 第一位是cellid，第二位是functionid
+                assert isinstance(_func, np.ndarray)
+                _func_id: int = int(_func[1])
+                _cell_id: int = int(_func[0])
+                # 如果功能为0就不能运送了，如果功能为最后一个也不能运送走了
+                if _func_id != 0:
+                    self.storage_list[_func_id - 1].send_product(
+                        int(products[_func_id - 1] * ratio[_cell_id])
+                    )
+            # collect是每个cell的权重
+            # 这里注意！！！！，因为funcs要-1才是需要的原料
+            material_list = (
+                    products[id_funcs[:, 1] - 1] * ratio[id_funcs[:, 0]].tolist()
+            )
+            material_list = list(map(int, material_list))
+            work_center.receive_material(material_list)
+
+    @deprecated
     def get_function_group(self):
         work_function = [cell for work_center in self.work_center_list for cell in work_center.get_all_cellid_func()]
         # for work_center in self.work_center_list:
@@ -575,15 +383,208 @@ class EnvRun:
         ]
         return grouped_indices
 
-    def reset(self):
-        self.step_products = np.zeros(self.product_num)
-        WorkCenter.reset_id()
-        WorkCell.reset_id()
-        StorageCenter.reset_id()
-        self.reward = 0
-        self.done = 0
-        self.episode_step = 0
-        for center in self.work_center_list:
-            center.reset_state()
-        for center in self.storage_list:
-            center.product_num = 0
+    @deprecated
+    def show_graph(self, step):
+        # norm_data: Data = data.to_homogeneous()
+        process_label = {}
+        process_edge = []
+        raw_dict = self.read_state()
+        # 这个size是有多少个workcell，主要是为了重新编号
+        size = []
+        # 总节点数量
+        count = 0
+        for _key, _value in raw_dict.items():
+            size.append(len(_value))
+            # 按照顺序一个一个处理成字典和元组形式，state是一行的数据
+            for i, state in enumerate(_value):
+                # 根据键值不同设置不同的属性
+                # cell的function指的是其生成的产品id
+                if isinstance(state, list):
+                    state = list(map(int, state))
+                else:
+                    state = int(state)
+                if _key == "cell":
+                    process_label[
+                        count
+                    ] = f"{i}:\n 状态:{state[1]}\n功能:{state[0]}\n原料:{state[3]}"
+                elif _key == "center":
+                    process_label[count] = f"{i}\n产品:{state}"
+                elif _key == "storage":
+                    process_label[count] = f"{i}:\n产品:{state[0]}\n数量:{state[1]}"
+                count += 1
+        # 建立边
+        for _key, _edge in self.edge_index.items():
+            node1, node2 = _key.split("_to_")
+            edge_T = _edge.T.tolist()
+            if node1 == "center" and node2 == "storage":
+                for __edge in edge_T:
+                    process_edge.append(
+                        (__edge[0] + size[0], __edge[1] + size[0] + size[1])
+                    )
+            elif node1 == "cell" and node2 == "center":
+                for __edge in edge_T:
+                    process_edge.append((__edge[0], __edge[1] + size[0]))
+            elif node1 == "storage" and node2 == "cell":
+                for __edge in edge_T:
+                    process_edge.append((__edge[0] + size[0] + size[1], __edge[1]))
+        graph = nx.DiGraph()
+        graph.add_nodes_from([i for i in range(count)])
+        self.read_edge = process_edge
+        graph.add_edges_from(process_edge)
+        # if count==sum(size):
+        nn = [
+            [i for i in range(size[0])],
+            [i for i in range(size[0], size[0] + size[1])],
+            [i for i in range(size[0] + size[1], size[0] + size[1] + size[2])],
+        ]
+        pos = gen_pos(nn, [i for i in range(count)])
+        plt.figure(figsize=(10, 5))
+        nx.draw_networkx_nodes(
+            graph,
+            pos=pos,
+            nodelist=[i for i in range(size[0])],
+            node_color="white",
+            node_size=500,
+            edgecolors="black",
+            node_shape="s",
+            linewidths=1,
+        )
+        nx.draw_networkx_nodes(
+            graph,
+            pos,
+            nodelist=[i for i in range(size[0], size[0] + size[1])],
+            node_color="white",
+            node_size=500,
+            edgecolors="black",
+            node_shape="s",
+            linewidths=1,
+        )
+        nx.draw_networkx_nodes(
+            graph,
+            pos,
+            nodelist=[i for i in range(size[0] + size[1], size[0] + size[1] + size[2])],
+            node_color="white",
+            node_size=500,
+            edgecolors="blue",
+            node_shape="s",
+            linewidths=1,
+        )
+        nx.draw_networkx_labels(graph, pos=pos, labels=process_label, font_size=6)
+        nx.draw_networkx_edges(
+            graph,
+            pos,
+            edgelist=process_edge,
+            edge_color="black",
+            arrows=True,
+            connectionstyle="arc3,rad=0.12",
+            node_size=500,
+            node_shape="s",
+        )
+        # nx.draw(graph, with_labels=True)
+
+        plt.savefig(f"./graph/{step}.png", dpi=500, bbox_inches="tight")
+        plt.show()
+        plt.close()
+        return
+        # process_edge = []
+        # node = []
+        # hetero_data = HeteroData()
+        # # 节点信息
+        # for key, _value in self.obs_states.items():
+        #     hetero_data[key].x = _value
+        #     # 边信息
+        # for key, _value in self.edge_index.items():
+        #     node1, node2 = key.split("_to_")
+        #     hetero_data[(f"{node1}", f"{key}", f"{node2}")].edge_index = _value
+        # graph: nx.Graph = to_networkx(data=hetero_data, to_undirected=False)
+        # for key in self.edge_index.keys():
+        #     graph.add_edges_from([self.edge_index[key]])
+        # nx.draw(graph, with_labels=True)
+        # plt.show()
+        # 可视化
+        # graph = nx.DiGraph()
+        # for node in self.work_cell_list:
+        #     graph.add_node(node._id, working=node.get_function())
+        # for center in self.center_list:
+        #     graph.add_node(
+        #         center.cell_id + self.work_cell_num, product=center.product_id
+        #     )
+        # # 生成边
+        # for work_cell in self.work_cell_list:
+        #     for center in self.center_list:
+        #         cell_fun_id = work_cell.function
+        #         product_id = center.product_id
+        #         # 边信息
+        #         # 从生产到中转
+        #         if cell_fun_id == product_id:
+        #             # 可视化节点需要id不能重复的
+        #             graph.add_edge(work_cell._id, center.cell_id + self.work_cell_num)
+        #         # 从中转到下一步
+        #         if product_id == cell_fun_id - 1:
+        #             # 可视化节点需要id不能重复的
+        #             graph.add_edge(center.cell_id + self.work_cell_num, work_cell._id)
+        """
+
+
+def select_functions(start, end, work_center_num, fun_per_center):
+    num_selections = work_center_num * fun_per_center
+    # 创建一个包含范围内所有数字的列表
+    numbers = np.arange(start, end + 1)
+
+    # 计算还需要额外选取的次数
+    remaining_selections = num_selections - len(numbers)
+
+    # 如果还需要额外选取，就继续随机选取，确保每个数字都被选取至少一次
+    if remaining_selections > 0:
+        additional_selections = np.random.choice(numbers, size=remaining_selections)
+        numbers = np.concatenate((numbers, additional_selections))
+    np.random.shuffle(numbers)
+    # 转变为2个功能一组
+
+    return numbers.reshape(-1, fun_per_center)
+
+
+@deprecated
+def edge_weight_init(raw_array):
+    # 示例二维数组
+    value_counts = {}
+    for value in np.unique(raw_array):
+        count = np.count_nonzero(raw_array == value)
+        value_counts[value] = count
+    normalized_value = {}
+    for value, count in value_counts.items():
+        ratio = 1 / count if count != 0 else 0
+        normalized_value[value] = ratio
+    normalized_array = np.copy(raw_array)
+    for value, ratio in normalized_value.items():
+        normalized_array = np.where(normalized_array == value, ratio, normalized_array)
+    return torch.tensor(normalized_array)
+
+
+@deprecated
+def gen_pos(node_lists: List[List], nodes):
+    """产生工作单元和搬运中心的位置坐标
+
+    Args:
+        node_lists:
+        nodes: _description_
+
+    Raises:
+        SystemExit: _description_
+
+    Returns:
+        _type_: _description_
+    """
+    step = 1
+    x_list = []
+    y_list = []
+    for i, node_list in enumerate(node_lists):
+        x_step = 10 / len(node_list)
+        for j in range(len(node_list)):
+            y_list.append(i * step)
+            x_list.append((j + 0.5) * x_step)
+
+    pos = {}
+    for node, x, y in zip(nodes, x_list, y_list):
+        pos[node] = (x, y)
+    return pos

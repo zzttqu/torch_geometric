@@ -21,7 +21,7 @@ class WorkCenter:
             speed_list: 该工作中心所具有的功能的速度列表，例如【10,20,30】单位：半成品数量/单位时间
         """
 
-        self._id = WorkCenter._next_id
+        self._id = WorkCenter.get_next_id()
         self.category = category
         # 计数含nan元素个数
         self.func_num = torch.count_nonzero(speed_list).item()
@@ -128,32 +128,17 @@ class WorkCenter:
     def send_product(self) -> int:
         return self.workcell_list[self.working_func].send_product()
 
-    def get_all_cellid_func(self) -> ndarray[Any, dtype[Any]]:
-        id_array = [np.array((workcell.get_id(), workcell.get_function())) for workcell in self.workcell_list]
-        id_arrays = np.stack(id_array, dtype=int)
-        return id_arrays
-
     def get_id(self):
         return self._id
 
     def get_all_cell_id(self) -> torch.Tensor:
         return self.all_cell_id
 
-    def get_cell_speed(self, indexes: int) -> int:
-        speed = self.workcell_list[indexes].get_speed()
-        return speed
-
     def get_all_cell_state(self):
         return [cell.get_state() for cell in self.workcell_list]
 
-    def get_speed(self):
-        return self.speed
-
     def get_func_list(self):
         return self.func_list
-
-    def get_product(self):
-        return self.product
 
     def reset_state(self):
         for cell in self.workcell_list:
