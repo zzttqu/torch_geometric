@@ -16,13 +16,25 @@ class StorageCenter:
             goal: 目标生产数量，用于规范化
             max_func: 最大功能数，用于规范化
         """
+        self._id = StorageCenter.get_next_id()
+        self._product_id = product_id
+        self._process = process
         self.max_func = 2 if max_func <= 1 else max_func
         self.goal = goal
-        self._id = StorageCenter.get_next_id()
-        self.product_id = int(product_id)
-        self.process = process
         self.state = StateCode.workcell_working
         self.product_num = 0
+
+    @property
+    def id(self):
+        return self._id
+
+    @property
+    def product_id(self):
+        return self._product_id
+
+    @property
+    def process(self):
+        return self._process
 
     @classmethod
     def get_next_id(cls):
@@ -33,15 +45,6 @@ class StorageCenter:
     @classmethod
     def reset_id(cls):
         cls._next_id = 0
-
-    def get_id(self) -> int:
-        return self._id
-
-    def get_process(self) -> int:
-        return self.process
-
-    def get_product_id(self) -> int:
-        return self.product_id
 
     def receive_product(self, num: int) -> None:
         """
@@ -77,9 +80,6 @@ class StorageCenter:
         produce_progress = self.product_num / self.goal
         product_id_norm = self.product_id / (self.max_func - 1)
         return torch.tensor([product_id_norm, produce_progress], dtype=torch.float32)
-
-    def get_category(self) -> int:
-        return self.process
 
     def read_state(self) -> list[int]:
         """

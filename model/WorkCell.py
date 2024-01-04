@@ -12,6 +12,16 @@ class WorkCell:
     """
     _next_id: ClassVar = 0
 
+    @classmethod
+    def get_next_id(cls):
+        current_id = cls._next_id
+        cls._next_id += 1
+        return current_id
+
+    @classmethod
+    def reset_id(cls):
+        cls._next_id = 0
+
     def __init__(
             self,
             function_id: int,
@@ -32,7 +42,7 @@ class WorkCell:
         self._id = WorkCell.get_next_id()
         self._function = function_id
         self.max_func = 2 if max_func <= 1 else max_func
-        self.speed = speed
+        self._speed = speed
         self.materials = materials
         self.products = 0
         self.health = 100
@@ -40,11 +50,15 @@ class WorkCell:
 
     @property
     def function(self):
-        return self.function
+        return self._function
 
-    @function.setter
-    def function(self, value):
-        raise  Exception("Cannot change function of workcell")
+    @property
+    def speed(self):
+        return self._speed
+
+    @property
+    def id(self):
+        return self._id
 
     def receive_material(self, num: int):
         """
@@ -154,16 +168,6 @@ class WorkCell:
             dtype=torch.float32,
         )
 
-    @classmethod
-    def get_next_id(cls):
-        current_id = cls._next_id
-        cls._next_id += 1
-        return current_id
-
-    @classmethod
-    def reset_id(cls):
-        cls._next_id = 0
-
     def read_state(self) -> list[int]:
         """
         读取可读状态
@@ -175,9 +179,6 @@ class WorkCell:
     # 功能id
     def get_function(self):
         return self.function
-
-    def get_id(self):
-        return self._id
 
     def get_speed(self):
         return self.speed

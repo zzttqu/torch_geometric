@@ -126,7 +126,7 @@ class EnvRun:
                              storage_need_tensor]
         # 生成货架和半成品的对应关系
         self.storage_id_relation = torch.tensor(
-            [(storage.get_id(), storage.get_process(), storage.get_category()) for storage in self.storage_list],
+            [(storage.id, storage.product_id, storage.process) for storage in self.storage_list],
             dtype=torch.int)
         # 产品数量
         self.step_products = np.zeros(function_num)
@@ -192,7 +192,7 @@ class EnvRun:
             center_id += center_num
         # 其次运输
         for storage in self.storage_list:
-            category, func1 = storage.get_category(), storage.get_product_id()
+            category, func1 = storage.process, storage.product_id
             for center in self.work_center_list:
                 process, func2 = center.get_process(), center.get_func()
                 if process == 0:
@@ -306,9 +306,10 @@ class EnvRun:
 
     def reset(self):
         self.step_products = np.zeros(self.product_num)
-        WorkCenter.reset_id()
-        WorkCell.reset_id()
-        StorageCenter.reset_id()
+        # 只有重新生成的时候再resetid
+        # WorkCenter.reset_id()
+        # WorkCell.reset_id()
+        # StorageCenter.reset_id()
         self.reward = 0
         self.done = 0
         self.episode_step = 0
@@ -504,7 +505,7 @@ class EnvRun:
         # 可视化
         # graph = nx.DiGraph()
         # for node in self.work_cell_list:
-        #     graph.add_node(node._id, working=node.get_function())
+        #     graph.add_node(node.id, working=node.get_function())
         # for center in self.center_list:
         #     graph.add_node(
         #         center.cell_id + self.work_cell_num, product=center.product_id
@@ -518,11 +519,11 @@ class EnvRun:
         #         # 从生产到中转
         #         if cell_fun_id == product_id:
         #             # 可视化节点需要id不能重复的
-        #             graph.add_edge(work_cell._id, center.cell_id + self.work_cell_num)
+        #             graph.add_edge(work_cell.id, center.cell_id + self.work_cell_num)
         #         # 从中转到下一步
         #         if product_id == cell_fun_id - 1:
         #             # 可视化节点需要id不能重复的
-        #             graph.add_edge(center.cell_id + self.work_cell_num, work_cell._id)
+        #             graph.add_edge(center.cell_id + self.work_cell_num, work_cell.id)
         """
 
 

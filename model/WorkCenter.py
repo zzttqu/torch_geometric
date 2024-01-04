@@ -1,4 +1,4 @@
-from typing import List, Tuple, Generator, Any, Union
+from typing import List, Tuple, Union
 
 from numpy import ndarray, dtype
 from model.WorkCell import WorkCell
@@ -7,13 +7,14 @@ import torch
 from loguru import logger
 from model.StateCode import StateCode
 from typing import ClassVar
+from torch import Tensor
 
 
 # 这个类是用来定义加工中心的，一个加工中心包括多个加工单元，但同一时间只能有一个加工单元工作
 class WorkCenter:
     _next_id: ClassVar = 0
 
-    def __init__(self, category: int, speed_list: torch.Tensor, init_func: int):
+    def __init__(self, category: int, speed_list: Tensor, init_func: int):
         """
         工作中心初始化
         Args:
@@ -22,25 +23,37 @@ class WorkCenter:
         """
 
         self._id = WorkCenter.get_next_id()
-        self.category = category
+        # 这个是工作中心属于第几道工序
+        self._category = category
+        self._speed_list = speed_list
         # 计数含nan元素个数
         self.func_num = torch.count_nonzero(speed_list).item()
+        # 这次的list长度不包括nan，有几个就是几个，但是对应序号是【1,2】这样，不是【nan，1,2】
         self.func_list = torch.nonzero(~torch.isnan(speed_list), as_tuple=False).flatten()
-        self.func_list = torch.arange(self.func_num)
         # 构建workcell
         self.workcell_list: List[WorkCell] = [
             WorkCell(func, self.func_num, speed) for func, speed in zip(self.func_list, speed_list) if
             not torch.isnan(speed)
         ]
-        # 这个是工作中心属于第几道工序
-        self.category = category
-        self.working_func = init_func
-        self.speed_list = speed_list
-        self.working_cell = self.workcell_list[init_func]
-        self.all_cell_id = torch.tensor([workcell.get_id() for workcell in self.workcell_list])
 
-    def build_edge(self, storage_list: Union[torch.Tensor, np.ndarray]) -> Tuple[
-        torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        self.working_func = init_func
+        self.working_cell = self.workcell_list[init_func]
+        self.all_cell_id = Tensor([workcell.id for workcell in self.workcell_list])
+
+    @property
+    def id(self) -> int:
+        return self._id
+
+    @property
+    def category(self) -> int:
+        return self._category
+
+    @property
+    def speed_list(self) -> Tensor:
+        return self._speed_list
+
+    def build_edge(self, storage_list: Union[Tensor, np.ndarray]) -> Tuple[
+        Tensor, Tensor, Tensor, Tensor]:
         """
         创建该工作中心的边信息
         Args:
@@ -51,27 +64,27 @@ class WorkCenter:
 
         """
         # 还是得有center作为节点，因为center需要聚合多个cell和下一级storage的信息得出该节点是否工作
-        _cell2center_list = [(cell.get_id(), self._id) for cell in self.workcell_list]
-        _storage2center_list = [(_storage_id, self._id) for
+        _cell2center_list = [(cell.id, self.id) for cell in self.workcell_list]
+        _storage2center_list = [(_storage_id, self.id) for
                                 (_storage_id, _product_id, _category_id) in storage_list if
                                 self.category == _category_id]
         # cell通过storage和center的信息判断启动哪个节点
-        _center2cell_list = [(self._id, cell.get_id()) for cell in self.workcell_list]
+        _center2cell_list = [(self.id, cell.id) for cell in self.workcell_list]
         #                       cell.get_function() == _product_id and self.category == _category_id]
-        _storage2cell_list = [(_storage_id, cell.get_id()) for cell in self.workcell_list for
+        _storage2cell_list = [(_storage_id, cell.id) for cell in self.workcell_list for
                               (_storage_id, _product_id, _category_id) in storage_list if
                               cell.get_function() == _product_id and self.category - 1 == _category_id]
-        # _center2storage_list = [(self._id, _storage_id) for
+        # _center2storage_list = [(self.id, _storage_id) for
         #                         (_storage_id, _product_id, _category_id) in storage_list if
         #                         self.category == _category_id]
 
-        # _cell2storage_list = [(cell.get_id(), _storage_id) for cell in self.workcell_list if cell is not None for
+        # _cell2storage_list = [(cell.id, _storage_id) for cell in self.workcell_list if cell is not None for
         #                       (_storage_id, _product_id, _category_id) in storage_list if
 
-        _cell2center_tensor = torch.tensor(_cell2center_list, dtype=torch.long)
-        _storage2center_tensor = torch.tensor(_storage2center_list, dtype=torch.long)
-        _storage2cell_tensor = torch.tensor(_storage2cell_list, dtype=torch.long)
-        _center2cell_tensor = torch.tensor(_center2cell_list, dtype=torch.long)
+        _cell2center_tensor = Tensor(_cell2center_list, dtype=torch.long)
+        _storage2center_tensor = Tensor(_storage2center_list, dtype=torch.long)
+        _storage2cell_tensor = Tensor(_storage2cell_list, dtype=torch.long)
+        _center2cell_tensor = Tensor(_center2cell_list, dtype=torch.long)
 
         return _cell2center_tensor, _storage2center_tensor, _storage2cell_tensor, _center2cell_tensor
 
@@ -129,9 +142,9 @@ class WorkCenter:
         return self.workcell_list[self.working_func].send_product()
 
     def get_id(self):
-        return self._id
+        return self.id
 
-    def get_all_cell_id(self) -> torch.Tensor:
+    def get_all_cell_id(self) -> Tensor:
         return self.all_cell_id
 
     def get_all_cell_state(self):
@@ -147,7 +160,7 @@ class WorkCenter:
 
     def get_state(self):
         func_norm = self.get_func_list() / self.func_num
-        return torch.tensor(
+        return Tensor(
             [
                 func_norm,
             ],
