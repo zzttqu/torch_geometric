@@ -30,13 +30,21 @@ class WorkCell:
         """
         # 需要有当前这个工作单元每个功能的备件，每个功能生产效率
         self._id = WorkCell.get_next_id()
-        self.function = function_id
+        self._function = function_id
         self.max_func = 2 if max_func <= 1 else max_func
         self.speed = speed
         self.materials = materials
         self.products = 0
         self.health = 100
         self.state = StateCode.workcell_ready
+
+    @property
+    def function(self):
+        return self.function
+
+    @function.setter
+    def function(self, value):
+        raise  Exception("Cannot change function of workcell")
 
     def receive_material(self, num: int):
         """

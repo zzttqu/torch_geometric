@@ -335,7 +335,24 @@ if __name__ == '__main__':
     speed_list = torch.tensor([[5, 10, 15, 20, 12], [8, 12, 18, torch.nan, 12], [3, 6, torch.nan, 10, 8]]).T
     speed = torch.tensor([8, 12, 18, torch.nan, 12])
     pp = torch.nonzero(~torch.isnan(speed), as_tuple=False).flatten()
-    logger.info(pp)
+
     e = torch.sum(~torch.isnan(speed_list), dim=1)
     a = torch.tensor([[0, 1, -torch.inf], [-2.6, 4, -torch.inf], [+2.6, 4, -torch.inf], [+2.6, 4, -torch.inf]])
     b = torch.softmax(a, dim=0)
+
+
+    class A:
+        def __init__(self, ff):
+            self._function = ff
+
+        @property
+        def function(self):
+            # 只有property就无法修改，没有setter
+            return self._function
+
+
+
+
+    a = A(2)
+    a.function = 1
+    logger.info(a.function)
