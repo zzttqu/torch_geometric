@@ -35,8 +35,7 @@ class WorkCenter:
         # 这个是工作中心属于第几道工序
         self.category = category
         self.working_func = init_func
-        self.speed = speed_list[init_func]
-        self.product = 0
+        self.speed_list = speed_list
         self.working_cell = self.workcell_list[init_func]
         self.all_cell_id = torch.tensor([workcell.get_id() for workcell in self.workcell_list])
 
@@ -82,8 +81,10 @@ class WorkCenter:
         Args:
             materials: 该工作中心接收的当前运行功能的原料
         """
-
         self.workcell_list[self.working_func].receive_material(materials)
+        # 0号工序自动获取加工速度的一批次原料
+        if self.category == 0:
+            self.workcell_list[self.working_func].receive_material(self.speed_list[self.working_func])
 
     def work(self, activate_cell: int, on_off: int):
         """
@@ -105,8 +106,6 @@ class WorkCenter:
                     if state == StateCode.workcell_working:
                         self.working_cell = cell
                         self.working_func = cell.get_function()
-                        self.speed = cell.get_speed()
-                        self.product = cell.get_products()
                 else:
                     cell.work(0)
 
@@ -126,9 +125,8 @@ class WorkCenter:
     def get_func(self):
         return self.working_func
 
-    def send_product(self):
-        self.working_cell.send_product()
-        self.product = 0
+    def send_product(self) -> int:
+        return self.workcell_list[self.working_func].send_product()
 
     def get_all_cellid_func(self) -> ndarray[Any, dtype[Any]]:
         id_array = [np.array((workcell.get_id(), workcell.get_function())) for workcell in self.workcell_list]

@@ -435,8 +435,7 @@ class EnvRun:
                 _ratio[activate_func, process_index] = cell_slice[activate_func, 1]
                 on_or_off = center_dist.sample().item()
                 work_center.work(activate_func, on_or_off)
-                work_center.get_product()
-            # 还需要考虑如果所有的cell都选了一个func就会导致有softmax后的tensor为nan
+            # 还需要考虑如果所有的cell都选了一个func就会导致全是inf，softmax后的tensor为nan
             _ratio = torch.softmax(_ratio, dim=1)
             # 如果有nan就改成0
             _ratio_without_nan = torch.where(torch.isnan(_ratio), torch.tensor(0.0), _ratio)
@@ -451,7 +450,9 @@ class EnvRun:
             category, func1 = storage.get_category(), storage.get_product_id()
             for center in self.work_center_list:
                 process, func2 = center.get_process(), center.get_func()
-                if category - 1 == process and func1 == func2:
+                if process == 0:
+                    center.receive_material(1)
+                elif category - 1 == process and func1 == func2:
                     materials = storage.send_product(center_ratio[center.get_id()])
                     center.receive_material(materials)
                 elif category == process and func1 == func2:

@@ -44,9 +44,6 @@ class WorkCell:
         Args:
             num (int): 接受原料，但是如果功能为0则忽略
         """
-        if self.function == 0:
-            return
-
         # 接收原材料
         self.materials += num
 
