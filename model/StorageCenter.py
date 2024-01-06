@@ -16,7 +16,7 @@ class StorageCenter:
             goal: 目标生产数量，用于规范化
             max_func: 最大功能数，用于规范化
         """
-        self._id = StorageCenter.get_next_id()
+        self.__id = StorageCenter.get_next_id()
         self._product_id = product_id
         self._process = process
         self.max_func = 2 if max_func <= 1 else max_func
@@ -26,7 +26,7 @@ class StorageCenter:
 
     @property
     def id(self):
-        return self._id
+        return self.__id
 
     @property
     def product_id(self):
