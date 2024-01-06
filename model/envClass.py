@@ -8,8 +8,6 @@ from model.WorkCell import WorkCell
 from model.WorkCenter import WorkCenter
 from model.StorageCenter import StorageCenter
 from loguru import logger
-from matplotlib import pyplot as plt
-# from torch_geometric.data import HeteroData
 from torch.distributions import Categorical
 
 # from model.WorkCell import WorkCell
@@ -196,10 +194,10 @@ class EnvRun:
             for center in self.work_center_list:
                 process, func2 = center.get_process(), center.get_func()
                 if process == 0:
-                    center.receive_material(1)
+                    center.receive(1)
                 elif category - 1 == process and func1 == func2:
-                    materials = storage.send_product(center_ratio[center.get_id()])
-                    center.receive_material(materials)
+                    materials = storage.send(center_ratio[center.get_id()])
+                    center.receive(materials)
                 elif category == process and func1 == func2:
                     product = center.send_product()
                     storage.receive_product(product)
@@ -314,9 +312,9 @@ class EnvRun:
         self.done = 0
         self.episode_step = 0
         for center in self.work_center_list:
-            center.reset_state()
+            center.reset()
         for center in self.storage_list:
-            center.product_num = 0
+            center.product_count = 0
 
     """    @deprecated
     def deliver_centers_material(self, workcell_get_material: np.ndarray):
