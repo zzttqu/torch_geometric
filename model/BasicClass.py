@@ -27,7 +27,7 @@ class BasicClass(ABC):
         return current_id
 
     @classmethod
-    def reset_id(cls):
+    def reset_class_id(cls):
         """
         重置该类的id
         Returns:

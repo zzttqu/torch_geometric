@@ -13,9 +13,6 @@ from torch import Tensor
 # 这个类是用来定义加工中心的，一个加工中心包括多个加工单元，但同一时间只能有一个加工单元工作
 class WorkCenter(BasicClass):
 
-    def send(self, *args):
-        pass
-
     def __init__(self, process_id: int, speed_list: Tensor, init_func: int):
         """
         工作中心初始化
@@ -26,23 +23,21 @@ class WorkCenter(BasicClass):
         super().__init__(process_id)
         # 这个是工作中心属于第几道工序
         self._speed_list = speed_list
-        # 计数含nan元素个数
-        self.func_num = torch.count_nonzero(speed_list).item()
         # 这次的list长度不包括nan，有几个就是几个，但是对应序号是【1,2】这样，不是【nan，1,2】
         self.func_list = torch.nonzero(~torch.isnan(speed_list), as_tuple=False).flatten()
+        logger.info(self.func_list)
         # 构建workcell
         self.workcell_list: List[WorkCell] = [
-            WorkCell(func, self.func_num, speed) for func, speed in zip(self.func_list, speed_list) if
+            WorkCell(func, speed, process_id) for func, speed in zip(self.func_list, speed_list) if
             not torch.isnan(speed)
         ]
 
-        self.working_func = init_func
-        self.working_cell = self.workcell_list[init_func]
-        self.all_cell_id = Tensor([workcell.id for workcell in self.workcell_list])
-
-    @property
-    def speed_list(self) -> Tensor:
-        return self._speed_list
+        self._working_func = init_func
+        self._working_speed = self._speed_list[init_func]
+        self._working_cell = self.workcell_list[torch.where(self.func_list == init_func)[0].item()]
+        self._all_cell_id = Tensor([workcell.id for workcell in self.workcell_list])
+        # 0是停止工作
+        self.state = 0
 
     def build_edge(self, storage_list: Union[Tensor, np.ndarray]) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
@@ -85,10 +80,10 @@ class WorkCenter(BasicClass):
         Args:
             materials: 该工作中心接收的当前运行功能的原料
         """
-        self.workcell_list[self.working_func].receive(materials)
+        self._working_cell.receive(materials)
         # 0号工序自动获取加工速度的一批次原料
         if self.process == 0:
-            self.workcell_list[self.working_func].receive(self.speed_list[self.working_func])
+            self._working_cell.receive(self._working_speed)
 
     def work(self, activate_cell: int, on_off: int):
         """
@@ -108,33 +103,35 @@ class WorkCenter(BasicClass):
                     state = cell.work(1)
                     # 如果正常工作则修改work_center的状态
                     if state == StateCode.workcell_working:
-                        self.working_cell = cell
-                        self.working_func = cell.function
+                        self._working_cell = cell
+                        self._working_func = cell.function
+                        self._working_speed = cell.speed
                 else:
                     cell.work(0)
-
-    def get_func(self):
-        return self.working_func
-
-    def send_product(self) -> int:
-        return self.workcell_list[self.working_func].send()
-
-    def get_all_cell_id(self) -> Tensor:
-        return self.all_cell_id
-
-    def get_all_cell_state(self):
-        return [cell.get_state() for cell in self.workcell_list]
-
-    def get_func_list(self):
-        return self.func_list
 
     def reset(self):
         for cell in self.workcell_list:
             cell.reset()
-        return
 
-    def get_state(self):
-        func_norm = self.get_func_list() / self.func_num
+    def send(self) -> int:
+        return self._working_cell.send()
+
+    @property
+    def working_func(self):
+        return self._working_func
+
+    @property
+    def all_cell_id(self) -> Tensor:
+        return self._all_cell_id
+
+    def get_func_list(self):
+        return self.func_list
+
+    def get_all_cell_state(self, max_speed=1, func_num=1, state_code_len=1):
+        return [cell.status(max_speed, func_num, state_code_len) for cell in self.workcell_list]
+
+    def status(self, function_num=1):
+        func_norm = self._working_func / function_num
         return Tensor(
             [
                 func_norm,

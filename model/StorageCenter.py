@@ -24,18 +24,22 @@ class StorageCenter(BasicClass):
         self.max_func = 2 if max_func <= 1 else max_func
         self.goal = goal
         self.state = StateCode.workcell_working
-        self.product_count = 0
+        self._product_count = 0
 
     @property
     def product_id(self):
         return self._product_id
+
+    @property
+    def product_count(self):
+        return self._product_count
 
     def receive(self, num: int) -> None:
         """
         从生产中心接收产品
         :param num:接收产品数量
         """
-        self.product_count += num
+        self._product_count += num
 
     def send(self, ratio: int) -> int:
         """
@@ -43,28 +47,21 @@ class StorageCenter(BasicClass):
         :param ratio: 需要发送产品占比
         :return:
         """
-        product = math.floor(self.product_count * ratio)
-        self.product_count -= product
+        product = math.floor(self._product_count * ratio)
+        self._product_count -= product
         return product
 
     def reset(self):
-        self.product_count = 0
+        self._product_count = 0
 
-    def get_product_num(self) -> int:
-        """
-        获取当前产品中心的产品数量
-        :return: 返回产品数量
-        """
-        return self.product_count
-
-    def get_state(self) -> torch.Tensor:
+    def status(self) -> torch.Tensor:
         """
         获取当前产品中心
         :return: 返回产品状态【规范化产品id，规范化生产数量】
         """
         # 改用生产进度作为表征
         # id归一化
-        produce_progress = self.product_count / self.goal
+        produce_progress = self._product_count / self.goal
         product_id_norm = self.product_id / (self.max_func - 1)
         return torch.tensor([product_id_norm, produce_progress], dtype=torch.float32)
 
@@ -73,4 +70,4 @@ class StorageCenter(BasicClass):
         读取产品状态，不用规范化
         :return:【产品id，产品数量】
         """
-        return [self.product_id, self.product_count]
+        return [self.product_id, self._product_count]

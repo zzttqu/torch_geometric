@@ -13,7 +13,6 @@ class WorkCell(BasicClass):
     def __init__(
             self,
             function_id: int,
-            max_func: int,
             speed: int,
             process_id,
     ):
@@ -22,12 +21,10 @@ class WorkCell(BasicClass):
         WorkCell 初始化函数
         Args:
             function_id:功能id，对应产品，也对应其所用时间
-            max_func:最大功能数量，用语归一化
             speed:生产速度，单位时间/每个半成品
         """
         # 需要有当前这个工作单元每个功能的备件，每个功能生产效率
         super().__init__(process_id)
-        self.max_func = 2 if max_func <= 1 else max_func
         self._materials = 0
         self._product_count = 0
         self._health = 100
@@ -128,7 +125,7 @@ class WorkCell(BasicClass):
         self._product_count = 0
 
     # 状态空间
-    def get_state(self) -> torch.Tensor:
+    def status(self, max_speed=1, func_num=1, state_code_len=1) -> torch.Tensor:
         """
         获取工作单元状态，规范化后的
         Returns:
@@ -138,11 +135,11 @@ class WorkCell(BasicClass):
             第四项是一个工步的生产能力
             第五项是当前的产品数量
         """
-        # 归一化speed和materials
-        speed_norm = 1
+        # 规范化speed和materials
+        speed_norm = self.speed / max_speed
         materials_norm = self._materials / self.speed
-        func_norm = self.function / (self.max_func - 1)
-        state_norm = self.state.value / len(StateCode)
+        func_norm = self.function / func_num
+        state_norm = self.state.value / state_code_len
         return torch.tensor(
             [
                 func_norm,
