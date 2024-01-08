@@ -1,5 +1,7 @@
 from typing import List, Dict, Tuple
 
+from torch_geometric.data import HeteroData
+from torch_geometric.utils import to_networkx
 import networkx as nx
 import numpy as np
 import torch
@@ -107,7 +109,7 @@ class EnvRun:
         # 每个工序的工作中心数量
         self.center_per_process = torch.sum(work_center_init_func, dim=1)
         self.per_process_num = torch.sum(~torch.isnan(speed_list), dim=1)
-        self.max_speed = torch.max(speed_list)
+        self.max_speed = torch.max(speed_list[~torch.isnan(speed_list)])
         self.state_code_size = len(StateCode)
         self.work_center_list: list[WorkCenter] = []
         # 第一层解析工序，第二层解析每个工序中的产品，第三层生成工作中心
@@ -150,7 +152,7 @@ class EnvRun:
 
     def build_edge(self) -> Dict[str, torch.Tensor]:
         edge_names = ["cell2center", "storage2center", "storage2cell", "center2cell"]
-        logger.info(self.storage_id_relation)
+        # logger.info(self.storage_id_relation)
         for edge_name in edge_names:
             self.edge_index[edge_name] = torch.zeros((2, 0), dtype=torch.long)
 
@@ -164,13 +166,6 @@ class EnvRun:
 
         for edge_key in self.edge_index.keys():
             self.edge_index[edge_key] = self.edge_index[edge_key].to(self.device)
-        logger.info(f"{self.edge_index['storage2cell'].shape}")
-        logger.info(f"{self.edge_index['storage2cell']}")
-        dd = []
-        for i in range(1, len(self.edge_index['storage2cell'][1])):
-            if self.edge_index['storage2cell'][1][i] - self.edge_index['storage2cell'][1][i - 1] != 1:
-                dd.append(self.edge_index['storage2cell'][1][i].item())
-        logger.info(dd)
         return self.edge_index
 
     def update(self, all_action: dict[str, torch.Tensor]):
@@ -219,7 +214,7 @@ class EnvRun:
                     product = center.send()
                     storage.receive(product)
         # 最后计算奖励
-        self.get_reward()
+        # self.get_reward()
 
     def get_reward(self):
         # 额定扣血
@@ -269,16 +264,17 @@ class EnvRun:
             self,
     ) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor], float, int, int]:
         # 先从workcenter中取出来，再从celllist的list中取出来每个cell的tensor
-        work_cell_states = torch.cat([cell for work_center in self.work_center_list for cell in
-                                      work_center.get_all_cell_state(self.max_speed, self.func_num,
-                                                                     self.state_code_size)], dim=0).to(self.device)
+        work_cell_states = torch.stack([cell for work_center in self.work_center_list for cell in
+                                        work_center.get_all_cell_state(self.max_speed, self.func_num,
+                                                                       self.state_code_size)], dim=0).to(self.device)
         # for work_center in self.work_center_list:
         #     a += work_center.get_all_cell_state()
         # 按cellid排序，因为要构造数据结构，其实不用排序，因为本来就是按顺序生成的。。。。
         # sort_state = sorted(a, key=lambda x: x[0])
         # 这里会因为cell_id的自增出问题
-        storage_states = torch.cat([storage.status() for storage in self.storage_list], dim=0).to(self.device)
-        work_center_states = torch.cat([center.status() for center in self.work_center_list], dim=0).to(self.device)
+        storage_states = torch.stack([storage.status() for storage in self.storage_list], dim=0).to(self.device)
+        work_center_states = torch.stack([center.status(self.func_num) for center in self.work_center_list], dim=0).to(
+            self.device)
 
         obs_states: Dict[str, torch.Tensor] = {
             "cell": work_cell_states,
@@ -551,6 +547,23 @@ if __name__ == '__main__':
 
     speed_list = torch.tensor([[5, 10, 15, 20, 12], [8, 12, 18, torch.nan, 12], [3, 6, torch.nan, 10, 8]]).T
     env = EnvRun(work_center_init_func, order, speed_list, torch.device('cuda:0'))
+    env.get_obs()
+    hh = HeteroData()
+    for key, value in env.get_obs()[0].items():
+        hh[key].x = value
+    for key, value in env.get_obs()[1].items():
+        a, b = key.split('2')
+        hh[a, 'to', b].edge_index = value
+    G = to_networkx(hh)
+    import matplotlib.pyplot as plt
+
+    plt.rcParams['figure.dpi'] = 300
+    plt.rcParams['figure.figsize'] = (15, 15)
+    pos = nx.spring_layout(G, k=0.2, scale=0.5)
+    node_size = [10 * G.degree(node) for node in G.nodes]
+    nx.draw(G, pos, with_labels=True, node_size=node_size, font_size=5, edge_color='gray', width=1.0, alpha=0.7)
+
+    plt.show()
 
 
 def select_functions(start, end, work_center_num, fun_per_center):

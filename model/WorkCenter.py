@@ -36,7 +36,7 @@ class WorkCenter(BasicClass):
         # 0是停止工作
         self.state = 0
 
-    def build_edge(self, storage_list: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+    def build_edge(self, storage_list: list[Tensor]) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         创建该工作中心的边信息
         Args:
@@ -154,7 +154,7 @@ class WorkCenter(BasicClass):
 
     def status(self, function_num=1):
         func_norm = self._working_func / function_num
-        return Tensor(
+        return torch.tensor(
             [
                 func_norm,
             ],
