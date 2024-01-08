@@ -547,9 +547,12 @@ if __name__ == '__main__':
 
     speed_list = torch.tensor([[5, 10, 15, 20, 12], [8, 12, 18, torch.nan, 12], [3, 6, torch.nan, 10, 8]]).T
     env = EnvRun(work_center_init_func, order, speed_list, torch.device('cuda:0'))
-    env.get_obs()
+    logger.info(env.get_obs())
     hh = HeteroData()
+    _id = 0
     for key, value in env.get_obs()[0].items():
+        _id += value.shape[0]
+        logger.info(_id)
         hh[key].x = value
     for key, value in env.get_obs()[1].items():
         a, b = key.split('2')
@@ -560,8 +563,10 @@ if __name__ == '__main__':
     plt.rcParams['figure.dpi'] = 300
     plt.rcParams['figure.figsize'] = (15, 15)
     pos = nx.spring_layout(G, k=0.2, scale=0.5)
+    pos1 = nx.circular_layout(G)
+    pos2 = nx.shell_layout(G)
     node_size = [10 * G.degree(node) for node in G.nodes]
-    nx.draw(G, pos, with_labels=True, node_size=node_size, font_size=5, edge_color='gray', width=1.0, alpha=0.7)
+    nx.draw(G, pos2, with_labels=True, node_size=node_size, font_size=5, edge_color='gray', width=1.0, alpha=0.7)
 
     plt.show()
 
