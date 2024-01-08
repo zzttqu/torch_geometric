@@ -3,6 +3,7 @@ from typing import List, Dict, Tuple
 import networkx as nx
 import numpy as np
 import torch
+from torch import Tensor
 
 from model.StateCode import StateCode
 from model.WorkCell import WorkCell
@@ -112,7 +113,6 @@ class EnvRun:
         # 第一层解析工序，第二层解析每个工序中的产品，第三层生成工作中心
         for process, funcs in enumerate(work_center_init_func):
             for func, num in enumerate(funcs):
-                logger.info(f"{func},{num},{process}")
                 self.work_center_list.extend([
                     WorkCenter(process, speed_list[process], func)
                     for _ in range(0, num)
@@ -128,10 +128,16 @@ class EnvRun:
         self.storage_list = [StorageCenter(product.item(), process.item(), order[product.item()], self.func_num) for
                              process, product in
                              storage_need_tensor]
-        # 生成货架和半成品的对应关系
         self.storage_id_relation = torch.tensor(
             [(storage.id, storage.product_id, storage.process) for storage in self.storage_list],
             dtype=torch.int)
+        self.storage_id_relation: list[Tensor] = [torch.empty((0, 2), dtype=torch.int) for _ in range(self.process_num)]
+        # 生成货架和半成品的对应关系
+        for storage in self.storage_list:
+            storage_data = torch.tensor((storage.id, storage.product_id)).view(1, -1)
+            self.storage_id_relation[storage.process] = torch.cat(
+                (self.storage_id_relation[storage.process], storage_data), dim=0)
+
         # 一次循环的step数量
         self.episode_step = 0
         # 奖励和完成与否
@@ -143,12 +149,13 @@ class EnvRun:
         self.build_edge()
 
     def build_edge(self) -> Dict[str, torch.Tensor]:
-        edge_names = ["center2cell", "storage2cell", "cell2center", "storage2center"]
-
+        edge_names = ["cell2center", "storage2center", "storage2cell", "center2cell"]
+        logger.info(self.storage_id_relation)
         for edge_name in edge_names:
             self.edge_index[edge_name] = torch.zeros((2, 0), dtype=torch.long)
 
         for work_center in self.work_center_list:
+            # 直接挑出工序对应的储存中心
             edges = work_center.build_edge(storage_list=self.storage_id_relation)
 
             for edge_name, edge_data in zip(edge_names, edges):
@@ -157,7 +164,13 @@ class EnvRun:
 
         for edge_key in self.edge_index.keys():
             self.edge_index[edge_key] = self.edge_index[edge_key].to(self.device)
-
+        logger.info(f"{self.edge_index['storage2cell'].shape}")
+        logger.info(f"{self.edge_index['storage2cell']}")
+        dd = []
+        for i in range(1, len(self.edge_index['storage2cell'][1])):
+            if self.edge_index['storage2cell'][1][i] - self.edge_index['storage2cell'][1][i - 1] != 1:
+                dd.append(self.edge_index['storage2cell'][1][i].item())
+        logger.info(dd)
         return self.edge_index
 
     def update(self, all_action: dict[str, torch.Tensor]):
@@ -537,7 +550,7 @@ if __name__ == '__main__':
                                           [2, 3, 5]])
 
     speed_list = torch.tensor([[5, 10, 15, 20, 12], [8, 12, 18, torch.nan, 12], [3, 6, torch.nan, 10, 8]]).T
-    env = EnvRun(work_center_init_func, order, speed_list,torch.device('cuda:0'))
+    env = EnvRun(work_center_init_func, order, speed_list, torch.device('cuda:0'))
 
 
 def select_functions(start, end, work_center_num, fun_per_center):

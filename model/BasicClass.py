@@ -2,6 +2,8 @@ import inspect
 import random
 from abc import ABC, abstractmethod
 
+import torch
+
 
 class BasicClass(ABC):
     class_id = 0
@@ -61,6 +63,33 @@ class BasicClass(ABC):
 
 
 if __name__ == '__main__':
+    empty = torch.empty((4, 2), dtype=torch.long)
+    empty[0] = torch.tensor([1, 2])
+    print(empty)
+    raise SystemExit
+    a1 = torch.tensor([2, 4, 6, 5])
+    _a1 = a1.clone()
+    b1 = [torch.tensor([[1, 2], [2, 3], [0, 4]]), torch.tensor([[4, 2], [5, 3], [6, 6]])]
+    for b in b1:
+        condition = b[:, 1] == _a1.view(-1, 1)
+        result = torch.where(condition, b[:, 0], torch.tensor(-1))
+        nnn_a = torch.nonzero(condition)[:, 0]
+        nnn_c = torch.nonzero(condition)[:, 1]
+
+        _a1[nnn_a] = -1
+        # a = torch.nonzero(torch.isin(b1, a1)).flatten()
+        # for pp, qq in zip(nnn_b, nnn_a):
+        #     print(b[pp, 1], a1[qq])
+
+
+    #
+    # id22 = torch.where(torch.eq(b1, a1[a][0]))
+    # print(torch.eq(b1, a1[a][0]))
+    # cc = a1.clone()
+    # cc[0] = 0
+    # # b = torch.where(torch.tensor([2, 4]), torch.tensor([1, 2, 3]))
+    # print(id22)
+
     class CC(BasicClass):
         def reset(self, *args):
             pass

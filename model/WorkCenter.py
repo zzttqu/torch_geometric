@@ -24,14 +24,11 @@ class WorkCenter(BasicClass):
         # 这个是工作中心属于第几道工序
         self._speed_list = speed_list
         # 这次的list长度不包括nan，有几个就是几个，但是对应序号是【1,2】这样，不是【nan，1,2】
-        self.func_list = torch.nonzero(~torch.isnan(speed_list), as_tuple=False).flatten()
-        logger.info(self.func_list)
+        # 所以在选择working_cell的时候需要注意workcell_list长度不是和funclist中的元素一样长的，可能会出现越界
+        # 比如只有两个，但是里边是[1,2]选了2就会导致越界
+        self.func_list: Tensor = torch.nonzero(~torch.isnan(speed_list), as_tuple=False).flatten()
         # 构建workcell
-        self.workcell_list: List[WorkCell] = [
-            WorkCell(func, speed, process_id) for func, speed in zip(self.func_list, speed_list) if
-            not torch.isnan(speed)
-        ]
-
+        self.workcell_list: List[WorkCell] = [WorkCell(func, speed_list[func], process_id) for func in self.func_list]
         self._working_func = init_func
         self._working_speed = self._speed_list[init_func]
         self._working_cell = self.workcell_list[torch.where(self.func_list == init_func)[0].item()]
@@ -39,7 +36,7 @@ class WorkCenter(BasicClass):
         # 0是停止工作
         self.state = 0
 
-    def build_edge(self, storage_list: Union[Tensor, np.ndarray]) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+    def build_edge(self, storage_list: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         创建该工作中心的边信息
         Args:
@@ -52,25 +49,50 @@ class WorkCenter(BasicClass):
         # 还是得有center作为节点，因为center需要聚合多个cell和下一级storage的信息得出该节点是否工作
         _cell2center_list = [(cell.id, self.id) for cell in self.workcell_list]
         _storage2center_list = [(_storage_id, self.id) for
-                                (_storage_id, _product_id, _category_id) in storage_list if
-                                self._process_id == _category_id]
+                                (_storage_id, _product_id) in storage_list[self.process]]
         # cell通过storage和center的信息判断启动哪个节点
         _center2cell_list = [(self.id, cell.id) for cell in self.workcell_list]
         #                       cell.get_function() == _product_id and self.category == _category_id]
-        _storage2cell_list = [(_storage_id, cell.id) for cell in self.workcell_list for
-                              (_storage_id, _product_id, _category_id) in storage_list if
-                              cell.function == _product_id and self.process - 1 == _category_id]
+        _storage2cell_tensor = None
+        if self.process == 0:
+            _storage2cell_list = None
+        else:
+            # 如果上一级工序包括这一级的功能，就是这一级的原材料上一级都有
+            func_need_match = self.func_list.clone().view(-1, 1)
+            _storage2cell_tensor = torch.empty((2, 0), dtype=torch.long)
+            for i, _storage in enumerate(reversed(storage_list[0:self.process])):
+                # 看看有哪些重复的，会广播为（ func_list_num，storage_num）的tensor，
+                # 所以每个点的纵坐标（第1维度）是storage的index，横坐标是func的index
+                # 因为storage是行的，需要复制三次变成3*3,每行都一样的，所以第一维度不一样，但是第零维度是一样的
+                # 所以得出结果的第0维度是storage的index，第1维度是func的index
+                mask = torch.eq(_storage[:, 1], func_need_match)
+                # 找到id
+                # 剔除-1找到索引
+                _storage_indexes = torch.nonzero(mask)[:, 1]
+                _cell_indexes = torch.nonzero(mask)[:, 0]
+                func_need_match[_cell_indexes] = -1
+                _storage_ids = _storage[_storage_indexes, 0]
+                _cell_ids = torch.tensor([self.workcell_list[index].id for index in _cell_indexes], dtype=torch.long)
+                # 先把两个id堆叠
+                tmp = torch.stack((_storage_ids, _cell_ids), dim=0)
+                # 然后再循环连接
+                _storage2cell_tensor = torch.cat((_storage2cell_tensor, tmp), dim=1)
+                if func_need_match.sum() == -1 * len(self.func_list):
+                    break
+
+            # _storage2cell_list = [(_storage_id, cell.id) for cell in self.workcell_list for
+            #                       (_storage_id, _product_id) in storage_list[self.process]]
+        #     如果没有，向上一级一级寻找
+
         # _center2storage_list = [(self.id, _storage_id) for
         #                         (_storage_id, _product_id, _category_id) in storage_list if
         #                         self.category == _category_id]
 
         # _cell2storage_list = [(cell.id, _storage_id) for cell in self.workcell_list if cell is not None for
         #                       (_storage_id, _product_id, _category_id) in storage_list if
-
-        _cell2center_tensor = Tensor(_cell2center_list, dtype=torch.long)
-        _storage2center_tensor = Tensor(_storage2center_list, dtype=torch.long)
-        _storage2cell_tensor = Tensor(_storage2cell_list, dtype=torch.long)
-        _center2cell_tensor = Tensor(_center2cell_list, dtype=torch.long)
+        _cell2center_tensor = torch.tensor(_cell2center_list, dtype=torch.long).T
+        _storage2center_tensor = torch.tensor(_storage2center_list, dtype=torch.long).T
+        _center2cell_tensor = torch.tensor(_center2cell_list, dtype=torch.long).T
 
         return _cell2center_tensor, _storage2center_tensor, _storage2cell_tensor, _center2cell_tensor
 
@@ -89,7 +111,7 @@ class WorkCenter(BasicClass):
         """
         加工
         Args:
-            on_off: 
+            on_off:
             activate_cell: 加工动作，0或需要工作的工作单元在workcell_list中的位置
         """
         # 这里目前改为了工作中心选择哪个工作单元工作
