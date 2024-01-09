@@ -28,7 +28,7 @@ class WorkCenter(BasicClass):
         # 比如只有两个，但是里边是[1,2]选了2就会导致越界
         self.func_list: Tensor = torch.nonzero(~torch.isnan(speed_list), as_tuple=False).flatten()
         # 构建workcell
-        self.workcell_list: List[WorkCell] = [WorkCell(func, speed_list[func], process_id) for func in self.func_list]
+        self.workcell_list: List[WorkCell] = [WorkCell(func, speed_list[func].item(), process_id) for func in self.func_list]
         self._working_func = init_func
         self._working_speed = self._speed_list[init_func]
         self._working_cell = self.workcell_list[torch.where(self.func_list == init_func)[0].item()]
@@ -59,7 +59,7 @@ class WorkCenter(BasicClass):
             func_need_match = self.func_list.clone().view(-1, 1)
             _storage2cell_tensor = torch.empty((2, 0), dtype=torch.long)
             for i, _storage in enumerate(reversed(storage_list[0:self.process])):
-                # 看看有哪些重复的，会广播为（ func_list_num，storage_num）的tensor，
+                # 看看有哪些重复的，会广播为（func_list_num，storage_num）的tensor，
                 # 所以每个点的纵坐标（第1维度）是storage的index，横坐标是func的index
                 # 因为storage是行的，需要复制三次变成3*3,每行都一样的，所以第一维度不一样，但是第零维度是一样的
                 # 所以得出结果的第0维度是storage的index，第1维度是func的index

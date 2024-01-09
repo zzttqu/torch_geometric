@@ -25,7 +25,7 @@ class WorkCell(BasicClass):
         """
         # 需要有当前这个工作单元每个功能的备件，每个功能生产效率
         super().__init__(process_id)
-        self._materials = 0
+        self._materials = int(speed)
         self._product_count = 0
         self._health = 100
         self._speed = speed
@@ -51,7 +51,9 @@ class WorkCell(BasicClass):
             num (int): 接受原料，但是如果功能为0则忽略
         """
         # 接收原材料
+
         self._materials += num
+        logger.warning(f"接收了{type(self._materials)}")
 
     def send(self) -> int:
         """

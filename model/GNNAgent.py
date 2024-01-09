@@ -63,6 +63,9 @@ class Agent:
         all_logits, _ = self.network(state, edge_index)
         total_center_num = len(all_logits["center"])
         cell_logits, center_logits = all_logits.values()
+        # logger.debug(f'{cell_logits, center_logits}')
+        logger.debug(f"{state['cell']}")
+
         log_probs = torch.zeros((total_center_num, 2), dtype=torch.float32)
         actions = torch.zeros((total_center_num, 2), dtype=torch.float32)
         center_ratio = torch.zeros(total_center_num, dtype=torch.float32)
@@ -134,11 +137,10 @@ class Agent:
             edge: List[Dict[str, torch.Tensor]],
             mini_batch_size: int,
     ):
-        all_values = []
+        all_values = torch.zeros(mini_batch_size, device=self.device, dtype=torch.float)
         for i in range(mini_batch_size):
             value = self.get_value(node[i], edge[i])
-            all_values.append(value)
-        all_values = torch.stack(all_values)
+            all_values[i] = value
         return all_values
 
     def get_batch_actions_probs(
@@ -152,12 +154,8 @@ class Agent:
         for i in range(mini_batch_size):
             _, _, log_probs = self.get_action(node[i], edge[i], action_list[i])
             # 这个probs本来就是一维的，其实不用cat，stack更好吧
-            logger.debug(log_probs)
-            logger.debug(action_list[i])
-            raise SystemExit
             all_log_probs[i] = log_probs
-        # logger.debug(all_log_probs)
-        log_probs_list = torch.cat(all_log_probs, dim=0).view((mini_batch_size, -1))
+        log_probs_list = torch.cat(all_log_probs, dim=0)
         return log_probs_list
 
     def load_model(self, name):
@@ -241,16 +239,15 @@ class Agent:
                 )
                 # logger.debug(f"new_log_prob: {new_log_prob}")
 
-                # 这里感觉应该连接起来变成一个
-
-                ratios = torch.exp(new_log_prob - mini_probs).sum(1)
+                # 这里需要连接起来变成一个，要不然两个tensor不一样大
+                ratios = torch.mean(torch.exp(new_log_prob - torch.cat(mini_probs, dim=0)))
                 surr1 = ratios * flat_advantages[index]
                 surr2 = torch.clamp(ratios, 1 - self.clip, 1 + self.clip)
                 actor_loss: torch.Tensor = -torch.min(surr1, surr2)
                 new_value = self.get_batch_values(
                     mini_nodes, mini_edges, mini_batch_size
                 )
-                critic_loss = F.mse_loss(flat_returns[index], new_value.view(-1))
+                critic_loss = F.mse_loss(flat_returns[index], new_value)
                 total_loss: torch.Tensor = actor_loss.mean() + 0.5 * critic_loss
                 self.optimizer.zero_grad()
                 total_loss.backward()

@@ -91,16 +91,6 @@ class EnvRun:
     ):
         self.device = device
         self.edge_index: Dict[str, Union[torch.Tensor, list]] = {}
-        # 产品订单
-        order = torch.tensor([100, 600, 200])
-        # 这里应该是对各个工作单元进行配置了
-        work_center_init_func = torch.tensor([[3, 3, 10],
-                                              [2, 2, 6],
-                                              [4, 5, 0],
-                                              [3, 0, 12],
-                                              [2, 3, 5]])
-
-        speed_list = torch.tensor([[5, 10, 15, 20, 12], [8, 12, 18, torch.nan, 12], [3, 6, torch.nan, 10, 8]]).T
         self.order = order
         self.speed_list = speed_list
         self.process_num = work_center_init_func.shape[0]
@@ -132,12 +122,11 @@ class EnvRun:
         self.storage_list = [StorageCenter(product.item(), process.item(), order[product.item()], self.func_num) for
                              process, product in
                              storage_need_tensor]
-        self.storage_id_relation = torch.tensor(
-            [(storage.id, storage.product_id, storage.process) for storage in self.storage_list],
-            dtype=torch.int)
+
         self.storage_id_relation: list[Tensor] = [torch.empty((0, 2), dtype=torch.int) for _ in range(self.process_num)]
         # 生成货架和半成品的对应关系
         for storage in self.storage_list:
+            # 要增加一个维度，要不然无法cat
             storage_data = torch.tensor((storage.id, storage.product_id)).view(1, -1)
             self.storage_id_relation[storage.process] = torch.cat(
                 (self.storage_id_relation[storage.process], storage_data), dim=0)
@@ -215,15 +204,16 @@ class EnvRun:
             center_id += center_num"""
         # 其次运输
         for storage in self.storage_list:
-            process, func1 = storage.process, storage.product_id
+            storage_process, func1 = storage.process, storage.product_id
             for center in self.work_center_list:
-                process, func2 = center.process, center.working_func
-                if process == 0:
+                center_process, func2 = center.process, center.working_func
+                if center_process == 0:
                     center.receive(0)
-                elif process - 1 == process and func1 == func2:
+                elif center_process - 1 == storage_process and func1 == func2:
                     materials = storage.send(center_ratio[center.id])
+                    logger.debug(materials)
                     center.receive(materials)
-                elif process == process and func1 == func2:
+                elif center_process == storage_process and func1 == func2:
                     product = center.send()
                     storage.receive(product)
         # 最后计算奖励
@@ -252,9 +242,10 @@ class EnvRun:
             # 只有库存过大的时候才会扣血
             if storage.product_count > 2 * self.speed_list[storage.process][storage.product_id]:
                 products_reward -= storage.product_count / self.process_num * 0.01
-            # self.product_count[storage.process][storage.product_id] = storage.product_count
+            if storage.process < self.process_num - 1:
+                products_reward += storage.product_count * (storage.process + 1) / self.order[storage.product_id] * 0.1
             # 最终产物大大奖励
-            if storage.process == self.process_num - 1:
+            elif storage.process == self.process_num - 1:
                 products_reward += storage.product_count / self.order[storage.product_id] * 0.5
                 if storage.product_count > self.order[storage.product_id] and self.order_finish_count[
                     storage.product_id] != 1:
@@ -329,8 +320,8 @@ class EnvRun:
         self.order_finish_count.zero_()
         for center in self.work_center_list:
             center.reset()
-        for center in self.storage_list:
-            center._product_count = 0
+        for storage in self.storage_list:
+            storage._product_count = 0
 
     def reinit(self):
         self.reset()

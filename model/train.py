@@ -16,15 +16,9 @@ if __name__ == "__main__":
     #     writer = csv.writer(csvfile)
     #     writer.writerow([0, 0, 0])
     # 读取用np读，写入用csv写
-    try:
-        data = np.genfromtxt("./log.csv", delimiter=",", skip_header=1)
-        init_step = int(data[-1, 0]) if data.ndim > 1 else 0
-    except (IOError, ValueError):
-        # 处理文件不存在或数据不可读的情况
-        init_step = 0
+
+    init_step = 0
     # 设置显示
-    plt.rcParams["font.sans-serif"] = ["SimHei"]  # 显示中文标签
-    plt.rcParams["axes.unicode_minus"] = False
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     np.set_printoptions(precision=3, suppress=True)
     torch.set_printoptions(precision=3, sci_mode=False)
@@ -33,19 +27,18 @@ if __name__ == "__main__":
     function_num = 3
     work_center_num = 5
     batch_size = 32
-    order = torch.tensor([100, 600, 200])
+    order = torch.tensor([100, 600, 200], dtype=torch.int)
     # 这里应该是对各个工作单元进行配置了
     work_center_init_func = torch.tensor([[3, 3, 10],
                                           [2, 2, 6],
                                           [4, 5, 0],
                                           [3, 0, 12],
-                                          [2, 3, 5]])
+                                          [2, 3, 5]], dtype=torch.int)
 
     speed_list = torch.tensor([[5, 10, 15, 20, 12], [8, 12, 18, torch.nan, 12], [3, 6, torch.nan, 10, 8]]).T
     total_step = init_step
-    max_steps = 64 * 10
-    episode_step_max = 32
-    product_goal = 200
+    max_steps = 2
+    episode_step_max = 64
     n_epochs = 8
 
     episode_num = 0
@@ -64,7 +57,6 @@ if __name__ == "__main__":
     env.build_edge()
 
     # 加载之前的
-
     obs_states, edge_index, reward, dones, _ = env.get_obs()
 
     hetero_data = HeteroData()
@@ -106,6 +98,7 @@ if __name__ == "__main__":
     # 添加
     # show()
     while total_step < init_step + max_steps:
+        logger.debug(f"第{total_step}步")
         total_step += 1
         agent.network.eval()
         with torch.no_grad():
