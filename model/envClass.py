@@ -1,4 +1,6 @@
-from typing import List, Dict, Tuple
+from datetime import datetime
+
+from typing import List, Dict, Tuple, Union
 
 from torch_geometric.data import HeteroData
 from torch_geometric.utils import to_networkx
@@ -86,11 +88,9 @@ class EnvRun:
             speed_list,
             device,
             episode_step_max=256,
-            product_goal=500,
-            product_goal_scale=0.2,
     ):
         self.device = device
-        self.edge_index: Dict[str, torch.Tensor] = {}
+        self.edge_index: Dict[str, Union[torch.Tensor, list]] = {}
         # 产品订单
         order = torch.tensor([100, 600, 200])
         # 这里应该是对各个工作单元进行配置了
@@ -101,10 +101,11 @@ class EnvRun:
                                               [2, 3, 5]])
 
         speed_list = torch.tensor([[5, 10, 15, 20, 12], [8, 12, 18, torch.nan, 12], [3, 6, torch.nan, 10, 8]]).T
+        self.order = order
         self.speed_list = speed_list
         self.process_num = work_center_init_func.shape[0]
         self.func_num = order.shape[0]
-        self.product_count = torch.zeros(size=(self.process_num, self.func_num), dtype=torch.int)
+        # self.product_count = torch.zeros(size=(self.process_num, self.func_num), dtype=torch.int)
         self.total_center_num = work_center_init_func.sum()
         # 每个工序的工作中心数量
         self.center_per_process = torch.sum(work_center_init_func, dim=1)
@@ -112,6 +113,7 @@ class EnvRun:
         self.max_speed = torch.max(speed_list[~torch.isnan(speed_list)])
         self.state_code_size = len(StateCode)
         self.work_center_list: list[WorkCenter] = []
+        self.episode_step_max = episode_step_max
         # 第一层解析工序，第二层解析每个工序中的产品，第三层生成工作中心
         for process, funcs in enumerate(work_center_init_func):
             for func, num in enumerate(funcs):
@@ -145,27 +147,22 @@ class EnvRun:
         # 奖励和完成与否
         self.reward = 0
         self.done = 0
-
-        self.episode_step_max = episode_step_max
+        self.order_finish_count = torch.zeros(order.shape[0], dtype=torch.int)
         # 初始化边
         self.build_edge()
 
     def build_edge(self) -> Dict[str, torch.Tensor]:
-        edge_names = ["cell2center", "storage2center", "storage2cell", "center2cell"]
+        edge_names = ["cell2center", "cell2storage", "storage2center", "storage2cell", "center2cell"]
         # logger.info(self.storage_id_relation)
-        for edge_name in edge_names:
-            self.edge_index[edge_name] = torch.zeros((2, 0), dtype=torch.long)
-
-        for work_center in self.work_center_list:
-            # 直接挑出工序对应的储存中心
-            edges = work_center.build_edge(storage_list=self.storage_id_relation)
-
-            for edge_name, edge_data in zip(edge_names, edges):
-                if edge_data is not None:
-                    self.edge_index[edge_name] = torch.cat([self.edge_index[edge_name], edge_data], dim=1)
-
-        for edge_key in self.edge_index.keys():
-            self.edge_index[edge_key] = self.edge_index[edge_key].to(self.device)
+        self.edge_index = {edge_name: torch.zeros(2, 0) for _ in range(self.total_center_num) for edge_name in
+                           edge_names}
+        all_edges = [work_center.build_edge(storage_list=self.storage_id_relation) for work_center in
+                     self.work_center_list]
+        # 原本alledges中每一项都是6位元组，用zip*进行解压缩，就像转置，原来是center个，每个6位，现在变成了每位60元组，一共6个
+        # 然后edgenames中的每一个name就和alledges中每一项对应了
+        for edge_name, edge_data in zip(edge_names, zip(*all_edges)):
+            tmp = torch.cat([edge for edge in edge_data if edge is not None], dim=1)
+            self.edge_index[edge_name] = tmp.to(self.device)
         return self.edge_index
 
     def update(self, all_action: dict[str, torch.Tensor]):
@@ -214,8 +211,9 @@ class EnvRun:
                     product = center.send()
                     storage.receive(product)
         # 最后计算奖励
-        # self.get_reward()
+        self.get_reward()
 
+    #
     def get_reward(self):
         # 额定扣血
         # 暂时删去
@@ -225,40 +223,37 @@ class EnvRun:
                 / self.product_num
                 * max(self.episode_step / self.episode_step_max, 1 / 2)
         )"""
-        # 生产有奖励，根据产品级别加分
-        products_reward = 0
 
-        for storage in self.storage_list:
-            if storage.product_count > 2 * self.speed_list[storage.process][storage.product_id]:
-                products_reward += storage.product_count * 0.01
-            self.product_count[storage.process][storage.product_id] = storage.product_count
-        for i, storage in enumerate(self.storage_list[:-1]):
-            # 只有库存过大的时候才会扣血
-            if storage.product_count > self.speed_list[i] * 2:
-                # logger.info(f"{i}号库存{storage.get_product_num()}，生产能力{self.product_capacity[i]}")
-                products_reward += (
-                        -0.01
-                        * storage.get_product_num()
-                    # * (i)
-                    # / self.function_num
-                )
-        # 最终产物肯定要大大滴加分
-        products_reward += 0.05 * self.step_products[-1]
-        # 最终产物奖励，要保证这个产物奖励小于扣血
-        # goal_reward = self.storage_list[-1].get_product_num() * 0.001
-        # self.reward += stable_reward
-        # self.reward += goal_reward
-        self.reward += products_reward
         self.done = 0
         self.episode_step += 1
         # 相等的时候刚好是episode，就是1,2,3,4，4如果是max，那等于4的时候就应该跳出了
         if self.episode_step >= self.episode_step_max:
-            # self.reward -= 5
             self.done = 1
-        # 实现任务目标
-        elif self.storage_list[-1].get_product_num() > self.product_goal:
-            self.reward += 0.5
-            self.done = 1
+        # 生产有奖励，根据产品级别加分
+        products_reward = 0
+
+        for storage in self.storage_list:
+            # 只有库存过大的时候才会扣血
+            if storage.product_count > 2 * self.speed_list[storage.process][storage.product_id]:
+                products_reward -= storage.product_count / self.process_num * 0.01
+            # self.product_count[storage.process][storage.product_id] = storage.product_count
+            # 最终产物大大奖励
+            if storage.process == self.process_num - 1:
+                products_reward += storage.product_count / self.order[storage.product_id] * 0.5
+                if storage.product_count > self.order[storage.product_id] and self.order_finish_count[
+                    storage.product_id] != 1:
+                    products_reward += 1
+                    self.order_finish_count[storage.product_id] = 1
+            if self.order_finish_count.sum() > len(self.order):
+                self.done = 1
+                break
+        self.reward += products_reward
+        # 最终产物肯定要大大滴加分
+
+        # 最终产物奖励，要保证这个产物奖励小于扣血
+        # goal_reward = self.storage_list[-1].get_product_num() * 0.001
+        # self.reward += stable_reward
+        # self.reward += goal_reward
 
     def get_obs(
             self,
@@ -308,7 +303,6 @@ class EnvRun:
         }
 
     def reset(self):
-        self.step_products = np.zeros(self.func_num)
         # 只有重新生成的时候再resetid
         # WorkCenter.reset_id()
         # WorkCell.reset_id()
@@ -316,6 +310,7 @@ class EnvRun:
         self.reward = 0
         self.done = 0
         self.episode_step = 0
+        self.order_finish_count.zero_()
         for center in self.work_center_list:
             center.reset()
         for center in self.storage_list:

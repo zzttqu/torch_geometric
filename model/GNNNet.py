@@ -108,7 +108,7 @@ class HGTNet(nn.Module):
     def __init__(
             self,
             data: HeteroData,
-            hidden_channels=64,
+            hidden_channels=32,
             num_layers=2,
             action_choice=2,
     ):
@@ -121,6 +121,7 @@ class HGTNet(nn.Module):
                 data.num_node_features[node_type], hidden_channels
             )
         self.conv_list = torch.nn.ModuleList()
+        logger.info(data.metadata())
         for i in range(num_layers):
             if i == 0:
                 conv = HANConv(node_features_dict, hidden_channels, data.metadata(), heads=2)
@@ -152,18 +153,19 @@ class HGTNet(nn.Module):
             norm_edge_index_dict[f"{node1}", f"{key}", f"{node2}"] = _value
         # 根据node type分别传播，这里由于改了inputdim，还不能直接去掉encoder层
         # 目前不用encoder层
-        # x_dict = {
-        #     node_type: F.leaky_relu(self.encoders[f"{node_type}_linear"](x))
-        #     for node_type, x in x_dict.items()
-        # }
+        x_dict = {
+            node_type: F.leaky_relu(self.encoders[f"{node_type}_linear"](x))
+            for node_type, x in x_dict.items()
+        }
         # x_dict = {
         #     node_type: F.leaky_relu(self.encoders[f"{node_type}_linear"](x))
         #     for node_type, x in x_dict.items()
         # }
 
-        for conv in self.conv_list:
+        for conv in self.conv_list[1:]:
             x_dict = conv(x_dict, norm_edge_index_dict)
         # 两个输出，一个需要连接所有节点的特征然后输出一个value
+        logger.debug(x_dict)
         full_x = torch.cat([x for x in x_dict.values()], dim=0)
 
         value = self.linV(full_x).mean()

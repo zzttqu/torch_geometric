@@ -36,7 +36,7 @@ class WorkCenter(BasicClass):
         # 0是停止工作
         self.state = 0
 
-    def build_edge(self, storage_list: list[Tensor]) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+    def build_edge(self, storage_list: list[Tensor]) -> Tuple[Tensor, Tensor, Tensor, Union[Tensor, None], Tensor]:
         """
         创建该工作中心的边信息
         Args:
@@ -54,9 +54,7 @@ class WorkCenter(BasicClass):
         _center2cell_list = [(self.id, cell.id) for cell in self.workcell_list]
         #                       cell.get_function() == _product_id and self.category == _category_id]
         _storage2cell_tensor = None
-        if self.process == 0:
-            _storage2cell_list = None
-        else:
+        if self.process > 0:
             # 如果上一级工序包括这一级的功能，就是这一级的原材料上一级都有
             func_need_match = self.func_list.clone().view(-1, 1)
             _storage2cell_tensor = torch.empty((2, 0), dtype=torch.long)
@@ -82,19 +80,21 @@ class WorkCenter(BasicClass):
 
             # _storage2cell_list = [(_storage_id, cell.id) for cell in self.workcell_list for
             #                       (_storage_id, _product_id) in storage_list[self.process]]
-        #     如果没有，向上一级一级寻找
+        # center和storage也需要向storage
 
         # _center2storage_list = [(self.id, _storage_id) for
-        #                         (_storage_id, _product_id, _category_id) in storage_list if
-        #                         self.category == _category_id]
+        #                         (_storage_id, _product_id) in storage_list if
+        #                         self.f == _category_id]
 
-        # _cell2storage_list = [(cell.id, _storage_id) for cell in self.workcell_list if cell is not None for
-        #                       (_storage_id, _product_id, _category_id) in storage_list if
-        _cell2center_tensor = torch.tensor(_cell2center_list, dtype=torch.long).T
-        _storage2center_tensor = torch.tensor(_storage2center_list, dtype=torch.long).T
-        _center2cell_tensor = torch.tensor(_center2cell_list, dtype=torch.long).T
+        _cell2storage_list = [(cell.id, _storage_id) for cell in self.workcell_list for
+                              (_storage_id, _product_id) in storage_list[self.process] if cell.function == _product_id]
 
-        return _cell2center_tensor, _storage2center_tensor, _storage2cell_tensor, _center2cell_tensor
+        _cell2storage_tensor: Tensor = torch.tensor(_cell2storage_list, dtype=torch.long).T
+        _cell2center_tensor: Tensor = torch.tensor(_cell2center_list, dtype=torch.long).T
+        _storage2center_tensor: Tensor = torch.tensor(_storage2center_list, dtype=torch.long).T
+        _center2cell_tensor: Tensor = torch.tensor(_center2cell_list, dtype=torch.long).T
+
+        return _cell2center_tensor, _cell2storage_tensor, _storage2center_tensor, _storage2cell_tensor, _center2cell_tensor
 
     def receive(self, materials: int):
         """

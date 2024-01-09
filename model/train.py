@@ -10,30 +10,6 @@ from torch_geometric.data import HeteroData
 from model.GNNAgent import Agent
 from model.PPOMemory import PPOMemory
 
-# def show(graph):
-#     # 可视化
-#     node_states = nx.get_node_attributes(graph, "state")
-#     node_function = nx.get_node_attributes(graph, "function")
-#     nodes = nx.nodes(graph)
-#     edges = nx.edges(graph)
-#     node_labels = {}
-#     edge_labels = {}
-#     pos = {}
-#     for node in nodes:
-#         # 这里只用\n就可以换行了
-#         node_labels[
-#             node
-#         ] = f"{node}节点：\n 状态：{node_states[node]} \n 功能：{node_function[node]}"
-#         pos[node] = (node_function, node)
-#
-#     # print(node_labels)
-#     pos = nx.spring_layout(graph)
-#     nx.draw_networkx_nodes(graph, pos)
-#     nx.draw_networkx_labels(graph, pos, node_labels)
-#     # nx.draw_networkx_edges(graph, pos, connectionstyle="arc3,rad=0.2")
-#     nx.draw_networkx_edges(graph, pos)
-#     plt.show()
-
 
 if __name__ == "__main__":
     # # 写入一个csv文件
@@ -58,7 +34,15 @@ if __name__ == "__main__":
     function_num = 3
     work_center_num = 5
     batch_size = 32
+    order = torch.tensor([100, 600, 200])
+    # 这里应该是对各个工作单元进行配置了
+    work_center_init_func = torch.tensor([[3, 3, 10],
+                                          [2, 2, 6],
+                                          [4, 5, 0],
+                                          [3, 0, 12],
+                                          [2, 3, 5]])
 
+    speed_list = torch.tensor([[5, 10, 15, 20, 12], [8, 12, 18, torch.nan, 12], [3, 6, torch.nan, 10, 8]]).T
     total_step = init_step
     max_steps = 64 * 10
     episode_step_max = 32
@@ -69,12 +53,11 @@ if __name__ == "__main__":
     learn_num = 0
 
     env = EnvRun(
-        work_center_num=work_center_num,
-        fun_per_center=2,
-        function_num=function_num,
+        order=order,
+        speed_list=speed_list,
+        work_center_init_func=work_center_init_func,
         device=device,
         episode_step_max=episode_step_max,
-        product_goal_scale=0.3,
     )
     # 如果不可视化节点就不用取返回值graph
     # 加入tensorboard
@@ -85,16 +68,13 @@ if __name__ == "__main__":
 
     obs_states, edge_index, reward, dones, _ = env.get_obs()
 
-    # print(f"初始化状态为{obs_states}")
-    # print(f"初始化边为{edge_index}")
-    logger.info(f"加工能力为{env.product_capacity}")
     hetero_data = HeteroData()
     # 节点信息
     for key, _value in obs_states.items():
         hetero_data[key].x = _value
         # 边信息
     for key, _value in edge_index.items():
-        node1, node2 = key.split("_to_")
+        node1, node2 = key.split("2")
         hetero_data[(f"{node1}", f"{key}", f"{node2}")].edge_index = _value
     agent = Agent(
         batch_size=batch_size,
@@ -102,14 +82,14 @@ if __name__ == "__main__":
         init_data=hetero_data,
     )
 
-    agent.load_model("last_model.pth")
+    # agent.load_model("last_model.pth")
     memory = PPOMemory(
         batch_size,
         device,
     )
 
     init_time = datetime.now()
-    print(f"模型加载完成，环境初始化完成，当前时间{init_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info(f"模型加载完成，环境初始化完成")
     now_time = datetime.now()
 
     # 添加计算图
@@ -147,7 +127,7 @@ if __name__ == "__main__":
         _raw = {}
         for key, _value in raw.items():
             _raw[key] = _value.cpu()
-        env.update_all(_raw)
+        env.update(_raw)
         # 可视化状态
         # logger.debug(f"{total_step} {env.read_state()}")
 
