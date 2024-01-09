@@ -32,7 +32,7 @@ class WorkCenter(BasicClass):
         self._working_func = init_func
         self._working_speed = self._speed_list[init_func]
         self._working_cell = self.workcell_list[torch.where(self.func_list == init_func)[0].item()]
-        self._all_cell_id = Tensor([workcell.id for workcell in self.workcell_list])
+        self._all_cell_id = torch.tensor([workcell.id for workcell in self.workcell_list], dtype=torch.int)
         # 0是停止工作
         self.state = 0
 
@@ -103,9 +103,9 @@ class WorkCenter(BasicClass):
             materials: 该工作中心接收的当前运行功能的原料
         """
         self._working_cell.receive(materials)
-        # 0号工序自动获取加工速度的一批次原料
-        if self.process == 0:
-            self._working_cell.receive(self._working_speed)
+        # 0号工序自动获取加工速度的一批次原料，cell级别已经忽略了，这里不用了
+        # if self.process == 0:
+        #     self._working_cell.receive(self._working_speed)
 
     def work(self, activate_cell: int, on_off: int):
         """

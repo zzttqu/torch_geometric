@@ -108,8 +108,8 @@ class EnvRun:
         # self.product_count = torch.zeros(size=(self.process_num, self.func_num), dtype=torch.int)
         self.total_center_num = work_center_init_func.sum()
         # 每个工序的工作中心数量
-        self.center_per_process = torch.sum(work_center_init_func, dim=1)
-        self.per_process_num = torch.sum(~torch.isnan(speed_list), dim=1)
+        self._center_per_process = torch.sum(work_center_init_func, dim=1)
+        self._funcs_per_process_num = torch.sum(~torch.isnan(speed_list), dim=1)
         self.max_speed = torch.max(speed_list[~torch.isnan(speed_list)])
         self.state_code_size = len(StateCode)
         self.work_center_list: list[WorkCenter] = []
@@ -121,8 +121,8 @@ class EnvRun:
                     WorkCenter(process, speed_list[process], func)
                     for _ in range(0, num)
                 ])
-        # TODO 加工能力代码
-
+        self._work_center2cell_list = [torch.tensor([cell_id for cell_id in cell.all_cell_id]) for cell in
+                                       self.work_center_list]
         # 初始化货架
         # 货架数量是产品工序和产品类别共同构成的
         # 不包括没有那道工序的半成品
@@ -151,6 +151,18 @@ class EnvRun:
         # 初始化边
         self.build_edge()
 
+    @property
+    def center_per_process(self):
+        return self._center_per_process
+
+    @property
+    def work_center2cell_list(self):
+        return self._work_center2cell_list
+
+    @property
+    def per_process_num(self):
+        return self._funcs_per_process_num
+
     def build_edge(self) -> Dict[str, torch.Tensor]:
         edge_names = ["cell2center", "cell2storage", "storage2center", "storage2cell", "center2cell"]
         # logger.info(self.storage_id_relation)
@@ -165,28 +177,32 @@ class EnvRun:
             self.edge_index[edge_name] = tmp.to(self.device)
         return self.edge_index
 
-    def update(self, all_action: dict[str, torch.Tensor]):
-        cell_logits = all_action["cell"]
-        center_logits = all_action["center"]
-        center_ratio = torch.zeros(self.total_center_num, dtype=torch.float32)
+    def update(self, all_action: Tensor, center_ratio: Tensor):
+        cell_logits = all_action[:, 0]
+        center_logits = all_action[:, 1]
         # self.work_center_process中记录了各个process的workcenter数量
         center_id = 0
         # 首先生产
-        for process, center_num in enumerate(self.center_per_process):
+        for work_center, activate_func, on_or_off in zip(self.work_center_list, cell_logits, center_logits):
+            work_center.work(activate_func.item(), on_or_off.item())
+        """ for process, center_num in enumerate(self._center_per_process):
+            assert isinstance(center_num, Tensor), "center_num 必须是 Tensor"
             # 为了保证不影响softmax，如果是0会导致最后概率不为0，根据每个工序包括的功能数量初始化
-            assert isinstance(center_num, int), "center_num 必须是 int"
-            _ratio = torch.full((self.per_process_num[process], center_num), -torch.inf)
-            for process_index, work_center in enumerate(self.work_center_list[center_id:center_id + center_num]):
-                cell_slice = cell_logits[work_center.all_cell_id]
-                center_slice = center_logits[work_center.id]
+            _ratio = torch.full((self._funcs_per_process_num[process], center_num), -torch.inf)
+            for process_index, cell_ids in enumerate(
+                    self._work_center2cell_list[center_id:center_id + center_num]):
+                cell_slice = cell_logits[cell_ids]
+                center_slice = center_logits[range(center_id, center_id + center_num), :]
                 center_dist = Categorical(logits=center_slice)
                 cell_dist = Categorical(logits=cell_slice[:, 0])
                 # 这里其实不影响，因为实际上是修改的workcell，但是如果这个工作中心没有这个功能，其实工作单元也没有，那么这个输出的index其实就是celllist的index
-                activate_func = cell_dist.sample().item()
+                activate_func = cell_dist.sample()
+                log_probs[0][center_id] = cell_dist.log_prob(activate_func)
                 # 这里是放置当前工序各个product的分配率
                 _ratio[activate_func, process_index] = cell_slice[activate_func, 1]
-                on_or_off = center_dist.sample().item()
-                work_center.work(activate_func, on_or_off)
+                on_or_off = center_dist.sample()
+                log_probs[1][center_id] = center_dist.log_prob(on_or_off)
+                work_center.work(activate_func.item(), on_or_off.item())
             # 还需要考虑如果所有的cell都选了一个func就会导致全是inf，softmax后的tensor为nan
             _ratio = torch.softmax(_ratio, dim=1)
             # 如果有nan就改成0
@@ -196,14 +212,14 @@ class EnvRun:
             ratios = torch.sum(_ratio_without_nan, dim=0)
             center_ratio[center_id:center_id + center_num] = ratios
             # 更新center的id，方便循环内部使用
-            center_id += center_num
+            center_id += center_num"""
         # 其次运输
         for storage in self.storage_list:
             process, func1 = storage.process, storage.product_id
             for center in self.work_center_list:
                 process, func2 = center.process, center.working_func
                 if process == 0:
-                    center.receive(1)
+                    center.receive(0)
                 elif process - 1 == process and func1 == func2:
                     materials = storage.send(center_ratio[center.id])
                     center.receive(materials)

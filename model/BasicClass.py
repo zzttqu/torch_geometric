@@ -63,10 +63,15 @@ class BasicClass(ABC):
 
 
 if __name__ == '__main__':
+    from torch.distributions import Categorical
+    import torch.nn.functional as F
 
     edge_names = ["cell2center", "cell2storage", "storage2center", "storage2cell", "center2cell"]
     # logger.info(self.storage_id_relation)
-
+    a = Categorical(torch.tensor([1, 2]))
+    p = a.sample()
+    prob = a.log_prob(p)
+    print(F.softmax(torch.tensor([0.5, 2.2]), dim=0))
     raise SystemExit
     a1 = torch.tensor([2, 4, 6, 5])
     _a1 = a1.clone()

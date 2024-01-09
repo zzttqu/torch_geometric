@@ -4,6 +4,8 @@ from typing import Dict, List, Tuple
 from loguru import logger
 import torch
 import torch.nn.functional as F
+from torch import Tensor
+
 from model.GNNNet import HGTNet
 from model.PPOMemory import PPOMemory
 from torch.distributions import Categorical
@@ -17,32 +19,30 @@ class Agent:
             batch_size,
             n_epochs,
             init_data: HeteroData,
+            center_per_process,
+            work_center2cell_list,
+            per_process_num,
             clip=0.2,
             lr=3e-4,
             gamma=0.99,
             gae_lambda=0.95,
     ):
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        # self.work_cell_num = work_cell_num
-        # self.center_num = center_num
+
+        self.center_per_process = center_per_process
+        self.per_process_num = per_process_num
+        self.work_center2cell_list = work_center2cell_list
+
         self.gamma = gamma
         self.batch_size = batch_size
         self.gae_lambda = gae_lambda
         self.n_epochs = n_epochs
-
         self.clip = clip
-
-        self.undirect_data = init_data
         # 如果为异质图
         assert init_data is not None, "init_data是异质图必需的"
-        # self.update_heterodata(init_data)
         self.network = HGTNet(
             init_data,
         ).to(self.device)
-        # 使用to_hetro相当于变了一个模型，还得todevice
-        """self.network = to_hetero(self.network, self.metadata, aggr="sum").to(
-            self.device
-        )"""
         self.optimizer = torch.optim.Adam(self.network.parameters(), lr=lr, eps=1e-5)
 
     def get_value(
@@ -58,10 +58,47 @@ class Agent:
             state: Dict[str, torch.Tensor],
             edge_index: Dict[str, torch.Tensor],
             all_action: Dict[str, torch.Tensor] = None,  # type: ignore
-    ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor]:
+    ) -> tuple[Tensor, Tensor, Tensor]:
         # hetero_data = T.ToUndirected()(hetero_data)
         all_logits, _ = self.network(state, edge_index)
-        assert isinstance(all_logits, dict), "必须是dict类型"
+        total_center_num = len(all_logits["center"])
+        cell_logits, center_logits = all_logits.values()
+        log_probs = torch.zeros((total_center_num, 2), dtype=torch.float32)
+        actions = torch.zeros((total_center_num, 2), dtype=torch.float32)
+        center_ratio = torch.zeros(total_center_num, dtype=torch.float32)
+        # self.work_center_process中记录了各个process的workcenter数量
+        center_id = 0
+        # 首先生产
+        for process, center_num in enumerate(self.center_per_process):
+            assert isinstance(center_num, Tensor), "center_num 必须是 Tensor"
+            # 为了保证不影响softmax，如果是0会导致最后概率不为0，根据每个工序包括的功能数量初始化
+            _ratio = torch.full((self.per_process_num[process], center_num), -torch.inf)
+            for process_index, cell_ids in enumerate(self.work_center2cell_list[center_id:center_id + center_num]):
+                cell_slice = cell_logits[cell_ids]
+                center_slice = center_logits[center_id, :]
+                center_dist = Categorical(logits=center_slice)
+                cell_dist = Categorical(logits=cell_slice[:, 0])
+                # 这里其实不影响，因为实际上是修改的workcell，但是如果这个工作中心没有这个功能，其实工作单元也没有，那么这个输出的index其实就是celllist的index
+                activate_func = cell_dist.sample()
+                log_probs[center_id, 0] = cell_dist.log_prob(activate_func)
+                # 这里是放置当前工序各个product的分配率
+                _ratio[activate_func, process_index] = cell_slice[activate_func, 1]
+                on_or_off = center_dist.sample()
+                log_probs[center_id, 1] = center_dist.log_prob(on_or_off)
+                actions[center_id, 0] = activate_func
+                actions[center_id, 1] = on_or_off
+            # 还需要考虑如果所有的cell都选了一个func就会导致全是inf，softmax后的tensor为nan
+            _ratio = torch.softmax(_ratio, dim=1)
+            # 如果有nan就改成0
+            _ratio_without_nan = torch.where(torch.isnan(_ratio), torch.tensor(0.0), _ratio)
+            # 因为center不能同时出现在两个工序中，所以_ratio必定同一列只有一个非0的，所以累加起来就变成center_num长度的数组了，就可以给center赋值了，
+            # 然后交给之后的物料转运
+            ratios = torch.sum(_ratio_without_nan, dim=0)
+            center_ratio[center_id:center_id + center_num] = ratios
+            # 更新center的id，方便循环内部使用
+            center_id += center_num
+
+        """assert isinstance(all_logits, dict), "必须是dict类型"
         # 这里是GNN的输出，是每个节点一个
         # 第一项是功能动作，第二项是是否接受上一级运输
         # 目前不需要对center进行动作，所以存储后可以不用
@@ -80,11 +117,12 @@ class Agent:
         for key, _dist in all_dist.items():
             tmp = torch.stack([_dist.log_prob(all_action[key])]).sum(0)
             log_probs = torch.cat((log_probs, tmp), dim=0)
+        # logger.debug(log_probs)
         # 只管采样，不管是哪类节点
         # 前边是workcell，后边是center
-        # log_probs = torch.stack([all_dist.log_prob(all_action)]).sum(0)
+        # log_probs = torch.stack([all_dist.log_prob(all_action)]).sum(0)"""
 
-        return all_action, log_probs
+        return actions, center_ratio, log_probs
 
     def get_batch_values(
             self,

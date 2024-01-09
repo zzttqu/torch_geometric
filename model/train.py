@@ -10,7 +10,6 @@ from torch_geometric.data import HeteroData
 from model.GNNAgent import Agent
 from model.PPOMemory import PPOMemory
 
-
 if __name__ == "__main__":
     # # 写入一个csv文件
     # with open("./log.csv", "a", newline="") as csvfile:
@@ -80,6 +79,9 @@ if __name__ == "__main__":
         batch_size=batch_size,
         n_epochs=n_epochs,
         init_data=hetero_data,
+        center_per_process=env.center_per_process,
+        per_process_num=env.per_process_num,
+        work_center2cell_list=env.work_center2cell_list,
     )
 
     # agent.load_model("last_model.pth")
@@ -108,26 +110,19 @@ if __name__ == "__main__":
         agent.network.eval()
         with torch.no_grad():
             # raw是一个2*节点数量
-            raw, log_prob = agent.get_action(obs_states, edge_index)
+            actions, center_ratio, log_prob = agent.get_action(obs_states, edge_index)
             value = agent.get_value(obs_states, edge_index)
-        writer.add_scalars(
-            "step/products",
-            {
-                f"产品{i}": env.storage_list[i].get_product_num()
-                for i in range(0, len(env.storage_list))
-            },
-            total_step,
-        )
         # 这个raw因为是字典，这里变了之后会影响get action中的raw
         # 后来还是改为了直接的tensor
         # for key, _value in raw.items():
         #    raw[key] = _value.cpu()
-        assert isinstance(raw, dict), "raw 不是字典"
+        # assert isinstance(raw, dict), "raw 不是字典"
         # assert raw.device != "cpu", "raw 不在cpu中"
-        _raw = {}
-        for key, _value in raw.items():
-            _raw[key] = _value.cpu()
-        env.update(_raw)
+        # logger.info(_raw)
+
+        env.update(actions.cpu(), center_ratio.cpu())
+        logger.info(env.get_obs())
+        raise SystemExit
         # 可视化状态
         # logger.debug(f"{total_step} {env.read_state()}")
 

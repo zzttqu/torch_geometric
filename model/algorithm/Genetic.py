@@ -26,18 +26,18 @@ for order_id in range(len(orders)):
 logger.info(total_time)
 
 
-def norm_list(array: np.ndarray, product_num, per_process_num):
-    array = array.reshape((per_process_num, product_num))
+def norm_list(array: np.ndarray, product_num, _funcs_per_process_num):
+    array = array.reshape((_funcs_per_process_num, product_num))
     for i in range(len(array)):
         array[i] = array[i] / np.sum(array[i])
     return array
 
 
-def generate_individual(product_num, per_process_num, syngen_num):
+def generate_individual(product_num, _funcs_per_process_num, syngen_num):
     init_syngen = []
     for i in range(syngen_num):
-        tmp = np.random.rand(per_process_num * product_num)
-        tmp = norm_list(tmp, per_process_num, product_num)
+        tmp = np.random.rand(_funcs_per_process_num * product_num)
+        tmp = norm_list(tmp, _funcs_per_process_num, product_num)
         init_syngen.append(tmp)
     return init_syngen
 
@@ -206,7 +206,7 @@ class GeneticAlgorithm:
         for i, pop in enumerate(self.population):
             product_using_time = np.zeros(self.product_num)
             for product in range(self.product_num):
-                for process in range(self.per_process_num):
+                for process in range(self._funcs_per_process_num):
                     raw_process_unit = pop[process][product] * self.RMT_units[process]
                     process_unit = raw_process_unit if raw_process_unit > 1 else 1
                     product_using_time[product] += self.eta_total_time[process][product] / int(process_unit)

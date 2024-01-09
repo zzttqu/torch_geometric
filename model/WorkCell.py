@@ -84,14 +84,14 @@ class WorkCell(BasicClass):
         # 停止工作
         elif action == 0:
             self.state = StateCode.workcell_ready
+        if self.process == 0:
+            self._materials = self.speed * 2
         # 检查当前状态
         self.state_check()
         if self.state == StateCode.workcell_working:
             # 工作中
             self._product_count += self.speed
             # 如果是0号功能，那就不扣原料
-            if self.function == 0:
-                return self.state
             self._materials -= self.speed
             # self._health -= 0.1
         return self.state
@@ -144,9 +144,7 @@ class WorkCell(BasicClass):
             [
                 func_norm,
                 state_norm,
-                # self.work_center_id,
                 speed_norm,
-                # self.products,
                 materials_norm,
             ],
             dtype=torch.float32,

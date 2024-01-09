@@ -121,7 +121,6 @@ class HGTNet(nn.Module):
                 data.num_node_features[node_type], hidden_channels
             )
         self.conv_list = torch.nn.ModuleList()
-        logger.info(data.metadata())
         for i in range(num_layers):
             if i == 0:
                 conv = HANConv(node_features_dict, hidden_channels, data.metadata(), heads=2)
@@ -165,7 +164,6 @@ class HGTNet(nn.Module):
         for conv in self.conv_list[1:]:
             x_dict = conv(x_dict, norm_edge_index_dict)
         # 两个输出，一个需要连接所有节点的特征然后输出一个value
-        logger.debug(x_dict)
         full_x = torch.cat([x for x in x_dict.values()], dim=0)
 
         value = self.linV(full_x).mean()
