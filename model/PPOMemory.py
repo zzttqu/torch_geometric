@@ -1,20 +1,21 @@
 from typing import Dict, List, Tuple
 
 import torch
+from torch import Tensor
 
 
 class PPOMemory:
     def __init__(
-        self,
-        batch_size: int,
-        device,
+            self,
+            batch_size: int,
+            device,
     ):
         self.node_states = [{} for _ in range(batch_size)]
         self.edge_indexes = [{} for _ in range(batch_size)]
         # 这里的actions用字典来存不同类型的动作
-        self.total_actions = [{} for _ in range(batch_size)]
+        self.total_actions = [torch.zeros(0, 2) for _ in range(batch_size)]
+        self.center_ratios = [torch.zeros(0) for _ in range(batch_size)]
         self.log_probs = [torch.zeros(0) for _ in range(batch_size)]
-
         self.values = torch.zeros(batch_size).to(device)
         self.rewards = torch.zeros(batch_size).to(device)
         self.dones = torch.zeros(batch_size).to(device)
@@ -22,18 +23,20 @@ class PPOMemory:
         self.count = 0
 
     def remember(
-        self,
-        node_state: Dict[str, torch.Tensor],
-        edge_index: Dict[str, torch.Tensor],
-        value: torch.Tensor,
-        reward: float,
-        done: int,
-        total_action: Dict[str, torch.Tensor],
-        log_probs: torch.Tensor,
-        episode_step: int = 0,
+            self,
+            node_state: Dict[str, Tensor],
+            edge_index: Dict[str, Tensor],
+            value: Tensor,
+            reward: float,
+            done: int,
+            actions: Tensor,
+            center_ratios: Tensor,
+            log_probs: Tensor,
+            episode_step: int = 0,
     ):
         self.node_states[self.count] = node_state
-        self.total_actions[self.count] = total_action
+        self.total_actions[self.count] = actions
+        self.center_ratios[self.count] = center_ratios
         self.log_probs[self.count] = log_probs
         self.edge_indexes[self.count] = edge_index
         self.values[self.count] = value
@@ -43,15 +46,16 @@ class PPOMemory:
         self.count += 1
 
     def generate_batches(
-        self,
+            self,
     ) -> Tuple[
-        List[Dict[str, torch.Tensor]],
-        List[Dict[str, torch.Tensor]],
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        List[Dict[str, torch.Tensor]],
-        List[torch.Tensor],
+        List[Dict[str, Tensor]],
+        List[Dict[str, Tensor]],
+        Tensor,
+        Tensor,
+        Tensor,
+        List[Tensor],
+        List[Tensor],
+        List[Tensor],
     ]:
         data_list = []
         """ for i in range(self.count):
@@ -75,5 +79,6 @@ class PPOMemory:
             self.rewards,
             self.dones,
             self.total_actions,
+            self.center_ratios,
             self.log_probs,
         )

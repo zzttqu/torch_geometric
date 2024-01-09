@@ -121,8 +121,6 @@ if __name__ == "__main__":
         # logger.info(_raw)
 
         env.update(actions.cpu(), center_ratio.cpu())
-        logger.info(env.get_obs())
-        raise SystemExit
         # 可视化状态
         # logger.debug(f"{total_step} {env.read_state()}")
 
@@ -130,12 +128,15 @@ if __name__ == "__main__":
         # for key, _value in raw.items():
         #    raw[key] = _value.to(device)
         obs_states, edge_index, reward, dones, episode_step = env.get_obs()
-        # logger.debug(obs_states)
-        # logger.debug(_raw)
-
-        # env.show_graph(total_step)
         writer.add_scalar("step/reward", reward, total_step)
-        memory.remember(obs_states, edge_index, value, reward, dones, raw, log_prob)
+        memory.remember(obs_states,
+                        edge_index,
+                        value,
+                        reward,
+                        dones,
+                        actions.cuda(),
+                        center_ratio,
+                        log_prob)
         # 如果记忆数量等于batch_size就学习
         if memory.count == batch_size:
             learn_num += 1

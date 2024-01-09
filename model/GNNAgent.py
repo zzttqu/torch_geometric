@@ -57,7 +57,7 @@ class Agent:
             self,
             state: Dict[str, torch.Tensor],
             edge_index: Dict[str, torch.Tensor],
-            all_action: Dict[str, torch.Tensor] = None,  # type: ignore
+            all_action: torch.Tensor = None,  # type: ignore
     ) -> tuple[Tensor, Tensor, Tensor]:
         # hetero_data = T.ToUndirected()(hetero_data)
         all_logits, _ = self.network(state, edge_index)
@@ -80,13 +80,17 @@ class Agent:
                 cell_dist = Categorical(logits=cell_slice[:, 0])
                 # 这里其实不影响，因为实际上是修改的workcell，但是如果这个工作中心没有这个功能，其实工作单元也没有，那么这个输出的index其实就是celllist的index
                 activate_func = cell_dist.sample()
-                log_probs[center_id, 0] = cell_dist.log_prob(activate_func)
+                log_probs[center_id + process_index, 0] = cell_dist.log_prob(
+                    activate_func) if all_action is None else cell_dist.log_prob(
+                    all_action[process_index + center_id, 0])
                 # 这里是放置当前工序各个product的分配率
                 _ratio[activate_func, process_index] = cell_slice[activate_func, 1]
                 on_or_off = center_dist.sample()
-                log_probs[center_id, 1] = center_dist.log_prob(on_or_off)
-                actions[center_id, 0] = activate_func
-                actions[center_id, 1] = on_or_off
+                log_probs[center_id + process_index, 1] = center_dist.log_prob(
+                    on_or_off) if all_action is None else center_dist.log_prob(
+                    all_action[process_index + center_id, 1])
+                actions[center_id + process_index, 0] = activate_func
+                actions[center_id + process_index, 1] = on_or_off
             # 还需要考虑如果所有的cell都选了一个func就会导致全是inf，softmax后的tensor为nan
             _ratio = torch.softmax(_ratio, dim=1)
             # 如果有nan就改成0
@@ -142,15 +146,19 @@ class Agent:
             mini_batch_size,
             node: List[Dict[str, torch.Tensor]],
             edge: List[Dict[str, torch.Tensor]],
-            action_list: List[Dict[str, torch.Tensor]],
+            action_list: List[torch.Tensor],
     ):
-        all_log_probs = []
+        all_log_probs = [torch.zeros(2, 0) for _ in range(mini_batch_size)]
         for i in range(mini_batch_size):
-            _, log_probs = self.get_action(node[i], edge[i], action_list[i])
+            _, _, log_probs = self.get_action(node[i], edge[i], action_list[i])
             # 这个probs本来就是一维的，其实不用cat，stack更好吧
-            all_log_probs.append(log_probs)
+            logger.debug(log_probs)
+            logger.debug(action_list[i])
+            raise SystemExit
+            all_log_probs[i] = log_probs
+        # logger.debug(all_log_probs)
         log_probs_list = torch.cat(all_log_probs, dim=0).view((mini_batch_size, -1))
-        return log_probs_list.sum(0)
+        return log_probs_list
 
     def load_model(self, name):
         # 如果没有文件需要跳过
@@ -178,6 +186,7 @@ class Agent:
             rewards,
             dones,
             actions,
+            center_ratios,
             log_probs,
         ) = ppo_memory.generate_batches()
         # flat_states = batches.reshape(-1, batches.shape[-1])
@@ -223,8 +232,7 @@ class Agent:
                 mini_nodes = [nodes[i] for i in index]
                 mini_edges = [edges[i] for i in index]
                 mini_actions = [actions[i] for i in index]
-                # 这里必须用stack因为是堆叠出新的维度，logprobs只有一个维度
-                mini_probs = torch.stack([log_probs[i] for i in index])
+                mini_probs = [log_probs[i] for i in index]
                 new_log_prob = self.get_batch_actions_probs(
                     mini_batch_size,
                     mini_nodes,
