@@ -68,11 +68,23 @@ if __name__ == '__main__':
 
     edge_names = ["cell2center", "cell2storage", "storage2center", "storage2cell", "center2cell"]
     # logger.info(self.storage_id_relation)
-    a = Categorical(torch.tensor([0, 1]))
-    p = torch.tensor(0.0)
+    a = Categorical(logits=torch.tensor([[2, 0], [0.2, 0.7]]))
+    print(F.softmax(torch.tensor([[0.2, 0.7], [2, 0]]), dim=1))
+    e = Categorical(logits=torch.tensor([2, 0]))
+    print(F.softmax(torch.tensor([2.0, 0.0]), dim=0))
+    c = Categorical(logits=torch.tensor([0.2, 0.7]))
+    a0 = a.sample()
+    e0 = e.sample()
+    c0 = c.sample()
+    # 1.22 = > 0.37754
+    # 2.01 = > 0.62245
 
-    prob = a.log_prob(p)
-    print(prob)
+    proba = a.log_prob(a0)
+    probe = e.log_prob(e0)
+    probc = c.log_prob(c0)
+    print(a0, proba)
+    print(e0, probe)
+    print(c0, probc)
     raise SystemExit
     a1 = torch.tensor([2, 4, 6, 5])
     _a1 = a1.clone()

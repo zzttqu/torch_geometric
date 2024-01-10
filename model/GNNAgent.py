@@ -59,27 +59,30 @@ class Agent:
             edge_index: Dict[str, torch.Tensor],
             all_action: torch.Tensor = None,  # type: ignore
     ) -> tuple[Tensor, Tensor, Tensor]:
-        # hetero_data = T.ToUndirected()(hetero_data)
         all_logits, _ = self.network(state, edge_index)
         total_center_num = len(all_logits["center"])
         cell_logits, center_logits = all_logits.values()
-        # logger.debug(f'{cell_logits, center_logits}')
-        logger.debug(f"{state['cell']}")
 
         log_probs = torch.zeros((total_center_num, 2), dtype=torch.float32)
         actions = torch.zeros((total_center_num, 2), dtype=torch.float32)
         center_ratio = torch.zeros(total_center_num, dtype=torch.float32)
         # self.work_center_process中记录了各个process的workcenter数量
         center_id = 0
+        centers_dist = Categorical(logits=center_logits)
+        on_or_off = centers_dist.sample()
+
+        log_probs[:, 1] = centers_dist.log_prob(
+            on_or_off) if all_action is None else centers_dist.log_prob(
+            all_action[:, 1])
+        actions[:, 1] = on_or_off
         # 首先生产
         for process, center_num in enumerate(self.center_per_process):
             assert isinstance(center_num, Tensor), "center_num 必须是 Tensor"
             # 为了保证不影响softmax，如果是0会导致最后概率不为0，根据每个工序包括的功能数量初始化
             _ratio = torch.full((self.per_process_num[process], center_num), -torch.inf)
+            # TODO 急需优化，此处耗时过长
             for process_index, cell_ids in enumerate(self.work_center2cell_list[center_id:center_id + center_num]):
                 cell_slice = cell_logits[cell_ids]
-                center_slice = center_logits[center_id, :]
-                center_dist = Categorical(logits=center_slice)
                 cell_dist = Categorical(logits=cell_slice[:, 0])
                 # 这里其实不影响，因为实际上是修改的workcell，但是如果这个工作中心没有这个功能，其实工作单元也没有，那么这个输出的index其实就是celllist的index
                 activate_func = cell_dist.sample()
@@ -88,12 +91,8 @@ class Agent:
                     all_action[process_index + center_id, 0])
                 # 这里是放置当前工序各个product的分配率
                 _ratio[activate_func, process_index] = cell_slice[activate_func, 1]
-                on_or_off = center_dist.sample()
-                log_probs[center_id + process_index, 1] = center_dist.log_prob(
-                    on_or_off) if all_action is None else center_dist.log_prob(
-                    all_action[process_index + center_id, 1])
                 actions[center_id + process_index, 0] = activate_func
-                actions[center_id + process_index, 1] = on_or_off
+
             # 还需要考虑如果所有的cell都选了一个func就会导致全是inf，softmax后的tensor为nan
             _ratio = torch.softmax(_ratio, dim=1)
             # 如果有nan就改成0

@@ -51,9 +51,7 @@ class WorkCell(BasicClass):
             num (int): 接受原料，但是如果功能为0则忽略
         """
         # 接收原材料
-
         self._materials += num
-        logger.warning(f"接收了{type(self._materials)}")
 
     def send(self) -> int:
         """
@@ -63,7 +61,7 @@ class WorkCell(BasicClass):
         """
         current_product = self._product_count
         self._product_count = 0
-        return current_product
+        return int(current_product)
 
     def func_err(self):
         """

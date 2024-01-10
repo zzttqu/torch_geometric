@@ -24,7 +24,7 @@ class StorageCenter(BasicClass):
         self.max_func = 2 if max_func <= 1 else max_func
         self.goal = goal
         self.state = StateCode.workcell_working
-        self._product_count = 0
+        self._product_count: int = 0
 
     @property
     def product_id(self):

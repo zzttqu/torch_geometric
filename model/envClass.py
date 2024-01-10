@@ -94,7 +94,7 @@ class EnvRun:
         self.order = order
         self.speed_list = speed_list
         self.process_num = work_center_init_func.shape[0]
-        self.func_num = order.shape[0]
+        self.product_num = order.shape[0]
         # self.product_count = torch.zeros(size=(self.process_num, self.func_num), dtype=torch.int)
         self.total_center_num = work_center_init_func.sum()
         # 每个工序的工作中心数量
@@ -119,7 +119,7 @@ class EnvRun:
         # 这个是找到不为0的元素位置，是一个（2，n）的tensor
         storage_need_tensor = torch.nonzero(~speed_list.isnan(), as_tuple=False)
         # 根据speed构建storage
-        self.storage_list = [StorageCenter(product.item(), process.item(), order[product.item()], self.func_num) for
+        self.storage_list = [StorageCenter(product.item(), process.item(), order[product.item()], self.product_num) for
                              process, product in
                              storage_need_tensor]
 
@@ -136,6 +136,7 @@ class EnvRun:
         # 奖励和完成与否
         self.reward = 0
         self.done = 0
+        self.step_product_count = torch.zeros((self.process_num, self.product_num), dtype=torch.int)
         self.order_finish_count = torch.zeros(order.shape[0], dtype=torch.int)
         # 初始化边
         self.build_edge()
@@ -170,7 +171,6 @@ class EnvRun:
         cell_logits = all_action[:, 0]
         center_logits = all_action[:, 1]
         # self.work_center_process中记录了各个process的workcenter数量
-        center_id = 0
         # 首先生产
         for work_center, activate_func, on_or_off in zip(self.work_center_list, cell_logits, center_logits):
             work_center.work(activate_func.item(), on_or_off.item())
@@ -203,19 +203,26 @@ class EnvRun:
             # 更新center的id，方便循环内部使用
             center_id += center_num"""
         # 其次运输
-        for storage in self.storage_list:
-            storage_process, func1 = storage.process, storage.product_id
-            for center in self.work_center_list:
-                center_process, func2 = center.process, center.working_func
-                if center_process == 0:
-                    center.receive(0)
-                elif center_process - 1 == storage_process and func1 == func2:
-                    materials = storage.send(center_ratio[center.id])
-                    logger.debug(materials)
-                    center.receive(materials)
-                elif center_process == storage_process and func1 == func2:
-                    product = center.send()
-                    storage.receive(product)
+        for center in self.work_center_list:
+            if center.process == 0:
+                center.receive(0)
+                continue
+            # 只要当前这个工序有的功能，那么货架就肯定有，直接按顺序接收就好了
+            for storage, products in zip(self.storage_id_relation[center.process], center.send()):
+                self.storage_list[storage[0]].receive(products)
+
+            # 然后接收原材料，还是当前工序没有就找上一级
+            for storage in self.storage_id_relation[0:center.process]:
+                mask = torch.eq(storage[:, 1], center.working_func)
+                storage_index = torch.nonzero(mask)
+                # 如果为空，就是当前没找到，就找上一级
+                if storage_index.numel() == 0:
+                    continue
+                storage_index = storage_index.item()
+                materials = self.storage_list[storage_index].send(center_ratio[center.id])
+                center.receive(materials)
+                break
+
         # 最后计算奖励
         self.get_reward()
 
@@ -239,18 +246,23 @@ class EnvRun:
         products_reward = 0
 
         for storage in self.storage_list:
+            _process = storage.process
+            _spd = storage.product_id
+            _spdc = storage.product_count
+            self.step_product_count[_process][_spd] = _spdc - self.step_product_count[_process][_spd]
+            # 当前货架的变化情况，如果小于0说明被消耗了，要大大奖励
+            tmp_count = self.step_product_count[_process][_spd]
             # 只有库存过大的时候才会扣血
-            if storage.product_count > 2 * self.speed_list[storage.process][storage.product_id]:
-                products_reward -= storage.product_count / self.process_num * 0.01
-            if storage.process < self.process_num - 1:
-                products_reward += storage.product_count * (storage.process + 1) / self.order[storage.product_id] * 0.1
+            if _spdc > 2 * self.speed_list[_process][_spd]:
+                products_reward -= _spdc / self.process_num * 0.01
+            if _process < self.process_num - 1:
+                products_reward -= tmp_count / self.order[_spd] * 0.01
             # 最终产物大大奖励
-            elif storage.process == self.process_num - 1:
-                products_reward += storage.product_count / self.order[storage.product_id] * 0.5
-                if storage.product_count > self.order[storage.product_id] and self.order_finish_count[
-                    storage.product_id] != 1:
+            elif _process == self.process_num - 1:
+                products_reward += _spdc / self.order[_spd] * 0.5
+                if _spdc > self.order[_spd] and self.order_finish_count[_spd] != 1:
                     products_reward += 1
-                    self.order_finish_count[storage.product_id] = 1
+                    self.order_finish_count[_spd] = 1
             if self.order_finish_count.sum() > len(self.order):
                 self.done = 1
                 break
@@ -267,7 +279,7 @@ class EnvRun:
     ) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor], float, int, int]:
         # 先从workcenter中取出来，再从celllist的list中取出来每个cell的tensor
         work_cell_states = torch.stack([cell for work_center in self.work_center_list for cell in
-                                        work_center.get_all_cell_state(self.max_speed, self.func_num,
+                                        work_center.get_all_cell_state(self.max_speed, self.product_num,
                                                                        self.state_code_size)], dim=0).to(self.device)
         # for work_center in self.work_center_list:
         #     a += work_center.get_all_cell_state()
@@ -275,7 +287,7 @@ class EnvRun:
         # sort_state = sorted(a, key=lambda x: x[0])
         # 这里会因为cell_id的自增出问题
         storage_states = torch.stack([storage.status() for storage in self.storage_list], dim=0).to(self.device)
-        work_center_states = torch.stack([center.status(self.func_num) for center in self.work_center_list], dim=0).to(
+        work_center_states = torch.stack([center.status(self.product_num) for center in self.work_center_list], dim=0).to(
             self.device)
 
         obs_states: Dict[str, torch.Tensor] = {

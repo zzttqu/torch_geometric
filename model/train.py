@@ -9,8 +9,10 @@ from loguru import logger
 from torch_geometric.data import HeteroData
 from model.GNNAgent import Agent
 from model.PPOMemory import PPOMemory
+import cProfile
 
-if __name__ == "__main__":
+
+def main():
     # # 写入一个csv文件
     # with open("./log.csv", "a", newline="") as csvfile:
     #     writer = csv.writer(csvfile)
@@ -24,8 +26,6 @@ if __name__ == "__main__":
     torch.set_printoptions(precision=3, sci_mode=False)
     # 神奇trick
     torch.manual_seed(3407)
-    function_num = 3
-    work_center_num = 5
     batch_size = 32
     order = torch.tensor([100, 600, 200], dtype=torch.int)
     # 这里应该是对各个工作单元进行配置了
@@ -37,8 +37,8 @@ if __name__ == "__main__":
 
     speed_list = torch.tensor([[5, 10, 15, 20, 12], [8, 12, 18, torch.nan, 12], [3, 6, torch.nan, 10, 8]]).T
     total_step = init_step
-    max_steps = 2
-    episode_step_max = 64
+    max_steps = 32
+    episode_step_max = 100
     n_epochs = 8
 
     episode_num = 0
@@ -97,12 +97,12 @@ if __name__ == "__main__":
     )
     # 添加
     # show()
+
     while total_step < init_step + max_steps:
-        logger.debug(f"第{total_step}步")
+        # logger.debug(f"第{total_step}步")
         total_step += 1
         agent.network.eval()
         with torch.no_grad():
-            # raw是一个2*节点数量
             actions, center_ratio, log_prob = agent.get_action(obs_states, edge_index)
             value = agent.get_value(obs_states, edge_index)
         # 这个raw因为是字典，这里变了之后会影响get action中的raw
@@ -165,3 +165,8 @@ if __name__ == "__main__":
     #     csv_writer = csv.writer(csvfile)
     #     csv_writer.writerow([total_step, f"{reward:.3f}"])
     # print(f"总计用时：{total_time}分钟，运行{total_step}步，学习{learn_num}次")
+
+
+if __name__ == '__main__':
+    # main()
+    cProfile.run('main()', sort='cumulative')

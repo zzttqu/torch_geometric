@@ -151,7 +151,7 @@ class HGTNet(nn.Module):
             node1, node2 = key.split("2")
             norm_edge_index_dict[f"{node1}", f"{key}", f"{node2}"] = _value
         # 根据node type分别传播，这里由于改了inputdim，还不能直接去掉encoder层
-        # 目前不用encoder层
+        # 目前用encoder层
         x_dict = {
             node_type: F.leaky_relu(self.encoders[f"{node_type}_linear"](x))
             for node_type, x in x_dict.items()

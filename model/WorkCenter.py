@@ -26,15 +26,20 @@ class WorkCenter(BasicClass):
         # 这次的list长度不包括nan，有几个就是几个，但是对应序号是【1,2】这样，不是【nan，1,2】
         # 所以在选择working_cell的时候需要注意workcell_list长度不是和funclist中的元素一样长的，可能会出现越界
         # 比如只有两个，但是里边是[1,2]选了2就会导致越界
-        self.func_list: Tensor = torch.nonzero(~torch.isnan(speed_list), as_tuple=False).flatten()
+        self._func_list: Tensor = torch.nonzero(~torch.isnan(speed_list), as_tuple=False).flatten()
         # 构建workcell
-        self.workcell_list: List[WorkCell] = [WorkCell(func, speed_list[func].item(), process_id) for func in self.func_list]
+        self.workcell_list: List[WorkCell] = [WorkCell(func, speed_list[func].item(), process_id) for func in
+                                              self._func_list]
         self._working_func = init_func
         self._working_speed = self._speed_list[init_func]
-        self._working_cell = self.workcell_list[torch.where(self.func_list == init_func)[0].item()]
+        self._working_cell = self.workcell_list[torch.where(self._func_list == init_func)[0].item()]
         self._all_cell_id = torch.tensor([workcell.id for workcell in self.workcell_list], dtype=torch.int)
         # 0是停止工作
         self.state = 0
+
+    @property
+    def func_list(self):
+        return self._func_list
 
     def build_edge(self, storage_list: list[Tensor]) -> Tuple[Tensor, Tensor, Tensor, Union[Tensor, None], Tensor]:
         """
@@ -56,7 +61,7 @@ class WorkCenter(BasicClass):
         _storage2cell_tensor = None
         if self.process > 0:
             # 如果上一级工序包括这一级的功能，就是这一级的原材料上一级都有
-            func_need_match = self.func_list.clone().view(-1, 1)
+            func_need_match = self._func_list.clone().view(-1, 1)
             _storage2cell_tensor = torch.empty((2, 0), dtype=torch.long)
             for i, _storage in enumerate(reversed(storage_list[0:self.process])):
                 # 看看有哪些重复的，会广播为（func_list_num，storage_num）的tensor，
@@ -75,7 +80,7 @@ class WorkCenter(BasicClass):
                 tmp = torch.stack((_storage_ids, _cell_ids), dim=0)
                 # 然后再循环连接
                 _storage2cell_tensor = torch.cat((_storage2cell_tensor, tmp), dim=1)
-                if func_need_match.sum() == -1 * len(self.func_list):
+                if func_need_match.sum() == -1 * len(self._func_list):
                     break
 
             # _storage2cell_list = [(_storage_id, cell.id) for cell in self.workcell_list for
@@ -135,8 +140,8 @@ class WorkCenter(BasicClass):
         for cell in self.workcell_list:
             cell.reset()
 
-    def send(self) -> int:
-        return self._working_cell.send()
+    def send(self) -> list[int]:
+        return [cell.send() for cell in self.workcell_list]
 
     @property
     def working_func(self):
@@ -147,7 +152,7 @@ class WorkCenter(BasicClass):
         return self._all_cell_id
 
     def get_func_list(self):
-        return self.func_list
+        return self._func_list
 
     def get_all_cell_state(self, max_speed=1, func_num=1, state_code_len=1):
         return [cell.status(max_speed, func_num, state_code_len) for cell in self.workcell_list]
