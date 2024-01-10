@@ -204,6 +204,8 @@ class EnvRun:
             center_id += center_num"""
         # 其次运输
         for center in self.work_center_list:
+            if center.working_speed == 0:
+                continue
             if center.process == 0:
                 center.receive(0)
                 continue
@@ -287,7 +289,8 @@ class EnvRun:
         # sort_state = sorted(a, key=lambda x: x[0])
         # 这里会因为cell_id的自增出问题
         storage_states = torch.stack([storage.status() for storage in self.storage_list], dim=0).to(self.device)
-        work_center_states = torch.stack([center.status(self.product_num) for center in self.work_center_list], dim=0).to(
+        work_center_states = torch.stack([center.status(self.product_num) for center in self.work_center_list],
+                                         dim=0).to(
             self.device)
 
         obs_states: Dict[str, torch.Tensor] = {

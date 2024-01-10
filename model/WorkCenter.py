@@ -22,13 +22,14 @@ class WorkCenter(BasicClass):
         """
         super().__init__(process_id)
         # 这个是工作中心属于第几道工序
-        self._speed_list = speed_list
+        self._speed_list = torch.nan_to_num(speed_list, nan=0)
         # 这次的list长度不包括nan，有几个就是几个，但是对应序号是【1,2】这样，不是【nan，1,2】
         # 所以在选择working_cell的时候需要注意workcell_list长度不是和funclist中的元素一样长的，可能会出现越界
         # 比如只有两个，但是里边是[1,2]选了2就会导致越界
-        self._func_list: Tensor = torch.nonzero(~torch.isnan(speed_list), as_tuple=False).flatten()
+        self._func_list = torch.arange(speed_list.shape[0])
+        # self._func_list: Tensor = torch.nonzero(~torch.isnan(speed_list), as_tuple=False).flatten()
         # 构建workcell
-        self.workcell_list: List[WorkCell] = [WorkCell(func, speed_list[func].item(), process_id) for func in
+        self.workcell_list: List[WorkCell] = [WorkCell(func, self._speed_list[func].item(), process_id) for func in
                                               self._func_list]
         self._working_func = init_func
         self._working_speed = self._speed_list[init_func]
@@ -146,6 +147,10 @@ class WorkCenter(BasicClass):
     @property
     def working_func(self):
         return self._working_func
+
+    @property
+    def working_speed(self):
+        return self._working_speed
 
     @property
     def all_cell_id(self) -> Tensor:
