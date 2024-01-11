@@ -167,12 +167,11 @@ class EnvRun:
             self.edge_index[edge_name] = tmp.to(self.device)
         return self.edge_index
 
-    def update(self, all_action: Tensor, center_ratio: Tensor):
-        cell_logits = all_action[:, 0]
-        center_logits = all_action[:, 1]
+    def update(self, centers_power_action, center_func_action, centers_ratio):
+
         # self.work_center_process中记录了各个process的workcenter数量
         # 首先生产
-        for work_center, activate_func, on_or_off in zip(self.work_center_list, cell_logits, center_logits):
+        for work_center, activate_func, on_or_off in zip(self.work_center_list, center_func_action, centers_power_action):
             work_center.work(activate_func.item(), on_or_off.item())
         """ for process, center_num in enumerate(self._center_per_process):
             assert isinstance(center_num, Tensor), "center_num 必须是 Tensor"
@@ -202,8 +201,10 @@ class EnvRun:
             center_ratio[center_id:center_id + center_num] = ratios
             # 更新center的id，方便循环内部使用
             center_id += center_num"""
+
         # 其次运输
         for center in self.work_center_list:
+            # speed是0就说明不存在这个工序，直接跳过
             if center.working_speed == 0:
                 continue
             if center.process == 0:
@@ -221,7 +222,7 @@ class EnvRun:
                 if storage_index.numel() == 0:
                     continue
                 storage_index = storage_index.item()
-                materials = self.storage_list[storage_index].send(center_ratio[center.id])
+                materials = self.storage_list[storage_index].send(centers_ratio[center.id])
                 center.receive(materials)
                 break
 

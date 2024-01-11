@@ -28,7 +28,7 @@ def main():
     torch.manual_seed(3407)
     batch_size = 32
     order = torch.tensor([100, 600, 200], dtype=torch.int)
-    # 这里应该是对各个工作单元进行配置了
+    # 这里应该是对各个工作单元进行配置了60个center
     work_center_init_func = torch.tensor([[3, 3, 10],
                                           [2, 2, 6],
                                           [4, 5, 0],
@@ -72,8 +72,9 @@ def main():
         n_epochs=n_epochs,
         init_data=hetero_data,
         center_per_process=env.center_per_process,
-        per_process_num=env.per_process_num,
-        work_center2cell_list=env.work_center2cell_list,
+        center_num=env.total_center_num,
+        process_num=env.process_num,
+        product_num=env.product_num,
     )
 
     # agent.load_model("last_model.pth")
@@ -103,7 +104,8 @@ def main():
         total_step += 1
         agent.network.eval()
         with torch.no_grad():
-            actions, center_ratio, log_prob = agent.get_action(obs_states, edge_index)
+            centers_power_action, center_func_action, centers_ratio, log_prob_power, log_prob_func = agent.get_action(
+                obs_states, edge_index)
             value = agent.get_value(obs_states, edge_index)
         # 这个raw因为是字典，这里变了之后会影响get action中的raw
         # 后来还是改为了直接的tensor
@@ -113,7 +115,7 @@ def main():
         # assert raw.device != "cpu", "raw 不在cpu中"
         # logger.info(_raw)
 
-        env.update(actions.cpu(), center_ratio.cpu())
+        env.update(centers_power_action.cpu(), center_func_action.cpu(), centers_ratio.cpu())
         # 可视化状态
         # logger.debug(f"{total_step} {env.read_state()}")
 
@@ -127,9 +129,11 @@ def main():
                         value,
                         reward,
                         dones,
-                        actions.cuda(),
-                        center_ratio,
-                        log_prob)
+                        centers_power_action.cuda(),
+                        center_func_action.cuda(),
+                        centers_ratio,
+                        log_prob_power,
+                        log_prob_func)
         # 如果记忆数量等于batch_size就学习
         if memory.count == batch_size:
             learn_num += 1
@@ -168,5 +172,5 @@ def main():
 
 
 if __name__ == '__main__':
-    # main()
-    cProfile.run('main()', sort='cumulative')
+    main()
+    # cProfile.run('main()', sort='cumulative')

@@ -53,11 +53,11 @@ class WorkCenter(BasicClass):
 
         """
         # 还是得有center作为节点，因为center需要聚合多个cell和下一级storage的信息得出该节点是否工作
-        _cell2center_list = [(cell.id, self.id) for cell in self.workcell_list if cell.speed is not 0]
+        _cell2center_list = [(cell.id, self.id) for cell in self.workcell_list if cell.speed != 0]
         _storage2center_list = [(_storage_id, self.id) for
                                 (_storage_id, _product_id) in storage_list[self.process]]
         # cell通过storage和center的信息判断启动哪个节点
-        _center2cell_list = [(self.id, cell.id) for cell in self.workcell_list if cell.speed is not 0]
+        _center2cell_list = [(self.id, cell.id) for cell in self.workcell_list]
         #                       cell.get_function() == _product_id and self.category == _category_id]
         _storage2cell_tensor = None
         if self.process > 0:
@@ -94,7 +94,7 @@ class WorkCenter(BasicClass):
 
         _cell2storage_list = [(cell.id, _storage_id) for cell in self.workcell_list for
                               (_storage_id, _product_id) in storage_list[self.process] if
-                              cell.function == _product_id and cell.speed is not 0]
+                              cell.function == _product_id and cell.speed != 0]
 
         _cell2storage_tensor: Tensor = torch.tensor(_cell2storage_list, dtype=torch.long).T
         _cell2center_tensor: Tensor = torch.tensor(_cell2center_list, dtype=torch.long).T
