@@ -66,6 +66,10 @@ if __name__ == '__main__':
     from torch.distributions import Categorical
     import torch.nn.functional as F
 
+    a = torch.tensor([[0.2, 0.7], [2, 0]])
+    b = torch.tensor([0])
+    print(a[b])
+    raise SystemExit
     edge_names = ["cell2center", "cell2storage", "storage2center", "storage2cell", "center2cell"]
     # logger.info(self.storage_id_relation)
     a = Categorical(logits=torch.tensor([[2, 0], [0.2, 0.7]]))
@@ -85,7 +89,7 @@ if __name__ == '__main__':
     print(a0, proba)
     print(e0, probe)
     print(c0, probc)
-    raise SystemExit
+
     a1 = torch.tensor([2, 4, 6, 5])
     _a1 = a1.clone()
     b1 = [torch.tensor([[1, 2], [2, 3], [0, 4]]), torch.tensor([[4, 2], [5, 3], [6, 6]])]

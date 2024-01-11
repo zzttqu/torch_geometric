@@ -87,11 +87,13 @@ class EnvRun:
             order,
             speed_list,
             device,
+            expected_step,
             episode_step_max=256,
     ):
         self.device = device
         self.edge_index: Dict[str, Union[torch.Tensor, list]] = {}
         self.order = order
+        self.expected_step = expected_step
         self.speed_list = speed_list
         self.process_num = work_center_init_func.shape[0]
         self.product_num = order.shape[0]
@@ -168,11 +170,18 @@ class EnvRun:
         return self.edge_index
 
     def update(self, centers_power_action, center_func_action, centers_ratio):
-
+        # logger.info('更新')
+        # aaa = torch.arange(self.total_center_num)
+        # torch.stack([aaa, centers_power_action], dim=1)
+        # logger.info(torch.stack([aaa, centers_power_action], dim=1))
+        # logger.info(torch.stack([aaa, center_func_action], dim=1))
+        # logger.info(torch.stack([aaa, centers_ratio], dim=1))
         # self.work_center_process中记录了各个process的workcenter数量
         # 首先生产
-        for work_center, activate_func, on_or_off in zip(self.work_center_list, center_func_action, centers_power_action):
-            work_center.work(activate_func.item(), on_or_off.item())
+        for center, activate_func, on_or_off in zip(self.work_center_list, center_func_action,
+                                                    centers_power_action):
+            center.work(activate_func.item(), on_or_off.item())
+            # logger.info(f'{work_center.id}   {work_center.working_func}   {activate_func.item()},{ on_or_off.item()}')
         """ for process, center_num in enumerate(self._center_per_process):
             assert isinstance(center_num, Tensor), "center_num 必须是 Tensor"
             # 为了保证不影响softmax，如果是0会导致最后概率不为0，根据每个工序包括的功能数量初始化
@@ -201,31 +210,43 @@ class EnvRun:
             center_ratio[center_id:center_id + center_num] = ratios
             # 更新center的id，方便循环内部使用
             center_id += center_num"""
-
         # 其次运输
         for center in self.work_center_list:
-            # speed是0就说明不存在这个工序，直接跳过
-            if center.working_speed == 0:
-                continue
+            # 只要当前这个工序有的功能，那么货架就肯定有，直接按顺序接收就好了
+            tmp = center.send()
+            # 第一个是center的id，第二个是center接收的产品id
+            for process_storage in self.storage_id_relation[center.process]:
+                self.storage_list[process_storage[0]].receive(tmp[process_storage[1]])
+            # 第0级不参与receive
             if center.process == 0:
                 center.receive(0)
                 continue
-            # 只要当前这个工序有的功能，那么货架就肯定有，直接按顺序接收就好了
-            for storage, products in zip(self.storage_id_relation[center.process], center.send()):
-                self.storage_list[storage[0]].receive(products)
-
-            # 然后接收原材料，还是当前工序没有就找上一级
-            for storage in self.storage_id_relation[0:center.process]:
-                mask = torch.eq(storage[:, 1], center.working_func)
-                storage_index = torch.nonzero(mask)
+            # speed是0就说明不存在这个工序，直接跳过
+            if center.working_speed == 0:
+                continue
+            #  0就说明没工作或者没这个功能
+            if centers_ratio[center.id] == 0:
+                continue
+            # 然后接收原材料，还是当前工序没有就找上一级，要倒序啊！从0级开始不是个寄吧
+            for process_storage in reversed(self.storage_id_relation[0:center.process]):
+                mask = torch.eq(process_storage[:, 1], center.working_func)
+                process_storage_index = torch.nonzero(mask).flatten()
                 # 如果为空，就是当前没找到，就找上一级
-                if storage_index.numel() == 0:
+                if process_storage_index.numel() == 0:
                     continue
-                storage_index = storage_index.item()
-                materials = self.storage_list[storage_index].send(centers_ratio[center.id])
+                # 必须不是tensor，如果是tensor[0]会导致取出来的部分不会降维
+                process_storage_index = process_storage_index.item()
+                # 这个才是真正的id process_storage[process_storage_index][0]
+                storage_id = process_storage[process_storage_index][0].item()
+                materials = self.storage_list[storage_id].send(centers_ratio[center.id])
+                # logger.debug(
+                #         f"{storage_id}   工序{center.process}中心{center.id},正在执行：{center.working_func}，接收{materials}个原料")
                 center.receive(materials)
+                # 找到之后就直接退出这个循环
                 break
-
+        # 刷新库存
+        for storage in self.storage_list:
+            storage.step()
         # 最后计算奖励
         self.get_reward()
 
@@ -255,21 +276,29 @@ class EnvRun:
             self.step_product_count[_process][_spd] = _spdc - self.step_product_count[_process][_spd]
             # 当前货架的变化情况，如果小于0说明被消耗了，要大大奖励
             tmp_count = self.step_product_count[_process][_spd]
-            # 只有库存过大的时候才会扣血
-            if _spdc > 2 * self.speed_list[_process][_spd]:
-                products_reward -= _spdc / self.process_num * 0.01
             if _process < self.process_num - 1:
+                # 当前货架的变化情况，如果小于0说明被消耗了，要大大奖励
                 products_reward -= tmp_count / self.order[_spd] * 0.01
+                # 只有库存过大的时候才会扣血
+                if _spdc > 2 * self.speed_list[_process][_spd]:
+                    products_reward -= _spdc / self.process_num * 0.05
             # 最终产物大大奖励
             elif _process == self.process_num - 1:
-                products_reward += _spdc / self.order[_spd] * 0.5
+                products_reward += tmp_count / self.order[_spd] * 0.1
+                # 如果达到订单数量且这个产品型号并未达到过订单数量，就+50奖励
                 if _spdc > self.order[_spd] and self.order_finish_count[_spd] != 1:
-                    products_reward += 1
+                    logger.warning(f'{_spd}号产品达到所需要的订单数量')
+                    products_reward += 50
+                    # 如果达到就置为1
                     self.order_finish_count[_spd] = 1
-            if self.order_finish_count.sum() > len(self.order):
+            if self.order_finish_count.sum() >= len(self.order):
                 self.done = 1
+                products_reward += 100
                 break
+                # 时间惩罚
+        time_penalty = self.episode_step / self.episode_step_max + 0.5 * self.expected_step / self.expected_step
         self.reward += products_reward
+        self.reward -= time_penalty
         # 最终产物肯定要大大滴加分
 
         # 最终产物奖励，要保证这个产物奖励小于扣血
@@ -314,16 +343,8 @@ class EnvRun:
         return process_raw_data(self.edge_index, raw_state)
 
     def read_state(self):
-        a = [cell for work_center in self.work_center_list for cell in work_center.read_all_cell_state()]
-
-        b = [int(center.read_state()) for center in self.work_center_list]
-
         c = [storage.read_state() for storage in self.storage_list]
-        return {
-            "cell": a,
-            "center": b,
-            "storage": c,
-        }
+        return {"storage": c}
 
     def reset(self):
         # 只有重新生成的时候再resetid

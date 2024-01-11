@@ -1,5 +1,6 @@
 import math
 
+from loguru import logger
 import torch
 from model.StateCode import *
 from typing import ClassVar
@@ -25,6 +26,7 @@ class StorageCenter(BasicClass):
         self.goal = goal
         self.state = StateCode.workcell_working
         self._product_count: int = 0
+        self.step_send_product = 0
 
     @property
     def product_id(self):
@@ -41,15 +43,25 @@ class StorageCenter(BasicClass):
         """
         self._product_count += num
 
-    def send(self, ratio: int) -> int:
+        # logger.debug(
+        #     f"{self.id}号货架，工序{self.process},储存{self.product_id}产品，接收产品{num}现有产品{self._product_count}")
+
+    def send(self, ratio: float) -> int:
         """
         从产品中心向下一级生产中心发送产品
         :param ratio: 需要发送产品占比
         :return:
         """
         product = math.floor(self._product_count * ratio)
-        self._product_count -= product
+        # logger.debug(
+        #     f"{self.id}号货架，工序{self.process}，发送产品{product}，发送比例:{ratio}现有产品{self._product_count - self.step_send_product}")
+        self.step_send_product += product
         return product
+
+    # 等全部发送完了才能减掉
+    def step(self):
+        self._product_count = self._product_count - self.step_send_product
+        self.step_send_product = 0
 
     def reset(self):
         self._product_count = 0
@@ -65,9 +77,9 @@ class StorageCenter(BasicClass):
         product_id_norm = self.product_id / (self.max_func - 1)
         return torch.tensor([product_id_norm, produce_progress], dtype=torch.float32)
 
-    def read_state(self) -> list[int]:
+    def read_state(self) -> int:
         """
         读取产品状态，不用规范化
         :return:【产品id，产品数量】
         """
-        return [self.product_id, self._product_count]
+        return self._product_count

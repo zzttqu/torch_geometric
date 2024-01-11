@@ -84,10 +84,13 @@ class Agent:
         # 物料分配概率
         # 先创建一个[0,1,2]的tensor，然后增加一个维度变成[[0,1,2]]，因为center_func_action是[1,2,1,2,0......]，
         # 所以也需要扩展把这个变成竖着的，然后两个求布尔，就和workcenter中生成边是一个道理
-        mask = torch.arange(center_ratio_logits.size(1), device=self.device).unsqueeze(
-            0) != center_func_action.unsqueeze(1)
-        # 未被选中的cell的分配率为负无穷
-        center_ratio_logits[mask] = -torch.inf
+        mask = torch.eq(torch.arange(center_ratio_logits.size(1), device=self.device).unsqueeze(
+            0), center_func_action.unsqueeze(1))
+        # 只有既开启并有功能的cell才能参与分配,需要新建一个维度来广播
+        # 逐个元素求与，需要同时满足
+        mask = torch.logical_and(mask, centers_power_action.unsqueeze(1)).bool()
+        # 未被选中的cell的分配率为负无穷，要取反，因为都满足才能留下，所以如果True被-inf就寄了，所以需要取反
+        center_ratio_logits[~mask] = -torch.inf
         # logger.debug(center_ratio_logits)
         # 提取每个center被选中的func的分配率
         _center_id = 0
@@ -98,7 +101,6 @@ class Agent:
             _center_id = _center_id + num
         center_ratio_logits = torch.nan_to_num(center_ratio_logits, nan=0, posinf=0, neginf=0)
         centers_ratio: Tensor = center_ratio_logits.sum(dim=1)
-
         """# 首先生产
         for process, center_num in enumerate(self.center_per_process):
             assert isinstance(center_num, Tensor), "center_num 必须是 Tensor"

@@ -1,3 +1,4 @@
+import sys
 from datetime import datetime
 
 import numpy as np
@@ -12,21 +13,12 @@ from model.PPOMemory import PPOMemory
 import cProfile
 
 
-def main():
+def main(max_steps):
     # # 写入一个csv文件
     # with open("./log.csv", "a", newline="") as csvfile:
     #     writer = csv.writer(csvfile)
     #     writer.writerow([0, 0, 0])
     # 读取用np读，写入用csv写
-
-    init_step = 0
-    # 设置显示
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    np.set_printoptions(precision=3, suppress=True)
-    torch.set_printoptions(precision=3, sci_mode=False)
-    # 神奇trick
-    torch.manual_seed(3407)
-    batch_size = 32
     order = torch.tensor([100, 600, 200], dtype=torch.int)
     # 这里应该是对各个工作单元进行配置了60个center
     work_center_init_func = torch.tensor([[3, 3, 10],
@@ -36,12 +28,17 @@ def main():
                                           [2, 3, 5]], dtype=torch.int)
 
     speed_list = torch.tensor([[5, 10, 15, 20, 12], [8, 12, 18, torch.nan, 12], [3, 6, torch.nan, 10, 8]]).T
-    total_step = init_step
-    max_steps = 32
-    episode_step_max = 100
-    n_epochs = 8
+    init_step = 0
+    # 设置
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    # 神奇trick
+    torch.manual_seed(3407)
+    batch_size = 128
 
-    episode_num = 0
+    total_step = init_step
+    max_steps = max_steps
+    episode_step_max = 256
+    n_epochs = 8
     learn_num = 0
 
     env = EnvRun(
@@ -49,6 +46,7 @@ def main():
         speed_list=speed_list,
         work_center_init_func=work_center_init_func,
         device=device,
+        expected_step=80,
         episode_step_max=episode_step_max,
     )
     # 如果不可视化节点就不用取返回值graph
@@ -77,13 +75,12 @@ def main():
         product_num=env.product_num,
     )
 
-    # agent.load_model("last_model.pth")
+    agent.load_model("last_model.pth")
     memory = PPOMemory(
         batch_size,
         device,
     )
 
-    init_time = datetime.now()
     logger.info(f"模型加载完成，环境初始化完成")
     now_time = datetime.now()
 
@@ -98,7 +95,7 @@ def main():
     )
     # 添加
     # show()
-
+    episode = 0
     while total_step < init_step + max_steps:
         # logger.debug(f"第{total_step}步")
         total_step += 1
@@ -118,7 +115,8 @@ def main():
         env.update(centers_power_action.cpu(), center_func_action.cpu(), centers_ratio.cpu())
         # 可视化状态
         # logger.debug(f"{total_step} {env.read_state()}")
-
+        for i, mm in enumerate(env.read_state()['storage']):
+            writer.add_scalar(f"step/state/{i}storage", mm, total_step)
         # 所以需要搬回cuda中
         # for key, _value in raw.items():
         #    raw[key] = _value.to(device)
@@ -146,14 +144,14 @@ def main():
                 mini_batch_size=batch_size // 2,
             )
             learn_time = (datetime.now() - now_time).seconds
-            print(f"第{learn_num}次学习，学习用时：{learn_time}秒")
+            logger.info(f"第{learn_num}次学习，学习用时：{learn_time}秒")
             agent.save_model("last_model.pth")
             now_time = datetime.now()
             writer.add_scalar("loss", loss, total_step)
         if dones == 1:
-            print("=================")
-            print(f"总步数：{total_step}，本次循环步数为：{episode_step}，奖励为{reward:.3f}")
-            writer.add_scalar("reward", reward, total_step)
+            episode += 1
+            logger.info(f"总步数：{total_step}，本次循环步数为：{episode_step}，奖励为{reward:.3f}")
+            writer.add_scalar("reward", reward, episode)
             # with open("./log.csv", "a", newline="") as csvfile:
             #     csv_writer = csv.writer(csvfile)
             #     csv_writer.writerow([total_step, f"{reward:.3f}"])
@@ -172,5 +170,7 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    # logger.remove()
+    # logger.add(sys.stderr, level='WARNING')
+    main(512)
     # cProfile.run('main()', sort='cumulative')

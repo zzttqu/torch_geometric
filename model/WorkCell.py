@@ -15,6 +15,7 @@ class WorkCell(BasicClass):
             function_id: int,
             speed: int,
             process_id,
+            material: int = 0,
     ):
 
         """
@@ -25,7 +26,8 @@ class WorkCell(BasicClass):
         """
         # 需要有当前这个工作单元每个功能的备件，每个功能生产效率
         super().__init__(process_id)
-        self._materials = int(speed)
+        self._materials = material
+        self._init_materials = material
         self._product_count = 0
         self._health = 100
         self._speed = speed
@@ -121,7 +123,7 @@ class WorkCell(BasicClass):
         """
         self.state = StateCode.workcell_ready
         # 给一个基础的原料
-        self._materials = self.speed
+        self._materials = self._init_materials
         self._product_count = 0
 
     # 状态空间

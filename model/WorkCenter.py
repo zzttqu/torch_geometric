@@ -29,11 +29,13 @@ class WorkCenter(BasicClass):
         self._func_list = torch.arange(speed_list.shape[0])
         # self._func_list: Tensor = torch.nonzero(~torch.isnan(speed_list), as_tuple=False).flatten()
         # 构建workcell
-        self.workcell_list: List[WorkCell] = [WorkCell(func, self._speed_list[func].item(), process_id) for func in
-                                              self._func_list]
-        self._working_func = init_func
+        self.workcell_list: List[WorkCell] = [
+            WorkCell(func.item(), self._speed_list[func].item(), process_id, material=0) for func
+            in
+            self._func_list]
+        self._working_func: int = init_func
         self._working_speed = self._speed_list[init_func]
-        self._working_cell = self.workcell_list[torch.where(self._func_list == init_func)[0].item()]
+        self._working_cell = self.workcell_list[init_func]
         self._all_cell_id = torch.tensor([workcell.id for workcell in self.workcell_list], dtype=torch.int)
         # 0是停止工作
         self.state = 0
@@ -130,11 +132,12 @@ class WorkCenter(BasicClass):
             for i, cell in enumerate(self.workcell_list):
                 if i == activate_cell:
                     state = cell.work(1)
+                    # if self.id == 22:
+                    #     logger.error(f"{self.id} {self.process} {state}")
                     # 如果正常工作则修改work_center的状态
-                    if state == StateCode.workcell_working:
-                        self._working_cell = cell
-                        self._working_func = cell.function
-                        self._working_speed = cell.speed
+                    self._working_cell = cell
+                    self._working_func = cell.function
+                    self._working_speed = cell.speed
                 else:
                     cell.work(0)
 
