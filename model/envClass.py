@@ -120,6 +120,13 @@ class EnvRun:
         # 不包括没有那道工序的半成品
         # 这个是找到不为0的元素位置，是一个（2，n）的tensor
         storage_need_tensor = torch.nonzero(~speed_list.isnan(), as_tuple=False)
+        # 需要新增1，也就是现在货架的processid对应的是cell的process+1
+        storage_need_tensor[:, 0] += 1
+        # 为了从原料货架起始，需要加一个
+        material_id = torch.tensor([[0, i] for i in range(self.product_num)], dtype=torch.int)
+        storage_need_tensor = torch.cat((material_id, storage_need_tensor), dim=0)
+        logger.info(storage_need_tensor)
+        raise SystemExit
         # 根据speed构建storage
         self.storage_list = [StorageCenter(product.item(), process.item(), order[product.item()], self.product_num) for
                              process, product in

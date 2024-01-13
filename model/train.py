@@ -38,7 +38,7 @@ def main(max_steps):
     total_step = init_step
     max_steps = max_steps
     episode_step_max = 256
-    n_epochs = 8
+    n_epochs = 12
     learn_num = 0
 
     env = EnvRun(

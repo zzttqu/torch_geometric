@@ -23,9 +23,13 @@ class StorageCenter(BasicClass):
         super().__init__(process_id)
         self._product_id = product_id
         self.max_func = 2 if max_func <= 1 else max_func
+
+        self._product_count: int = 0
+        # 如果是process=0是原料仓库，库存就是产品数量
+        if self._process_id == 0:
+            self._product_count = goal
         self.goal = goal
         self.state = StateCode.workcell_working
-        self._product_count: int = 0
         self.step_send_product = 0
 
     @property

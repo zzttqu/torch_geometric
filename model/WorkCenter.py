@@ -62,6 +62,7 @@ class WorkCenter(BasicClass):
         _center2cell_list = [(self.id, cell.id) for cell in self.workcell_list]
         #                       cell.get_function() == _product_id and self.category == _category_id]
         _storage2cell_tensor = None
+        # TODO 以storage0原料仓库为起始节点，而不是工作单元0级
         if self.process > 0:
             # 如果上一级工序包括这一级的功能，就是这一级的原材料上一级都有
             func_need_match = self._func_list.clone().view(-1, 1)
