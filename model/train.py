@@ -33,7 +33,7 @@ def main(max_steps):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     # 神奇trick
     torch.manual_seed(3407)
-    batch_size = 128
+    batch_size = 64
 
     total_step = init_step
     max_steps = max_steps
@@ -75,7 +75,7 @@ def main(max_steps):
         product_num=env.product_num,
     )
 
-    agent.load_model("last_model.pth")
+    # agent.load_model("last_model.pth")
     memory = PPOMemory(
         batch_size,
         device,
@@ -172,5 +172,5 @@ def main(max_steps):
 if __name__ == '__main__':
     # logger.remove()
     # logger.add(sys.stderr, level='WARNING')
-    main(512)
+    main(256)
     # cProfile.run('main()', sort='cumulative')

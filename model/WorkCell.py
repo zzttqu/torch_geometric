@@ -86,8 +86,6 @@ class WorkCell(BasicClass):
         # 停止工作
         elif action == 0:
             self.state = StateCode.workcell_ready
-        if self.process == 0:
-            self._materials = self.speed * 2
         # 检查当前状态
         self.state_check()
         if self.state == StateCode.workcell_working:

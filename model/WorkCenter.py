@@ -62,33 +62,32 @@ class WorkCenter(BasicClass):
         _center2cell_list = [(self.id, cell.id) for cell in self.workcell_list]
         #                       cell.get_function() == _product_id and self.category == _category_id]
         _storage2cell_tensor = None
-        # TODO 以storage0原料仓库为起始节点，而不是工作单元0级
-        if self.process > 0:
-            # 如果上一级工序包括这一级的功能，就是这一级的原材料上一级都有
-            func_need_match = self._func_list.clone().view(-1, 1)
-            _storage2cell_tensor = torch.empty((2, 0), dtype=torch.long)
-            for i, _storage in enumerate(reversed(storage_list[0:self.process])):
-                # 看看有哪些重复的，会广播为（func_list_num，storage_num）的tensor，
-                # 所以每个点的纵坐标（第1维度）是storage的index，横坐标是func的index
-                # 因为storage是行的，需要复制三次变成3*3,每行都一样的，所以第一维度不一样，但是第零维度是一样的
-                # 所以得出结果的第0维度是storage的index，第1维度是func的index
-                mask = torch.eq(_storage[:, 1], func_need_match)
-                # 找到id
-                # 剔除-1找到索引
-                _storage_indexes = torch.nonzero(mask)[:, 1]
-                _cell_indexes = torch.nonzero(mask)[:, 0]
-                func_need_match[_cell_indexes] = -1
-                _storage_ids = _storage[_storage_indexes, 0]
-                _cell_ids = torch.tensor([self.workcell_list[index].id for index in _cell_indexes], dtype=torch.long)
-                # 先把两个id堆叠
-                tmp = torch.stack((_storage_ids, _cell_ids), dim=0)
-                # 然后再循环连接
-                _storage2cell_tensor = torch.cat((_storage2cell_tensor, tmp), dim=1)
-                if func_need_match.sum() == -1 * len(self._func_list):
-                    break
+        # 如果上一级工序包括这一级的功能，就是这一级的原材料上一级都有
+        func_need_match = self._func_list.clone().view(-1, 1)
+        _storage2cell_tensor = torch.empty((2, 0), dtype=torch.long)
+        # 以storage0原料仓库为起始节点，而不是工作单元0级
+        for i, _storage in enumerate(reversed(storage_list[0:self.process])):
+            # 看看有哪些重复的，会广播为（func_list_num，storage_num）的tensor，
+            # 所以每个点的纵坐标（第1维度）是storage的index，横坐标是func的index
+            # 因为storage是行的，需要复制三次变成3*3,每行都一样的，所以第一维度不一样，但是第零维度是一样的
+            # 所以得出结果的第0维度是storage的index，第1维度是func的index
+            mask = torch.eq(_storage[:, 1], func_need_match)
+            # 找到id
+            # 剔除-1找到索引
+            _storage_indexes = torch.nonzero(mask)[:, 1]
+            _cell_indexes = torch.nonzero(mask)[:, 0]
+            func_need_match[_cell_indexes] = -1
+            _storage_ids = _storage[_storage_indexes, 0]
+            _cell_ids = torch.tensor([self.workcell_list[index].id for index in _cell_indexes], dtype=torch.long)
+            # 先把两个id堆叠
+            tmp = torch.stack((_storage_ids, _cell_ids), dim=0)
+            # 然后再循环连接
+            _storage2cell_tensor = torch.cat((_storage2cell_tensor, tmp), dim=1)
+            if func_need_match.sum() == -1 * len(self._func_list):
+                break
 
-            # _storage2cell_list = [(_storage_id, cell.id) for cell in self.workcell_list for
-            #                       (_storage_id, _product_id) in storage_list[self.process]]
+        # _storage2cell_list = [(_storage_id, cell.id) for cell in self.workcell_list for
+        #                       (_storage_id, _product_id) in storage_list[self.process]]
         # center和storage也需要向storage
 
         # _center2storage_list = [(self.id, _storage_id) for

@@ -50,17 +50,24 @@ class StorageCenter(BasicClass):
         # logger.debug(
         #     f"{self.id}号货架，工序{self.process},储存{self.product_id}产品，接收产品{num}现有产品{self._product_count}")
 
-    def send(self, ratio: float) -> int:
+    def send(self, ratio: float, speed: int) -> int:
         """
         从产品中心向下一级生产中心发送产品
-        :param ratio: 需要发送产品占比
+        需要知道当前工作单元的工作能力，不发出超过一次speed的数量。
+        :param
+        ratio: 需要发送产品占比
+        speed: 工作单元能力
         :return:
         """
+
         product = math.floor(self._product_count * ratio)
-        # logger.debug(
-        #     f"{self.id}号货架，工序{self.process}，发送产品{product}，发送比例:{ratio}现有产品{self._product_count - self.step_send_product}")
+        if product > speed:
+            product = speed
         self.step_send_product += product
         return product
+
+        # logger.debug(
+        #     f"{self.id}号货架，工序{self.process}，发送产品{product}，发送比例:{ratio}现有产品{self._product_count - self.step_send_product}")
 
     # 等全部发送完了才能减掉
     def step(self):
@@ -69,6 +76,8 @@ class StorageCenter(BasicClass):
 
     def reset(self):
         self._product_count = 0
+        if self._process_id == 0:
+            self._product_count = self.goal
 
     def status(self) -> torch.Tensor:
         """

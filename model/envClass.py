@@ -126,27 +126,26 @@ class EnvRun:
         # 为了从原料货架起始，需要加一个
         material_id = torch.tensor([[0, i] for i in range(self.product_num)], dtype=torch.int)
         storage_need_tensor = torch.cat((material_id, storage_need_tensor), dim=0)
-        logger.info(storage_need_tensor)
-        raise SystemExit
         # 根据speed构建storage
         self.storage_list = [StorageCenter(product.item(), process.item(), order[product.item()], self.product_num) for
                              process, product in
                              storage_need_tensor]
 
-        self.storage_id_relation: list[Tensor] = [torch.empty((0, 2), dtype=torch.int) for _ in range(self.process_num)]
+        self.storage_id_relation: list[Tensor] = [torch.empty((0, 2), dtype=torch.int) for _ in
+                                                  range(self.process_num + 1)]
         # 生成货架和半成品的对应关系
         for storage in self.storage_list:
             # 要增加一个维度，要不然无法cat
             storage_data = torch.tensor((storage.id, storage.product_id)).view(1, -1)
             self.storage_id_relation[storage.process] = torch.cat(
                 (self.storage_id_relation[storage.process], storage_data), dim=0)
-
         # 一次循环的step数量
         self.episode_step = 0
         # 奖励和完成与否
         self.reward = 0
         self.done = 0
-        self.step_product_count = torch.zeros((self.process_num, self.product_num), dtype=torch.int)
+        # 该step各个工序的变化
+        self.step_product_count = torch.zeros((self.process_num + 1, self.product_num), dtype=torch.int)
         self.order_finish_count = torch.zeros(order.shape[0], dtype=torch.int)
         # 初始化边
         self.build_edge()
@@ -225,10 +224,6 @@ class EnvRun:
             # 第一个是center的id，第二个是center接收的产品id
             for process_storage in self.storage_id_relation[center.process]:
                 self.storage_list[process_storage[0]].receive(tmp[process_storage[1]])
-            # 第0级不参与receive
-            if center.process == 0:
-                center.receive(0)
-                continue
             # speed是0就说明不存在这个工序，直接跳过
             if center.working_speed == 0:
                 continue
@@ -246,7 +241,8 @@ class EnvRun:
                 process_storage_index = process_storage_index.item()
                 # 这个才是真正的id process_storage[process_storage_index][0]
                 storage_id = process_storage[process_storage_index][0].item()
-                materials = self.storage_list[storage_id].send(centers_ratio[center.id])
+                # 根据工作能力和ratio发送物料
+                materials = self.storage_list[storage_id].send(centers_ratio[center.id], center.working_speed)
                 # logger.debug(
                 #         f"{storage_id}   工序{center.process}中心{center.id},正在执行：{center.working_func}，接收{materials}个原料")
                 center.receive(materials)
@@ -284,14 +280,14 @@ class EnvRun:
             self.step_product_count[_process][_spd] = _spdc - self.step_product_count[_process][_spd]
             # 当前货架的变化情况，如果小于0说明被消耗了，要大大奖励
             tmp_count = self.step_product_count[_process][_spd]
-            if _process < self.process_num - 1:
+            if _process < self.process_num:
                 # 当前货架的变化情况，如果小于0说明被消耗了，要大大奖励
                 products_reward -= tmp_count / self.order[_spd] * 0.01
                 # 只有库存过大的时候才会扣血
                 if _spdc > 2 * self.speed_list[_process][_spd]:
                     products_reward -= _spdc / self.process_num * 0.05
             # 最终产物大大奖励
-            elif _process == self.process_num - 1:
+            elif _process == self.process_num:
                 products_reward += tmp_count / self.order[_spd] * 0.1
                 # 如果达到订单数量且这个产品型号并未达到过订单数量，就+50奖励
                 if _spdc > self.order[_spd] and self.order_finish_count[_spd] != 1:
@@ -306,7 +302,7 @@ class EnvRun:
                 # 时间惩罚
         time_penalty = self.episode_step / self.episode_step_max + 0.5 * self.expected_step / self.expected_step
         self.reward += products_reward
-        self.reward -= time_penalty
+        self.reward -= 0
         # 最终产物肯定要大大滴加分
 
         # 最终产物奖励，要保证这个产物奖励小于扣血
@@ -363,10 +359,11 @@ class EnvRun:
         self.done = 0
         self.episode_step = 0
         self.order_finish_count.zero_()
+        self.step_product_count.zero_()
         for center in self.work_center_list:
             center.reset()
         for storage in self.storage_list:
-            storage._product_count = 0
+            storage.reset()
 
     def reinit(self):
         self.reset()
