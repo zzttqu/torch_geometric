@@ -109,8 +109,9 @@ class EnvRun:
         # 第一层解析工序，第二层解析每个工序中的产品，第三层生成工作中心
         for process, funcs in enumerate(work_center_init_func):
             for func, num in enumerate(funcs):
+                # 这里加一主要是为了配合原料仓库的process为0
                 self.work_center_list.extend([
-                    WorkCenter(process, speed_list[process], func)
+                    WorkCenter(process + 1, speed_list[process], func)
                     for _ in range(0, num)
                 ])
         self._work_center2cell_list = [torch.tensor([cell_id for cell_id in cell.all_cell_id]) for cell in
