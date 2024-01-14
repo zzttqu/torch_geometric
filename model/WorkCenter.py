@@ -34,7 +34,7 @@ class WorkCenter(BasicClass):
             in
             self._func_list]
         self._working_func: int = init_func
-        self._working_speed = self._speed_list[init_func]
+        self._working_speed = int(self._speed_list[init_func].item())
         self._working_cell = self.workcell_list[init_func]
         self._all_cell_id = torch.tensor([workcell.id for workcell in self.workcell_list], dtype=torch.int)
         # 0是停止工作

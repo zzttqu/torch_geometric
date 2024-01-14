@@ -178,11 +178,7 @@ class EnvRun:
 
     def update(self, centers_power_action, center_func_action, centers_ratio):
         # logger.info('更新')
-        # aaa = torch.arange(self.total_center_num)
-        # torch.stack([aaa, centers_power_action], dim=1)
-        # logger.info(torch.stack([aaa, centers_power_action], dim=1))
-        # logger.info(torch.stack([aaa, center_func_action], dim=1))
-        # logger.info(torch.stack([aaa, centers_ratio], dim=1))
+        aaa = torch.arange(self.total_center_num)
         # self.work_center_process中记录了各个process的workcenter数量
         # 首先生产
         for center, activate_func, on_or_off in zip(self.work_center_list, center_func_action,
@@ -240,7 +236,7 @@ class EnvRun:
                 # 必须不是tensor，如果是tensor[0]会导致取出来的部分不会降维
                 process_storage_index = process_storage_index.item()
                 # 这个才是真正的id process_storage[process_storage_index][0]
-                storage_id = process_storage[process_storage_index][0].item()
+                storage_id = process_storage[process_storage_index, 0].item()
                 # 根据工作能力和ratio发送物料
                 materials = self.storage_list[storage_id].send(centers_ratio[center.id], center.working_speed)
                 # logger.debug(

@@ -33,6 +33,7 @@ def main(max_steps):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     # 神奇trick
     torch.manual_seed(3407)
+    torch.manual_seed(3427)
     batch_size = 64
 
     total_step = init_step
@@ -172,5 +173,5 @@ def main(max_steps):
 if __name__ == '__main__':
     # logger.remove()
     # logger.add(sys.stderr, level='WARNING')
-    main(256)
+    main(512)
     # cProfile.run('main()', sort='cumulative')

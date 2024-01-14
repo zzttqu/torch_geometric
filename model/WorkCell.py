@@ -30,7 +30,7 @@ class WorkCell(BasicClass):
         self._init_materials = material
         self._product_count = 0
         self._health = 100
-        self._speed = speed
+        self._speed = int(speed)
         self._function = function_id
         self.state = StateCode.workcell_ready
 
