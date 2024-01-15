@@ -33,12 +33,12 @@ def main(max_steps):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     # 神奇trick
     torch.manual_seed(3407)
-    torch.manual_seed(3427)
-    batch_size = 64
+    # torch.manual_seed(3427)
+    batch_size = 32
 
     total_step = init_step
     max_steps = max_steps
-    episode_step_max = 256
+    episode_step_max = 128
     n_epochs = 12
     learn_num = 0
 
@@ -55,7 +55,7 @@ def main(max_steps):
     writer = SummaryWriter(log_dir="logs/train")
     env.build_edge()
 
-    # 加载之前的
+
     obs_states, edge_index, reward, dones, _ = env.get_obs()
 
     hetero_data = HeteroData()
@@ -75,8 +75,8 @@ def main(max_steps):
         process_num=env.process_num,
         product_num=env.product_num,
     )
-
-    # agent.load_model("last_model.pth")
+    # 加载之前的
+    agent.load_model("last_model.pth")
     memory = PPOMemory(
         batch_size,
         device,
@@ -173,5 +173,5 @@ def main(max_steps):
 if __name__ == '__main__':
     # logger.remove()
     # logger.add(sys.stderr, level='WARNING')
-    main(512)
+    main(1024)
     # cProfile.run('main()', sort='cumulative')

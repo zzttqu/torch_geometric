@@ -5,7 +5,7 @@ from model.WorkCell import WorkCell
 import numpy as np
 import torch
 from loguru import logger
-from model.StateCode import StateCode
+from model.StateCode import CenterCode
 from typing import ClassVar
 from torch import Tensor
 
@@ -26,13 +26,14 @@ class WorkCenter(BasicClass):
         # 这次的list长度不包括nan，有几个就是几个，但是对应序号是【1,2】这样，不是【nan，1,2】
         # 所以在选择working_cell的时候需要注意workcell_list长度不是和funclist中的元素一样长的，可能会出现越界
         # 比如只有两个，但是里边是[1,2]选了2就会导致越界
-        self._func_list = torch.arange(speed_list.shape[0])
+        self._func_list = torch.arange(speed_list.shape[0], dtype=torch.int)
         # self._func_list: Tensor = torch.nonzero(~torch.isnan(speed_list), as_tuple=False).flatten()
         # 构建workcell
         self.workcell_list: List[WorkCell] = [
             WorkCell(func.item(), self._speed_list[func].item(), process_id, material=0) for func
             in
             self._func_list]
+        self._working_status = CenterCode.center_ready
         self._working_func: int = init_func
         self._working_speed = int(self._speed_list[init_func].item())
         self._working_cell = self.workcell_list[init_func]
@@ -43,6 +44,10 @@ class WorkCenter(BasicClass):
     @property
     def func_list(self):
         return self._func_list
+
+    @property
+    def working_status(self):
+        return self._working_status
 
     def build_edge(self, storage_list: list[Tensor]) -> Tuple[Tensor, Tensor, Tensor, Union[Tensor, None], Tensor]:
         """
@@ -124,22 +129,23 @@ class WorkCenter(BasicClass):
             activate_cell: 加工动作，0或需要工作的工作单元在workcell_list中的位置
         """
         # 这里目前改为了工作中心选择哪个工作单元工作
-        # 如果是0，就是全部不工作
-        if on_off == 0:
+        # 如果是0，就是全部不工作 如果选了没有的功能就直接返回ready
+        if on_off == 0 or self.workcell_list[activate_cell].speed == 0:
+            self._working_status = CenterCode.center_ready
             for cell in self.workcell_list:
                 cell.work(0)
-        else:
-            for i, cell in enumerate(self.workcell_list):
-                if i == activate_cell:
-                    state = cell.work(1)
-                    # if self.id == 22:
-                    #     logger.error(f"{self.id} {self.process} {state}")
-                    # 如果正常工作则修改work_center的状态
-                    self._working_cell = cell
-                    self._working_func = cell.function
-                    self._working_speed = cell.speed
-                else:
-                    cell.work(0)
+            return
+        # 如果全都工作才能走到这里
+        self._working_status = CenterCode.center_working
+        for i, cell in enumerate(self.workcell_list):
+            if i == activate_cell:
+                cell.work(1)
+                # 如果正常工作则修改work_center的状态
+                self._working_cell = cell
+                self._working_func = cell.function
+                self._working_speed = cell.speed
+            else:
+                cell.work(0)
 
     def reset(self):
         for cell in self.workcell_list:
@@ -166,11 +172,13 @@ class WorkCenter(BasicClass):
     def get_all_cell_state(self, max_speed=1, func_num=1, state_code_len=1):
         return [cell.status(max_speed, func_num, state_code_len) for cell in self.workcell_list]
 
-    def status(self, function_num=1):
+    def status(self, function_num=1, state_code_len=1):
         func_norm = self._working_func / function_num
+        state_norm = self._working_status.value / state_code_len
         return torch.tensor(
             [
                 func_norm,
+                state_norm,
             ],
             dtype=torch.float32,
         )
@@ -183,3 +191,7 @@ class WorkCenter(BasicClass):
         for cell in self.workcell_list:
             a.append(cell.read_state())
         return a
+
+    @property
+    def speed_list(self):
+        return self._speed_list

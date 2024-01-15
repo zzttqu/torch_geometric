@@ -9,7 +9,7 @@ import numpy as np
 import torch
 from torch import Tensor
 
-from model.StateCode import StateCode
+from model.StateCode import CellCode, CenterCode
 from model.WorkCell import WorkCell
 from model.WorkCenter import WorkCenter
 from model.StorageCenter import StorageCenter
@@ -103,7 +103,7 @@ class EnvRun:
         self._center_per_process = torch.sum(work_center_init_func, dim=1)
         self._funcs_per_process_num = torch.sum(~torch.isnan(speed_list), dim=1)
         self.max_speed = torch.max(speed_list[~torch.isnan(speed_list)])
-        self.state_code_size = len(StateCode)
+        self.state_code_size = len(CellCode)
         self.work_center_list: list[WorkCenter] = []
         self.episode_step_max = episode_step_max
         # 第一层解析工序，第二层解析每个工序中的产品，第三层生成工作中心
@@ -178,57 +178,32 @@ class EnvRun:
 
     def update(self, centers_power_action, center_func_action, centers_ratio):
         # logger.info('更新')
-        aaa = torch.arange(self.total_center_num)
+        assert isinstance(center_func_action, Tensor), 'center_func_action必须是Tensor类'
+        assert center_func_action.shape[0] == self.total_center_num, 'center_func_action长度必须是center个数'
+        assert centers_power_action.shape[0] == self.total_center_num, 'centers_power_action长度必须是center个数'
         # self.work_center_process中记录了各个process的workcenter数量
-        # 首先生产
+        # 首先运输
         for center, activate_func, on_or_off in zip(self.work_center_list, center_func_action,
                                                     centers_power_action):
-            center.work(activate_func.item(), on_or_off.item())
-            # logger.info(f'{work_center.id}   {work_center.working_func}   {activate_func.item()},{ on_or_off.item()}')
-        """ for process, center_num in enumerate(self._center_per_process):
-            assert isinstance(center_num, Tensor), "center_num 必须是 Tensor"
-            # 为了保证不影响softmax，如果是0会导致最后概率不为0，根据每个工序包括的功能数量初始化
-            _ratio = torch.full((self._funcs_per_process_num[process], center_num), -torch.inf)
-            for process_index, cell_ids in enumerate(
-                    self._work_center2cell_list[center_id:center_id + center_num]):
-                cell_slice = cell_logits[cell_ids]
-                center_slice = center_logits[range(center_id, center_id + center_num), :]
-                center_dist = Categorical(logits=center_slice)
-                cell_dist = Categorical(logits=cell_slice[:, 0])
-                # 这里其实不影响，因为实际上是修改的workcell，但是如果这个工作中心没有这个功能，其实工作单元也没有，那么这个输出的index其实就是celllist的index
-                activate_func = cell_dist.sample()
-                log_probs[0][center_id] = cell_dist.log_prob(activate_func)
-                # 这里是放置当前工序各个product的分配率
-                _ratio[activate_func, process_index] = cell_slice[activate_func, 1]
-                on_or_off = center_dist.sample()
-                log_probs[1][center_id] = center_dist.log_prob(on_or_off)
-                work_center.work(activate_func.item(), on_or_off.item())
-            # 还需要考虑如果所有的cell都选了一个func就会导致全是inf，softmax后的tensor为nan
-            _ratio = torch.softmax(_ratio, dim=1)
-            # 如果有nan就改成0
-            _ratio_without_nan = torch.where(torch.isnan(_ratio), torch.tensor(0.0), _ratio)
-            # 因为center不能同时出现在两个工序中，所以_ratio必定同一列只有一个非0的，所以累加起来就变成center_num长度的数组了，就可以给center赋值了，
-            # 然后交给之后的物料转运
-            ratios = torch.sum(_ratio_without_nan, dim=0)
-            center_ratio[center_id:center_id + center_num] = ratios
-            # 更新center的id，方便循环内部使用
-            center_id += center_num"""
-        # 其次运输
-        for center in self.work_center_list:
+            assert isinstance(center, WorkCenter), 'center必须是WorkCenter类'
+            # 顺序接收center的产出
             # 只要当前这个工序有的功能，那么货架就肯定有，直接按顺序接收就好了
             tmp = center.send()
-            # 第一个是center的id，第二个是center接收的产品id
-            for process_storage in self.storage_id_relation[center.process]:
-                self.storage_list[process_storage[0]].receive(tmp[process_storage[1]])
-            # speed是0就说明不存在这个工序，直接跳过
-            if center.working_speed == 0:
-                continue
-            #  0就说明没工作或者没这个功能
-            if centers_ratio[center.id] == 0:
-                continue
+            if sum(tmp) > 0:
+                # logger.info(f'{center.id}号中心生产了{tmp},  {center.process}')
+                # 第一个是center的id，第二个是center接收的产品id
+                for process_storage in self.storage_id_relation[center.process]:
+                    self.storage_list[process_storage[0]].receive(tmp[process_storage[1]])
+
             # 然后接收原材料，还是当前工序没有就找上一级，要倒序啊！从0级开始不是个寄吧
             for process_storage in reversed(self.storage_id_relation[0:center.process]):
-                mask = torch.eq(process_storage[:, 1], center.working_func)
+                # speed是0就说明不存在这个工序，直接跳过原料分配
+                if center.speed_list[activate_func].item() == 0:
+                    break
+                #  0就说明没工作或者没这个功能
+                if on_or_off.item() == 0:
+                    break
+                mask = torch.eq(process_storage[:, 1], activate_func)
                 process_storage_index = torch.nonzero(mask).flatten()
                 # 如果为空，就是当前没找到，就找上一级
                 if process_storage_index.numel() == 0:
@@ -238,12 +213,20 @@ class EnvRun:
                 # 这个才是真正的id process_storage[process_storage_index][0]
                 storage_id = process_storage[process_storage_index, 0].item()
                 # 根据工作能力和ratio发送物料
-                materials = self.storage_list[storage_id].send(centers_ratio[center.id], center.working_speed)
+                materials = self.storage_list[storage_id].send(centers_ratio[center.id],
+                                                               int(center.speed_list[activate_func]))
                 # logger.debug(
                 #         f"{storage_id}   工序{center.process}中心{center.id},正在执行：{center.working_func}，接收{materials}个原料")
+                # logger.debug(
+                #     f'{center.id}号中心申请了{centers_ratio[center.id]:.2f}比例，{materials}个，功能是{activate_func},{center.working_status}')
                 center.receive(materials)
-                # 找到之后就直接退出这个循环
+                # 接收原料之后就直接退出这个循环
                 break
+
+            # logger.info(f'{work_center.id}   {work_center.working_func}   {activate_func.item()},{ on_or_off.item()}')
+            # 其次生产
+            center.work(activate_func.item(), on_or_off.item())
+
         # 刷新库存
         for storage in self.storage_list:
             storage.step()
@@ -279,8 +262,8 @@ class EnvRun:
             if _process < self.process_num:
                 # 当前货架的变化情况，如果小于0说明被消耗了，要大大奖励
                 products_reward -= tmp_count / self.order[_spd] * 0.01
-                # 只有库存过大的时候才会扣血
-                if _spdc > 2 * self.speed_list[_process][_spd]:
+                # 只有非0工序库存过大的时候才会扣血
+                if _spdc > 2 * self.speed_list[_process][_spd] and _process != 0:
                     products_reward -= _spdc / self.process_num * 0.05
             # 最终产物大大奖励
             elif _process == self.process_num:

@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from BasicClass import BasicClass
-from model.StateCode import *
+from model.StateCode import CellCode
 from loguru import logger
 
 
@@ -32,7 +32,7 @@ class WorkCell(BasicClass):
         self._health = 100
         self._speed = int(speed)
         self._function = function_id
-        self.state = StateCode.workcell_ready
+        self.state = CellCode.workcell_ready
 
     @property
     def product_count(self):
@@ -69,26 +69,26 @@ class WorkCell(BasicClass):
         """
         工作单元报错
         """
-        self.state = StateCode.workcell_function_error
+        self.state = CellCode.workcell_function_error
 
-    def work(self, action: int) -> StateCode:
+    def work(self, action: int) -> CellCode:
         """工作单元运行
 
         Args:
             action (int): 工作单元的动作，只有0：停止和1：运行
 
         Returns:
-            StateCode: 当前工作单元的状态
+            CellCode: 当前工作单元的状态
         """
         # 工作/继续工作，就直接修改状态了，不用重置function_err
         if action == 1:
-            self.state = StateCode.workcell_working
+            self.state = CellCode.workcell_working
         # 停止工作
         elif action == 0:
-            self.state = StateCode.workcell_ready
+            self.state = CellCode.workcell_ready
         # 检查当前状态
         self.state_check()
-        if self.state == StateCode.workcell_working:
+        if self.state == CellCode.workcell_working:
             # 工作中
             self._product_count += self.speed
             # 如果是0号功能，那就不扣原料
@@ -106,20 +106,20 @@ class WorkCell(BasicClass):
         #     self.state = StateCode.workcell_low_health
         # 缺少原料
         if self._materials < self.speed:
-            self.state = StateCode.workcell_low_material
+            self.state = CellCode.workcell_low_material
         # 不缺货就变为ready状态
         elif (
                 self._materials >= self.speed
-                and self.state == StateCode.workcell_low_material
+                and self.state == CellCode.workcell_low_material
         ):
-            self.state = StateCode.workcell_ready
+            self.state = CellCode.workcell_ready
 
     def reset(self):
         """
         重置工作单元状态
 
         """
-        self.state = StateCode.workcell_ready
+        self.state = CellCode.workcell_ready
         # 给一个基础的原料
         self._materials = self._init_materials
         self._product_count = 0

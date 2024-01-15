@@ -29,7 +29,7 @@ class StorageCenter(BasicClass):
         if self._process_id == 0:
             self._product_count = goal
         self.goal = goal
-        self.state = StateCode.workcell_working
+        self.state = CellCode.workcell_working
         self.step_send_product = 0
 
     @property
@@ -46,7 +46,7 @@ class StorageCenter(BasicClass):
         :param num:接收产品数量
         """
         self._product_count += num
-
+        #
         # logger.debug(
         #     f"{self.id}号货架，工序{self.process},储存{self.product_id}产品，接收产品{num}现有产品{self._product_count}")
 
@@ -59,15 +59,16 @@ class StorageCenter(BasicClass):
         speed: 工作单元能力
         :return:
         """
-
+        if self._product_count == 0:
+            return 0
         product = math.floor(self._product_count * ratio)
         if product > speed:
             product = speed
         self.step_send_product += product
+        # if self.process == 0:
+        #     logger.debug(
+        #         f"{self.id}号货架，工序{self.process}，发送产品类别{self.product_id},{product}，{speed}发送比例:{ratio:.2f}现有产品{self._product_count - self.step_send_product}")
         return product
-
-        # logger.debug(
-        #     f"{self.id}号货架，工序{self.process}，发送产品{product}，发送比例:{ratio}现有产品{self._product_count - self.step_send_product}")
 
     # 等全部发送完了才能减掉
     def step(self):
