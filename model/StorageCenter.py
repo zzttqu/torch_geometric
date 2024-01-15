@@ -3,7 +3,7 @@ import math
 from loguru import logger
 import torch
 from model.StateCode import *
-from typing import ClassVar
+from typing import ClassVar, Tuple
 from BasicClass import BasicClass
 
 
@@ -27,7 +27,7 @@ class StorageCenter(BasicClass):
         self._product_count: int = 0
         # 如果是process=0是原料仓库，库存就是产品数量
         if self._process_id == 0:
-            self._product_count = goal
+            self._product_count = int(goal)
         self.goal = goal
         self.state = CellCode.workcell_working
         self.step_send_product = 0
@@ -62,8 +62,10 @@ class StorageCenter(BasicClass):
         if self._product_count == 0:
             return 0
         product = math.floor(self._product_count * ratio)
-        if product > speed:
+        if product >= speed:
             product = speed
+        else:
+            product = 0
         self.step_send_product += product
         # if self.process == 0:
         #     logger.debug(
@@ -91,9 +93,9 @@ class StorageCenter(BasicClass):
         product_id_norm = self.product_id / (self.max_func - 1)
         return torch.tensor([product_id_norm, produce_progress], dtype=torch.float32)
 
-    def read_state(self) -> int:
+    def read_state(self) -> tuple[int, int]:
         """
         读取产品状态，不用规范化
         :return:【产品id，产品数量】
         """
-        return self._product_count
+        return self._product_count, self.product_id

@@ -157,3 +157,7 @@ class WorkCell(BasicClass):
             可读状态
         """
         return [int(self.function), int(self.state.value), int(self.speed), int(self._materials)]
+
+    @property
+    def materials(self):
+        return self._materials

@@ -176,8 +176,8 @@ class EnvRun:
             self.edge_index[edge_name] = tmp.to(self.device)
         return self.edge_index
 
-    def update(self, centers_power_action, center_func_action, centers_ratio):
-        # logger.info('更新')
+    def update(self, centers_power_action, center_func_action, centers_ratio, total_step):
+        # logger.info(f'{total_step}')
         assert isinstance(center_func_action, Tensor), 'center_func_action必须是Tensor类'
         assert center_func_action.shape[0] == self.total_center_num, 'center_func_action长度必须是center个数'
         assert centers_power_action.shape[0] == self.total_center_num, 'centers_power_action长度必须是center个数'
@@ -189,6 +189,8 @@ class EnvRun:
             # 顺序接收center的产出
             # 只要当前这个工序有的功能，那么货架就肯定有，直接按顺序接收就好了
             tmp = center.send()
+            # if center.process == 1:
+            #     logger.warning(f'{center.id}号中心生产了{tmp},  {center.process}')
             if sum(tmp) > 0:
                 # logger.info(f'{center.id}号中心生产了{tmp},  {center.process}')
                 # 第一个是center的id，第二个是center接收的产品id
@@ -200,7 +202,7 @@ class EnvRun:
                 # speed是0就说明不存在这个工序，直接跳过原料分配
                 if center.speed_list[activate_func].item() == 0:
                     break
-                #  0就说明没工作或者没这个功能
+                #  0就说明没工作
                 if on_or_off.item() == 0:
                     break
                 mask = torch.eq(process_storage[:, 1], activate_func)
@@ -216,10 +218,11 @@ class EnvRun:
                 materials = self.storage_list[storage_id].send(centers_ratio[center.id],
                                                                int(center.speed_list[activate_func]))
                 # logger.debug(
-                #         f"{storage_id}   工序{center.process}中心{center.id},正在执行：{center.working_func}，接收{materials}个原料")
+                #     f"{storage_id}   工序{center.process}中心{center.id},正在执行：{activate_func}，接收{materials}个原料")
                 # logger.debug(
                 #     f'{center.id}号中心申请了{centers_ratio[center.id]:.2f}比例，{materials}个，功能是{activate_func},{center.working_status}')
-                center.receive(materials)
+                # 要向指定的cell发送，要不然会出问题。。。
+                center.receive(materials, activate_func)
                 # 接收原料之后就直接退出这个循环
                 break
 
@@ -326,8 +329,13 @@ class EnvRun:
         return process_raw_data(self.edge_index, raw_state)
 
     def read_state(self):
+        products = {f'{i}': 0 for i in range(self.product_num)}
+        for storage in self.storage_list:
+            num, _id = storage.read_state()
+            products[f'{_id}'] += num
         c = [storage.read_state() for storage in self.storage_list]
-        return {"storage": c}
+        center = [work_center.read_state() for work_center in self.work_center_list]
+        return {"storage": c, 'center': center, 'total_storage_num': products}
 
     def reset(self):
         # 只有重新生成的时候再resetid

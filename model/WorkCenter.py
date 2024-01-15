@@ -5,7 +5,7 @@ from model.WorkCell import WorkCell
 import numpy as np
 import torch
 from loguru import logger
-from model.StateCode import CenterCode
+from model.StateCode import CenterCode, CellCode
 from typing import ClassVar
 from torch import Tensor
 
@@ -22,7 +22,7 @@ class WorkCenter(BasicClass):
         """
         super().__init__(process_id)
         # 这个是工作中心属于第几道工序
-        self._speed_list = torch.nan_to_num(speed_list, nan=0)
+        self._speed_list = torch.nan_to_num(speed_list, nan=0).to(dtype=torch.int)
         # 这次的list长度不包括nan，有几个就是几个，但是对应序号是【1,2】这样，不是【nan，1,2】
         # 所以在选择working_cell的时候需要注意workcell_list长度不是和funclist中的元素一样长的，可能会出现越界
         # 比如只有两个，但是里边是[1,2]选了2就会导致越界
@@ -38,8 +38,6 @@ class WorkCenter(BasicClass):
         self._working_speed = int(self._speed_list[init_func].item())
         self._working_cell = self.workcell_list[init_func]
         self._all_cell_id = torch.tensor([workcell.id for workcell in self.workcell_list], dtype=torch.int)
-        # 0是停止工作
-        self.state = 0
 
     @property
     def func_list(self):
@@ -110,13 +108,15 @@ class WorkCenter(BasicClass):
 
         return _cell2center_tensor, _cell2storage_tensor, _storage2center_tensor, _storage2cell_tensor, _center2cell_tensor
 
-    def receive(self, materials: int):
+    def receive(self, materials: int, func: int):
         """
         接收原材料产品
         Args:
+            func: 功能
             materials: 该工作中心接收的当前运行功能的原料
         """
-        self._working_cell.receive(materials)
+        if self.speed_list[func].item() != 0:
+            self.workcell_list[func].receive(materials)
         # 0号工序自动获取加工速度的一批次原料，cell级别已经忽略了，这里不用了
         # if self.process == 0:
         #     self._working_cell.receive(self._working_speed)
@@ -136,16 +136,21 @@ class WorkCenter(BasicClass):
                 cell.work(0)
             return
         # 如果全都工作才能走到这里
-        self._working_status = CenterCode.center_working
+        state = CellCode.workcell_ready
         for i, cell in enumerate(self.workcell_list):
             if i == activate_cell:
-                cell.work(1)
+                state = cell.work(1)
                 # 如果正常工作则修改work_center的状态
                 self._working_cell = cell
                 self._working_func = cell.function
                 self._working_speed = cell.speed
             else:
                 cell.work(0)
+        if state == CellCode.workcell_working:
+            self._working_status = CenterCode.center_working
+        # if self.working_func == 0:
+        #     logger.info(
+        #         f"{self.id}号工作中心工作状态：{self._working_status},{self._working_func},{self._working_speed},{self._working_cell.product_count}")
 
     def reset(self):
         for cell in self.workcell_list:
@@ -184,7 +189,11 @@ class WorkCenter(BasicClass):
         )
 
     def read_state(self):
-        return self.get_func_list()
+
+        total_m = [cell.materials for cell in self.workcell_list]
+        total_p = [cell.product_count for cell in self.workcell_list]
+
+        return [self.working_func, self.working_status.value, total_m[self.working_func], total_p[self.working_func]]
 
     def read_all_cell_state(self):
         a = []

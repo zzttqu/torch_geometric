@@ -55,7 +55,6 @@ def main(max_steps):
     writer = SummaryWriter(log_dir="logs/train")
     env.build_edge()
 
-
     obs_states, edge_index, reward, dones, _ = env.get_obs()
 
     hetero_data = HeteroData()
@@ -76,7 +75,7 @@ def main(max_steps):
         product_num=env.product_num,
     )
     # 加载之前的
-    agent.load_model("last_model.pth")
+    # agent.load_model("last_model.pth")
     memory = PPOMemory(
         batch_size,
         device,
@@ -113,11 +112,21 @@ def main(max_steps):
         # assert raw.device != "cpu", "raw 不在cpu中"
         # logger.info(_raw)
 
-        env.update(centers_power_action.cpu(), center_func_action.cpu(), centers_ratio.cpu())
+        env.update(centers_power_action.cpu(), center_func_action.cpu(), centers_ratio.cpu(), total_step)
         # 可视化状态
         # logger.debug(f"{total_step} {env.read_state()}")
-        for i, mm in enumerate(env.read_state()['storage']):
-            writer.add_scalar(f"step/state/{i}storage", mm, total_step)
+
+        # a = {f"{i}storage": mm for i, mm in enumerate(env.read_state()['storage'])}
+        # writer.add_scalars(f"storage", a, total_step)
+        p = env.read_state()
+        for i, (mm, _id) in enumerate(p['storage']):
+            writer.add_scalar(f"storage/storage_{i}_product{_id}", mm, total_step)
+
+        for i, n in enumerate(p['center']):
+            q = {"func": n[0], 'status': n[1], 'material': n[2], 'product': n[2]}
+            writer.add_scalars(f"centers/center_{i}", q, total_step)
+        writer.add_scalars(f"storage/total",p['total_storage_num'], total_step)
+
         # 所以需要搬回cuda中
         # for key, _value in raw.items():
         #    raw[key] = _value.to(device)
@@ -173,5 +182,5 @@ def main(max_steps):
 if __name__ == '__main__':
     # logger.remove()
     # logger.add(sys.stderr, level='WARNING')
-    main(1024)
+    main(512)
     # cProfile.run('main()', sort='cumulative')
