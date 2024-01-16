@@ -50,15 +50,25 @@ def main():
         init_data=hetero_data,
         device=device
     )
-    load_model_name = "last_model.pth"
-    logger.debug(f'加载了模型{load_model_name}')
-    agent.load_model(load_model_name)
+    # load_model_name = "last_model.pth"
+    # logger.debug(f'加载了模型{load_model_name}')
+    # agent.load_model(load_model_name)
+    # 添加计算图
+    a, b = agent.network(obs_states, edge_index)
+    writer = SummaryWriter(log_dir="logs/train")
+    writer.add_graph(
+        agent.network,
+        input_to_model=[obs_states, edge_index],
+        verbose=False,
+        use_strict_trace=False,
+    )
     del obs_states, edge_index
     torch.cuda.empty_cache()
-    writer = SummaryWriter(log_dir="logs/train")
+
     total_step = 0
     episode = 0
-    indexes = torch.randint(0, len(orders), size=(10,))
+    indexes = torch.randint(0, len(orders), size=(3,))
+
     for index in indexes:
         order = orders[index]
         torch.cuda.empty_cache()
@@ -89,7 +99,7 @@ def main():
             total_step += 1
             agent.network.eval()
             with torch.no_grad():
-                centers_power_action, center_func_action, centers_ratio, log_prob_power, log_prob_func = agent.get_action(
+                centers_power_action, center_func_action, centers_ratio, log_prob_power, log_prob_func, _ = agent.get_action(
                     obs_states, edge_index)
                 value = agent.get_value(obs_states, edge_index)
 
@@ -132,9 +142,10 @@ def main():
                     last_done=dones,
                     edge_index=edge_index,
                     mini_batch_size=batch_size // 2,
+                    progress=episode_step / max_steps,
                 )
                 learn_time = (datetime.now() - now_time).seconds
-                # logger.info(f"第{learn_num}次学习，学习用时：{learn_time}秒")
+                logger.info(f"第{learn_num}次学习，学习用时：{learn_time}秒")
                 agent.save_model("last_model.pth")
                 now_time = datetime.now()
             if dones == 1:

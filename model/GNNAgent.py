@@ -28,6 +28,7 @@ class Agent:
         self.device = device
 
         self.gamma = gamma
+        self.lr = lr
         self.batch_size = batch_size
         self.gae_lambda = gae_lambda
         self.n_epochs = n_epochs
@@ -44,10 +45,11 @@ class Agent:
              center_per_process,
              process_num,
              center_num):
-        self.batch_size=batch_size
+        self.batch_size = batch_size
         self.center_per_process = center_per_process
         self.center_num = center_num
         self.process_num = process_num
+        self.materials_method = "ratio"
 
     def get_value(
             self,
@@ -63,7 +65,7 @@ class Agent:
             edge_index: Dict[str, torch.Tensor],
             centers_power_action: torch.Tensor = None,  # type: ignore
             center_func_action: torch.Tensor = None,  # type: ignore
-    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
         all_logits, _ = self.network(state, edge_index)
         cell_logits, center_logits = all_logits.values()
         # self.work_center_process中记录了各个process的workcenter数量
@@ -83,6 +85,7 @@ class Agent:
         if centers_power_action is None:
             centers_power_action = centers_dist.sample()
         log_probs_center_power = centers_dist.log_prob(centers_power_action)
+        entropy = (centers_dist.entropy().sum() + _center_func_dist.entropy().sum())
         # 物料分配概率
         # 先创建一个[0,1,2]的tensor，然后增加一个维度变成[[0,1,2]]，因为center_func_action是[1,2,1,2,0......]，
         # 所以也需要扩展把这个变成竖着的，然后两个求布尔，就和workcenter中生成边是一个道理
@@ -91,19 +94,26 @@ class Agent:
         # 只有既开启并有功能的cell才能参与分配,需要新建一个维度来广播
         # 逐个元素求与，需要同时满足
         mask = torch.logical_and(mask, centers_power_action.unsqueeze(1)).bool()
-        # 未被选中的cell的分配率为负无穷，要取反，因为都满足才能留下，所以如果True被-inf就寄了，所以需要取反
-        center_ratio_logits[~mask] = -torch.inf
-        # logger.debug(center_ratio_logits)
-        # 提取每个center被选中的func的分配率
-        # TODO 或者改成分配顺序，因为只能按speed进行分配，这样反而还可以提高速度
-        _center_id = 0
-        for num in self.center_per_process:
-            # 每道工序进行softmax
-            center_ratio_logits[_center_id:_center_id + num] = F.softmax(
-                center_ratio_logits[_center_id:_center_id + num], dim=0)
-            _center_id = _center_id + num
-        center_ratio_logits = torch.nan_to_num(center_ratio_logits, nan=0, posinf=0, neginf=0)
-        centers_ratio: Tensor = center_ratio_logits.sum(dim=1)
+        # 按照比率分配
+        if self.materials_method == 'ratio':
+            # 未被选中的cell的分配率为负无穷，要取反，因为都满足才能留下，所以如果True被-inf就寄了，所以需要取反
+            center_ratio_logits[~mask] = -torch.inf
+            # logger.debug(center_ratio_logits)
+            # 提取每个center被选中的func的分配率
+            _center_id = 0
+            for num in self.center_per_process:
+                # 每道工序进行softmax
+                center_ratio_logits[_center_id:_center_id + num] = F.softmax(
+                    center_ratio_logits[_center_id:_center_id + num], dim=0)
+                _center_id = _center_id + num
+            center_ratio_logits = torch.nan_to_num(center_ratio_logits, nan=0, posinf=0, neginf=0)
+            centers_ratio: Tensor = center_ratio_logits.sum(dim=1)
+        # 按照顺序分配，数值大的可以分配的到，暂时没法实现
+        elif self.materials_method == 'order':
+            center_ratio_logits[~mask] = 0
+            centers_ratio: Tensor = center_ratio_logits.sum(dim=1)
+        else:
+            raise AttributeError
         """# 首先生产
         for process, center_num in enumerate(self.center_per_process):
             assert isinstance(center_num, Tensor), "center_num 必须是 Tensor"
@@ -157,7 +167,7 @@ class Agent:
         # 前边是workcell，后边是center
         # log_probs = torch.stack([all_dist.log_prob(all_action)]).sum(0)"""
 
-        return centers_power_action, center_func_action, centers_ratio, log_probs_center_power, log_probs_center_func
+        return centers_power_action, center_func_action, centers_ratio, log_probs_center_power, log_probs_center_func, entropy
 
     def get_batch_values(
             self,
@@ -181,14 +191,17 @@ class Agent:
     ):
         cf = [torch.zeros(0) for _ in range(mini_batch_size)]
         cp = [torch.zeros(0) for _ in range(mini_batch_size)]
+        entropy =0
         for i in range(mini_batch_size):
-            _, _, _, log_power, log_funcs = self.get_action(node[i], edge[i], centers_power_actions[i],
-                                                            center_func_actions[i])
+            _, _, _, log_power, log_funcs, _entropy = self.get_action(node[i], edge[i], centers_power_actions[i],
+                                                                      center_func_actions[i])
             cf[i] = log_funcs
             cp[i] = log_power
+            entropy += _entropy
         cf_l = torch.cat(cf, dim=0)
         cp_l = torch.cat(cp, dim=0)
-        return cf_l, cp_l
+        # entropy = torch.cat(entropy, dim=0)
+        return cf_l, cp_l, entropy
 
     def load_model(self, name):
         # 如果没有文件需要跳过
@@ -208,6 +221,7 @@ class Agent:
             last_done,
             edge_index,
             mini_batch_size,
+            progress,
     ):
         (
             nodes,
@@ -267,7 +281,8 @@ class Agent:
                 mini_actions_func = [func_actions[i] for i in index]
                 mini_probs_func = [log_probs_func[i] for i in index]
                 mini_probs_power = [log_probs_power[i] for i in index]
-                new_pf, new_pp = self.get_batch_actions_probs(
+                # 加入了选择熵值
+                new_pf, new_pp, entropy = self.get_batch_actions_probs(
                     mini_batch_size,
                     mini_nodes,
                     mini_edges,
@@ -282,7 +297,7 @@ class Agent:
                 ratios = (ratios_0 + ratios_1) / 2
                 surr1 = ratios * flat_advantages[index]
                 surr2 = torch.clamp(ratios, 1 - self.clip, 1 + self.clip)
-                actor_loss: torch.Tensor = -torch.min(surr1, surr2)
+                actor_loss: torch.Tensor = -torch.min(surr1, surr2) - entropy * 0.001
                 new_value = self.get_batch_values(
                     mini_nodes, mini_edges, mini_batch_size
                 )
@@ -294,5 +309,18 @@ class Agent:
                 # torch.nn.utils.clip_grad_norm_(self.network.parameters(), 10)
                 self.optimizer.step()
                 # batch_use_time = (datetime.now() - batch_time).microseconds
-
+        self.lr_decay(progress)
         return total_loss
+
+    def lr_decay(self, progress):
+        """
+        学习率衰减
+        Args:
+            progress: 学习率
+
+        Returns:
+
+        """
+        lr_now = self.lr * (1 - progress)
+        for p in self.optimizer.param_groups:
+            p["lr"] = lr_now

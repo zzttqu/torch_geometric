@@ -109,7 +109,7 @@ class HGTNet(nn.Module):
             self,
             data: HeteroData,
             hidden_channels=32,
-            num_layers=2,
+            num_layers=3,
     ):
         super().__init__()
         # 将节点映射为一个四维向量
@@ -149,27 +149,37 @@ class HGTNet(nn.Module):
         # 根据node type分别传播，这里由于改了inputdim，还不能直接去掉encoder层
         # 目前用encoder层
         x_dict = {
-            node_type: F.leaky_relu(self.encoders[f"{node_type}_linear"](x))
+            node_type: F.tanh(self.encoders[f"{node_type}_linear"](x))
             for node_type, x in x_dict.items()
         }
         # x_dict = {
         #     node_type: F.leaky_relu(self.encoders[f"{node_type}_linear"](x))
         #     for node_type, x in x_dict.items()
         # }
-
-        for conv in self.conv_list[1:]:
+        x_list = [{} for _ in range(len(self.conv_list) + 1)]
+        x_list[0] = x_dict
+        # dense残差网络
+        for i, conv in enumerate(self.conv_list):
+            x_dict = {
+                node_type: F.tanh(x)
+                for node_type, x in x_dict.items()
+            }
             x_dict = conv(x_dict, norm_edge_index_dict)
+            x_list[i + 1] = x_dict
+            for key, value in x_dict.items():
+                for j in range(0, i + 2):
+                    x_dict[key] += x_list[i][key]
         # 两个输出，一个需要连接所有节点的特征然后输出一个value
         full_x = torch.cat([x for x in x_dict.values()], dim=0)
 
         value = self.linV(full_x).mean()
         # 另一个需要根据每个节点用异质图线性层输出成一个dict
         # dict无法直接用tanh激活，还需要for
-        x_dict = {
-            node_type: F.leaky_relu(self.lin0(x)) for node_type, x in x_dict.items()
-        }
-        action = {"cell": torch.tanh(self.linCell(x_dict["cell"])),
-                  "center": torch.tanh(self.linCenter(x_dict["center"]))}
+        # x_dict = {
+        #     node_type: F.tanh(self.lin0(x)) for node_type, x in x_dict.items()
+        # }
+        action = {"cell": F.tanh(self.linCell(x_dict["cell"])),
+                  "center": F.tanh(self.linCenter(x_dict["center"]))}
 
         return action, value
 
