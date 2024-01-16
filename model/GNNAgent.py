@@ -93,6 +93,7 @@ class Agent:
         center_ratio_logits[~mask] = -torch.inf
         # logger.debug(center_ratio_logits)
         # 提取每个center被选中的func的分配率
+        # TODO 或者改成分配顺序，因为只能按speed进行分配，这样反而还可以提高速度
         _center_id = 0
         for num in self.center_per_process:
             # 每道工序进行softmax

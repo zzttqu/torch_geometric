@@ -282,9 +282,9 @@ class EnvRun:
                 products_reward += 100
                 break
                 # 时间惩罚
-        time_penalty = self.episode_step / self.episode_step_max + 0.5 * self.expected_step / self.expected_step
+        time_penalty = self.episode_step / self.episode_step_max + 0.5 * self.episode_step / self.expected_step
         self.reward += products_reward
-        self.reward -= 0
+        self.reward -= time_penalty
         # 最终产物肯定要大大滴加分
 
         # 最终产物奖励，要保证这个产物奖励小于扣血
