@@ -194,7 +194,7 @@ class GeneticAlgorithmNUMPY:
         self.RMT_units = np.array(rmt_units)
         self.population_num = population_num
         self.generation = generation
-        self.process_num = len(process_speed[0])
+        self.process_num = len(process_speed)
         self.process_list = [i for i in range(self.process_num)]
         self.product_num = len(order)
         self.population = np.zeros((self.population_num, self.product_num, self.process_num), dtype=np.float32)
@@ -214,8 +214,8 @@ class GeneticAlgorithmNUMPY:
             # 每行是一个工序，每列是一个产品
             for _process_id, _time in enumerate(self.eta_total_time):
                 assert isinstance(_time, np.ndarray)
-                if self.process_speed[_product_id][_process_id] != 0:
-                    _time[_product_id] = self.order[_product_id] / self.process_speed[_product_id][_process_id]
+                if self.process_speed[_process_id][_product_id] != 0:
+                    _time[_product_id] = self.order[_product_id] / self.process_speed[_process_id][_product_id]
                 else:
                     _time[_product_id] = 0
         # time0 = total_time[0]
@@ -228,7 +228,7 @@ class GeneticAlgorithmNUMPY:
         # for i in range(len(array)):
         #     array[i] = array[i] / np.sum(array[i])
         # 使用这种方式减少了百分之30的时间
-        sum_per_row = np.sum(array.reshape((self.process_num, self.product_num)), axis=1, keepdims=True)
+        sum_per_row = np.sum(array, axis=1, keepdims=True)
         normalized_array = array / sum_per_row
         return normalized_array
 
@@ -250,11 +250,8 @@ class GeneticAlgorithmNUMPY:
         _process_units = np.round(np.maximum(raw_process_units, 1))
 
         # 计算产品使用时间
-        process_speed = self.process_speed.T
-        # logger.info(self.eta_total_time)
-        # logger.info(process_units * process_speed)
         # 需要忽略nan
-        raw_fitness = np.nansum(self.eta_total_time[np.newaxis, :, :] / (process_units * process_speed),
+        raw_fitness = np.nansum(self.eta_total_time[np.newaxis, :, :] / (process_units * self.process_speed),
                                 axis=(1, 2))
 
         # logger.info(raw_fitness)
@@ -262,20 +259,6 @@ class GeneticAlgorithmNUMPY:
         # 计算适应度
         self.fitness = 10 - raw_fitness / 1e2
         self.time = np.nansum(self.eta_total_time[np.newaxis, :, :] / _process_units, axis=(1, 2))
-
-        """
-        # 这里只能计算当前个体的优势
-        for i, pop in enumerate(self.population):
-            product_using_time = np.zeros(self.product_num)
-            for product in range(self.product_num):
-                for process in range(self._funcs_per_process_num):
-                    raw_process_unit = pop[process][product] * self.RMT_units[process]
-                    process_unit = raw_process_unit if raw_process_unit > 1 else 1
-                    product_using_time[product] += self.eta_total_time[process][product] / int(process_unit)
-            # 计算适应度，使用时间越少适应度越大，分子可以修改
-            self.fitness[i] = 10 - product_using_time.sum() / 1e2
-            self.time[i] = product_using_time.sum()
-        logger.info(self.time)"""
 
     def select(self):
         select_method = 'best'
@@ -325,7 +308,7 @@ class GeneticAlgorithmNUMPY:
         child2 = np.concatenate([parent1[crossover_point:], parent2[:crossover_point]])
         return child1, child2
 
-    def evolve(self):
+    def evolve(self) -> tuple[int, list[list[int]]]:
         self.generate_init_population()
         for _ in range(self.generation):
             self.fitness_time_cal()
@@ -348,7 +331,8 @@ class GeneticAlgorithmNUMPY:
         # logger.info(
         #     # 最优解：{self.best_solution}，最优解适应度：{self.best_fitness: .2f}
         #     f"最优解时间：{self.shortest_time[-1]:.2f}")
-        return self.shortest_time, self.best_solution
+        unit_num = [[round(j.item() * self.RMT_units[i]) for j in nums] for i, nums in enumerate(self.best_solution)]
+        return round(self.shortest_time), unit_num
 
 
 def mainTorch():

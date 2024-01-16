@@ -14,7 +14,6 @@ from model.WorkCell import WorkCell
 from model.WorkCenter import WorkCenter
 from model.StorageCenter import StorageCenter
 from loguru import logger
-from torch.distributions import Categorical
 
 # from model.WorkCell import WorkCell
 # plt.rcParams["font.sans-serif"] = ["SimHei"]  # 显示中文标签
@@ -83,41 +82,40 @@ def process_raw_data(raw_edge_index, raw_state) -> dict:
 class EnvRun:
     def __init__(
             self,
-            work_center_init_func: Union[Tensor, list],
-            order: Union[Tensor, list],
-            speed_list: Union[Tensor, list],
-            expected_step,
             device,
             episode_step_max=256,
     ):
-        if isinstance(work_center_init_func, Tensor):
-            pass
-        elif isinstance(work_center_init_func, list):
-            work_center_init_func = torch.tensor(work_center_init_func)
-        else:
-            raise ValueError("work_center_init_func must be Tensor or list")
         self.device = device
         self.edge_index: Dict[str, Union[torch.Tensor, list]] = {}
-        self.order = torch.tensor(order)
-        self.expected_step = expected_step
-        self.speed_list = torch.tensor(speed_list)
-        self.process_num = work_center_init_func.shape[0]
-        self.product_num = order.shape[0]
-        # self.product_count = torch.zeros(size=(self.process_num, self.func_num), dtype=torch.int)
-        self.total_center_num = work_center_init_func.sum()
-        # 每个工序的工作中心数量
-        self._center_per_process = torch.sum(work_center_init_func, dim=1)
-        self._funcs_per_process_num = torch.sum(~torch.isnan(speed_list), dim=1)
-        self.max_speed = torch.max(speed_list[~torch.isnan(speed_list)])
+
         self.state_code_size = len(CellCode)
-        self.work_center_list: list[WorkCenter] = []
         self.episode_step_max = episode_step_max
+
+        # 一次循环的step数量
+        self.episode_step = 0
+        # 奖励和完成与否
+        self.reward = 0
+        self.done = 0
+
+    def initialize(self, order: list, work_center_init_func: list[list[int]], speed_list: list, expected_step):
+        self.order = torch.tensor(order)
+        self.work_center_init_func = torch.tensor(work_center_init_func)
+        self.speed_list = torch.tensor(speed_list)
+        self.work_center_list: list[WorkCenter] = []
+        self.process_num = len(work_center_init_func)
+        self.product_num = self.order.shape[0]
+        self.expected_step = expected_step
+        # 每个工序的工作中心数量
+        self._center_per_process = torch.sum(self.work_center_init_func, dim=1)
+        self._funcs_per_process_num = torch.sum(~torch.isnan(self.speed_list), dim=1)
+        self.total_center_num = self.work_center_init_func.sum()
+        self.max_speed = torch.max(self.speed_list[~torch.isnan(self.speed_list)])
         # 第一层解析工序，第二层解析每个工序中的产品，第三层生成工作中心
         for process, funcs in enumerate(work_center_init_func):
             for func, num in enumerate(funcs):
                 # 这里加一主要是为了配合原料仓库的process为0
                 self.work_center_list.extend([
-                    WorkCenter(process + 1, speed_list[process], func)
+                    WorkCenter(process + 1, self.speed_list[process], func)
                     for _ in range(0, num)
                 ])
         self._work_center2cell_list = [torch.tensor([cell_id for cell_id in cell.all_cell_id]) for cell in
@@ -126,7 +124,7 @@ class EnvRun:
         # 货架数量是产品工序和产品类别共同构成的
         # 不包括没有那道工序的半成品
         # 这个是找到不为0的元素位置，是一个（2，n）的tensor
-        storage_need_tensor = torch.nonzero(~speed_list.isnan(), as_tuple=False)
+        storage_need_tensor = torch.nonzero(~self.speed_list.isnan(), as_tuple=False)
         # 需要新增1，也就是现在货架的processid对应的是cell的process+1
         storage_need_tensor[:, 0] += 1
         # 为了从原料货架起始，需要加一个
@@ -145,15 +143,9 @@ class EnvRun:
             storage_data = torch.tensor((storage.id, storage.product_id)).view(1, -1)
             self.storage_id_relation[storage.process] = torch.cat(
                 (self.storage_id_relation[storage.process], storage_data), dim=0)
-        # 一次循环的step数量
-        self.episode_step = 0
-        # 奖励和完成与否
-        self.reward = 0
-        self.done = 0
         # 该step各个工序的变化
         self.step_product_count = torch.zeros((self.process_num + 1, self.product_num), dtype=torch.int)
-        self.order_finish_count = torch.zeros(order.shape[0], dtype=torch.int)
-        # 初始化边
+        self.order_finish_count = torch.zeros(self.order.shape[0], dtype=torch.int)
         self.build_edge()
 
     @property
@@ -362,11 +354,10 @@ class EnvRun:
                order: Union[Tensor, list],
                speed_list: Union[Tensor, list],
                expected_step, ):
-        self.__init__(work_center_init_func, order, speed_list, expected_step, self.device)
-        self.reset()
         WorkCenter.reset_class_id()
         WorkCell.reset_class_id()
         StorageCenter.reset_class_id()
+        self.initialize(order, work_center_init_func, speed_list, expected_step)
 
     """    @deprecated
     def deliver_centers_material(self, workcell_get_material: np.ndarray):
