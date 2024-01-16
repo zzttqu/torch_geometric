@@ -110,12 +110,11 @@ class HGTNet(nn.Module):
             data: HeteroData,
             hidden_channels=32,
             num_layers=2,
-            action_choice=2,
     ):
         super().__init__()
         # 将节点映射为一个四维向量
         self.encoders = torch.nn.ModuleDict()
-        node_features_dict = data.num_node_features
+        # node_features_dict = data.num_node_features
         for node_type in data.node_types:
             self.encoders[f"{node_type}_linear"] = nn.Linear(
                 data.num_node_features[node_type], hidden_channels

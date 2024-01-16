@@ -271,7 +271,7 @@ class EnvRun:
                 products_reward += tmp_count / self.order[_spd] * 0.1
                 # 如果达到订单数量且这个产品型号并未达到过订单数量，就+50奖励
                 if _spdc > self.order[_spd] and self.order_finish_count[_spd] != 1:
-                    logger.warning(f'{_spd}号产品达到所需要的订单数量')
+                    logger.info(f'{_spd}号产品达到所需要的订单数量')
                     products_reward += 50
                     # 如果达到就置为1
                     self.order_finish_count[_spd] = 1

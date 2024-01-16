@@ -23,43 +23,54 @@ def main():
     torch.manual_seed(3407)
     batch_size = 32
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # device = torch.device('cpu')
+
+    # 初始化模型用
+    ga = GeneticAlgorithmNUMPY(pop_num, generation, orders[0], process_speed, rmt_units)
+    best_time, best_solution = ga.evolve()
     env = EnvRun(device=device)
+    env.initialize(order=orders[0], work_center_init_func=best_solution, speed_list=process_speed,
+                   expected_step=best_time)
+    obs_states, edge_index, _, _, _ = env.get_obs()
+    n_epochs = 12
+    hetero_data = HeteroData()
+    # 节点信息
+    for key, _value in obs_states.items():
+        hetero_data[key].x = _value
+        # 边信息
+    for key, _value in edge_index.items():
+        node1, node2 = key.split("2")
+        hetero_data[(f"{node1}", f"{key}", f"{node2}")].edge_index = _value
+    agent = Agent(
+        batch_size=batch_size,
+        n_epochs=n_epochs,
+        init_data=hetero_data,
+        device=device
+    )
+    del obs_states, edge_index
+    torch.cuda.empty_cache()
+
     total_step = 0
     for order in orders:
+        torch.cuda.empty_cache()
         logger.info(f'order: {order}')
         ga = GeneticAlgorithmNUMPY(pop_num, generation, order, process_speed, rmt_units)
         best_time, best_solution = ga.evolve()
+        logger.info(f'算法最优{best_time},配置为{best_solution}')
         init_step = total_step
-        max_steps = 128
-        n_epochs = 12
+        max_steps = 64
+
         learn_num = 0
 
-        env.initialize(order=order, work_center_init_func=best_solution, speed_list=process_speed,
-                       expected_step=best_time)
+        env.reinit(order=order, work_center_init_func=best_solution, speed_list=process_speed,
+                   expected_step=best_time)
         obs_states, edge_index, reward, dones, _ = env.get_obs()
-
-        hetero_data = HeteroData()
-        # 节点信息
-        for key, _value in obs_states.items():
-            hetero_data[key].x = _value
-            # 边信息
-        for key, _value in edge_index.items():
-            node1, node2 = key.split("2")
-            hetero_data[(f"{node1}", f"{key}", f"{node2}")].edge_index = _value
-        agent = Agent(
-            batch_size=batch_size,
-            n_epochs=n_epochs,
-            init_data=hetero_data,
-            center_per_process=env.center_per_process,
-            center_num=env.total_center_num,
-            process_num=env.process_num,
-            product_num=env.product_num,
-        )
+        agent.init(env.center_per_process, env.process_num, env.total_center_num)
         memory = PPOMemory(
             batch_size,
             device,
         )
-        logger.info(f"模型加载完成，环境初始化完成")
+        logger.info(f"环境初始化完成")
         now_time = datetime.now()
         episode = 0
         while total_step < init_step + max_steps:

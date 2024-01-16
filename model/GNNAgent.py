@@ -19,21 +19,13 @@ class Agent:
             batch_size,
             n_epochs,
             init_data: HeteroData,
-            center_per_process,
-            process_num,
-            center_num,
-            product_num,
+            device: torch.device,
             clip=0.2,
             lr=3e-4,
             gamma=0.99,
             gae_lambda=0.95,
     ):
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-        self.center_per_process = center_per_process
-        self.center_num = center_num
-        self.process_num = process_num
-        self.product_num = product_num
+        self.device = device
 
         self.gamma = gamma
         self.batch_size = batch_size
@@ -46,6 +38,13 @@ class Agent:
             init_data,
         ).to(self.device)
         self.optimizer = torch.optim.Adam(self.network.parameters(), lr=lr, eps=1e-5)
+
+    def init(self, center_per_process,
+             process_num,
+             center_num):
+        self.center_per_process = center_per_process
+        self.center_num = center_num
+        self.process_num = process_num
 
     def get_value(
             self,
