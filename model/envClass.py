@@ -2,9 +2,9 @@ from datetime import datetime
 
 from typing import List, Dict, Tuple, Union
 
-from torch_geometric.data import HeteroData
-from torch_geometric.utils import to_networkx
-import networkx as nx
+# from torch_geometric.data import HeteroData
+# from torch_geometric.utils import to_networkx
+# import networkx as nx
 import numpy as np
 import torch
 from torch import Tensor
@@ -97,7 +97,8 @@ class EnvRun:
         self.reward = 0
         self.done = 0
 
-    def initialize(self, order: list, work_center_init_func: list[list[int]], speed_list: list, expected_step):
+    def initialize(self, order: list, work_center_init_func: list[list[int]], speed_list: list, expected_step,
+                   episode_step_max: int):
         self.order = torch.tensor(order)
         self.work_center_init_func = torch.tensor(work_center_init_func)
         self.speed_list = torch.tensor(speed_list)
@@ -105,9 +106,10 @@ class EnvRun:
         self.process_num = len(work_center_init_func)
         self.product_num = self.order.shape[0]
         self.expected_step = expected_step
+        self.episode_step_max = episode_step_max
+        self.episode_step_max = 2 * expected_step
         # 每个工序的工作中心数量
         self._center_per_process = torch.sum(self.work_center_init_func, dim=1)
-        self._funcs_per_process_num = torch.sum(~torch.isnan(self.speed_list), dim=1)
         self.total_center_num = self.work_center_init_func.sum()
         self.max_speed = torch.max(self.speed_list[~torch.isnan(self.speed_list)])
         # 第一层解析工序，第二层解析每个工序中的产品，第三层生成工作中心
@@ -155,10 +157,6 @@ class EnvRun:
     @property
     def work_center2cell_list(self):
         return self._work_center2cell_list
-
-    @property
-    def per_process_num(self):
-        return self._funcs_per_process_num
 
     def build_edge(self) -> Dict[str, torch.Tensor]:
         edge_names = ["cell2center", "cell2storage", "storage2center", "storage2cell", "center2cell"]
@@ -262,25 +260,29 @@ class EnvRun:
             tmp_count = self.step_product_count[_process][_spd]
             if _process < self.process_num:
                 # 当前货架的变化情况，如果小于0说明被消耗了，要大大奖励
-                products_reward -= tmp_count / self.order[_spd] * 0.01
+                products_reward -= tmp_count / self.order[_spd] * 0.05
                 # 只有非0工序库存过大的时候才会扣血
-                if _spdc > 2 * self.speed_list[_process][_spd] and _process != 0:
-                    products_reward -= _spdc / self.process_num * 0.05
+                # if _spdc > 8 * self.speed_list[_process][_spd] and _process != 0:
+                #     products_reward -= _spdc / self.process_num * 0.1
             # 最终产物大大奖励
-            elif _process == self.process_num:
+            # 但是完成这个之后就不再增加reward了
+            elif _process == self.process_num and self.order_finish_count[_spd] != 1:
                 products_reward += tmp_count / self.order[_spd] * 0.1
                 # 如果达到订单数量且这个产品型号并未达到过订单数量，就+50奖励
-                if _spdc > self.order[_spd] and self.order_finish_count[_spd] != 1:
-                    logger.info(f'{_spd}号产品达到所需要的订单数量')
-                    products_reward += 50
+                if _spdc >= self.order[_spd]:
+                    # logger.success(f'{_spd}号产品达到所需要的订单数量')
+                    products_reward += 5
                     # 如果达到就置为1
                     self.order_finish_count[_spd] = 1
             if self.order_finish_count.sum() >= len(self.order):
                 self.done = 1
-                products_reward += 100
+                # 如果所花费的step小于期望的step，就额外奖励
+                if self.episode_step < self.expected_step:
+                    self.reward += (self.expected_step - self.episode_step) / 5
+                products_reward += 20
                 break
                 # 时间惩罚
-        time_penalty = self.episode_step / self.episode_step_max + 0.5 * self.episode_step / self.expected_step
+        time_penalty = 0.5 * self.episode_step / self.expected_step
         self.reward += products_reward
         self.reward -= time_penalty
         # 最终产物肯定要大大滴加分
@@ -292,7 +294,7 @@ class EnvRun:
 
     def get_obs(
             self,
-    ) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor], float, int, int]:
+    ) -> Tuple[Dict[str, Tensor], Dict[str, Tensor], float, int, int, Tensor]:
         # 先从workcenter中取出来，再从celllist的list中取出来每个cell的tensor
         work_cell_states = torch.stack([cell for work_center in self.work_center_list for cell in
                                         work_center.get_all_cell_state(self.max_speed, self.product_num,
@@ -320,6 +322,7 @@ class EnvRun:
             self.reward,
             self.done,
             self.episode_step,
+            self.order_finish_count
         )
 
     def online_state(self):
@@ -353,11 +356,11 @@ class EnvRun:
     def reinit(self, work_center_init_func: Union[Tensor, list],
                order: Union[Tensor, list],
                speed_list: Union[Tensor, list],
-               expected_step, ):
+               expected_step, episode_step_max):
         WorkCenter.reset_class_id()
         WorkCell.reset_class_id()
         StorageCenter.reset_class_id()
-        self.initialize(order, work_center_init_func, speed_list, expected_step)
+        self.initialize(order, work_center_init_func, speed_list, expected_step, episode_step_max)
 
     """    @deprecated
     def deliver_centers_material(self, workcell_get_material: np.ndarray):

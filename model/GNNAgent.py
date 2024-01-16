@@ -39,9 +39,12 @@ class Agent:
         ).to(self.device)
         self.optimizer = torch.optim.Adam(self.network.parameters(), lr=lr, eps=1e-5)
 
-    def init(self, center_per_process,
+    def init(self,
+             batch_size: int,
+             center_per_process,
              process_num,
              center_num):
+        self.batch_size=batch_size
         self.center_per_process = center_per_process
         self.center_num = center_num
         self.process_num = process_num

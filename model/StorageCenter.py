@@ -27,7 +27,7 @@ class StorageCenter(BasicClass):
         self._product_count: int = 0
         # 如果是process=0是原料仓库，库存就是产品数量*1.5，防止因为中间不够而卡主无法达到order数量
         if self._process_id == 0:
-            self._product_count = int(1.5 * goal)
+            self._product_count = int(1.2 * goal)
         self.goal = goal
         self.state = CellCode.workcell_working
         self.step_send_product = 0
@@ -80,7 +80,7 @@ class StorageCenter(BasicClass):
     def reset(self):
         self._product_count = 0
         if self._process_id == 0:
-            self._product_count = int(1.5 * self.goal)
+            self._product_count = int(1.2 * self.goal)
 
     def status(self) -> torch.Tensor:
         """

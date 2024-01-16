@@ -43,12 +43,7 @@ def main(max_steps):
     learn_num = 0
 
     env = EnvRun(
-        order=order,
-        speed_list=speed_list,
-        work_center_init_func=work_center_init_func,
         device=device,
-        expected_step=80,
-        episode_step_max=episode_step_max,
     )
     # 如果不可视化节点就不用取返回值graph
     # 加入tensorboard
@@ -69,10 +64,7 @@ def main(max_steps):
         batch_size=batch_size,
         n_epochs=n_epochs,
         init_data=hetero_data,
-        center_per_process=env.center_per_process,
-        center_num=env.total_center_num,
-        process_num=env.process_num,
-        product_num=env.product_num,
+        device=device,
     )
     # 加载之前的
     agent.load_model("last_model.pth")
