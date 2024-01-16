@@ -83,18 +83,24 @@ def process_raw_data(raw_edge_index, raw_state) -> dict:
 class EnvRun:
     def __init__(
             self,
-            work_center_init_func,
-            order,
-            speed_list,
-            device,
+            work_center_init_func: Union[Tensor, list],
+            order: Union[Tensor, list],
+            speed_list: Union[Tensor, list],
             expected_step,
+            device,
             episode_step_max=256,
     ):
+        if isinstance(work_center_init_func, Tensor):
+            pass
+        elif isinstance(work_center_init_func, list):
+            work_center_init_func = torch.tensor(work_center_init_func)
+        else:
+            raise ValueError("work_center_init_func must be Tensor or list")
         self.device = device
         self.edge_index: Dict[str, Union[torch.Tensor, list]] = {}
-        self.order = order
+        self.order = torch.tensor(order)
         self.expected_step = expected_step
-        self.speed_list = speed_list
+        self.speed_list = torch.tensor(speed_list)
         self.process_num = work_center_init_func.shape[0]
         self.product_num = order.shape[0]
         # self.product_count = torch.zeros(size=(self.process_num, self.func_num), dtype=torch.int)
@@ -352,7 +358,11 @@ class EnvRun:
         for storage in self.storage_list:
             storage.reset()
 
-    def reinit(self):
+    def reinit(self, work_center_init_func: Union[Tensor, list],
+               order: Union[Tensor, list],
+               speed_list: Union[Tensor, list],
+               expected_step, ):
+        self.__init__(work_center_init_func, order, speed_list, expected_step, self.device)
         self.reset()
         WorkCenter.reset_class_id()
         WorkCell.reset_class_id()
@@ -567,41 +577,41 @@ class EnvRun:
         """
 
 
-if __name__ == '__main__':
-    order = torch.tensor([100, 600, 200])
-    # 这里应该是对各个工作单元进行配置了
-    work_center_init_func = torch.tensor([[3, 3, 10],
-                                          [2, 2, 6],
-                                          [4, 5, 0],
-                                          [3, 0, 12],
-                                          [2, 3, 5]])
+# if __name__ == '__main__':
+#     order = torch.tensor([100, 600, 200])
+#     # 这里应该是对各个工作单元进行配置了
+#     work_center_init_func = torch.tensor([[3, 3, 10],
+#                                           [2, 2, 6],
+#                                           [4, 5, 0],
+#                                           [3, 0, 12],
+#                                           [2, 3, 5]])
+#
+#     speed_list = torch.tensor([[5, 10, 15, 20, 12], [8, 12, 18, torch.nan, 12], [3, 6, torch.nan, 10, 8]]).T
+#     env = EnvRun(work_center_init_func, order, speed_list, torch.device('cuda:0'))
+#     logger.info(env.get_obs())
+#     hh = HeteroData()
+#     _id = 0
+#     for key, value in env.get_obs()[0].items():
+#         _id += value.shape[0]
+#         logger.info(_id)
+#         hh[key].x = value
+#     for key, value in env.get_obs()[1].items():
+#         a, b = key.split('2')
+#         hh[a, 'to', b].edge_index = value
+#     G = to_networkx(hh)
+#     import matplotlib.pyplot as plt
+#
+#     plt.rcParams['figure.dpi'] = 300
+#     plt.rcParams['figure.figsize'] = (15, 15)
+#     pos = nx.spring_layout(G, k=0.2, scale=0.5)
+#     pos1 = nx.circular_layout(G)
+#     pos2 = nx.shell_layout(G)
+#     node_size = [10 * G.degree(node) for node in G.nodes]
+#     nx.draw(G, pos2, with_labels=True, node_size=node_size, font_size=5, edge_color='gray', width=1.0, alpha=0.7)
+#
+#     plt.show()
 
-    speed_list = torch.tensor([[5, 10, 15, 20, 12], [8, 12, 18, torch.nan, 12], [3, 6, torch.nan, 10, 8]]).T
-    env = EnvRun(work_center_init_func, order, speed_list, torch.device('cuda:0'))
-    logger.info(env.get_obs())
-    hh = HeteroData()
-    _id = 0
-    for key, value in env.get_obs()[0].items():
-        _id += value.shape[0]
-        logger.info(_id)
-        hh[key].x = value
-    for key, value in env.get_obs()[1].items():
-        a, b = key.split('2')
-        hh[a, 'to', b].edge_index = value
-    G = to_networkx(hh)
-    import matplotlib.pyplot as plt
-
-    plt.rcParams['figure.dpi'] = 300
-    plt.rcParams['figure.figsize'] = (15, 15)
-    pos = nx.spring_layout(G, k=0.2, scale=0.5)
-    pos1 = nx.circular_layout(G)
-    pos2 = nx.shell_layout(G)
-    node_size = [10 * G.degree(node) for node in G.nodes]
-    nx.draw(G, pos2, with_labels=True, node_size=node_size, font_size=5, edge_color='gray', width=1.0, alpha=0.7)
-
-    plt.show()
-
-
+@deprecated
 def select_functions(start, end, work_center_num, fun_per_center):
     num_selections = work_center_num * fun_per_center
     # 创建一个包含范围内所有数字的列表
