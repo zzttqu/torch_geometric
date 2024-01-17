@@ -1,4 +1,6 @@
-import math
+"""
+本文件主要用于测试包括遗传算法和机器学习
+"""
 from datetime import datetime
 
 from torch.utils.tensorboard import SummaryWriter
@@ -70,6 +72,7 @@ def main():
     indexes = torch.randint(0, len(orders), size=(3,))
 
     for index in indexes:
+        # TODO 应该先测试一下当前模型的效果
         order = orders[index]
         torch.cuda.empty_cache()
         logger.info(f'=======当前订单为: {order}=======')
@@ -144,10 +147,10 @@ def main():
                     mini_batch_size=batch_size // 2,
                     progress=episode_step / max_steps,
                 )
-                learn_time = (datetime.now() - now_time).seconds
-                logger.info(f"第{learn_num}次学习，学习用时：{learn_time}秒")
+                # learn_time = (datetime.now() - now_time).seconds
+                # logger.info(f"第{learn_num}次学习，学习用时：{learn_time}秒")
+                # now_time = datetime.now()
                 agent.save_model("last_model.pth")
-                now_time = datetime.now()
             if dones == 1:
                 episode += 1
                 logger.info(
