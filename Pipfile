@@ -4,14 +4,12 @@ verify_ssl = true
 name = "pip_conf_index_global"
 
 [packages]
-django = "==4.2.6"
-loguru = "==0.7.2"
-matplotlib = "==3.8.0"
-networkx = "==3.1"
-numpy = "==1.24.1"
-torch = "==2.1.0+cu121"
-torch-geometric = "==2.4.0"
-tensorboard = "==2.14.1"
+torch = "*"
+torchvision = "*"
+torchaudio = "*"
+numpy = "*"
+torch-geometric = "*"
+loguru = "*"
 
 [dev-packages]
 
