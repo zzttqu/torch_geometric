@@ -43,12 +43,10 @@ class Agent:
     def init(self,
              batch_size: int,
              center_per_process,
-             process_num,
              center_num):
         self.batch_size = batch_size
         self.center_per_process = center_per_process
         self.center_num = center_num
-        self.process_num = process_num
         self.materials_method = "ratio"
 
     def get_value(
@@ -69,11 +67,8 @@ class Agent:
         all_logits, _ = self.network(state, edge_index)
         cell_logits, center_logits = all_logits.values()
         # self.work_center_process中记录了各个process的workcenter数量
-
-        # 工作中心启动还是停止
-
-        _center_ratio = torch.full((self.process_num, self.center_num), -torch.inf)
         # 启动哪个功能
+        # 因为每个center的cell数量是一样的，只不过有的cell不能用而已
         center_func_logits = cell_logits[:, 0].reshape(self.center_num, -1).clone()
         # 直接折叠成centernum的形状，就可以选择
         center_ratio_logits = cell_logits[:, 1].reshape(self.center_num, -1).clone()
@@ -81,6 +76,7 @@ class Agent:
         if center_func_action is None:
             center_func_action = _center_func_dist.sample()
         log_probs_center_func = _center_func_dist.log_prob(center_func_action)
+        # 工作中心启动还是停止
         centers_dist = Categorical(logits=center_logits)
         if centers_power_action is None:
             centers_power_action = centers_dist.sample()
@@ -191,7 +187,7 @@ class Agent:
     ):
         cf = [torch.zeros(0) for _ in range(mini_batch_size)]
         cp = [torch.zeros(0) for _ in range(mini_batch_size)]
-        entropy =0
+        entropy = 0
         for i in range(mini_batch_size):
             _, _, _, log_power, log_funcs, _entropy = self.get_action(node[i], edge[i], centers_power_actions[i],
                                                                       center_func_actions[i])
@@ -297,7 +293,7 @@ class Agent:
                 ratios = (ratios_0 + ratios_1) / 2
                 surr1 = ratios * flat_advantages[index]
                 surr2 = torch.clamp(ratios, 1 - self.clip, 1 + self.clip)
-                actor_loss: torch.Tensor = -torch.min(surr1, surr2) - entropy * 0.001
+                actor_loss: torch.Tensor = -torch.min(surr1, surr2)
                 new_value = self.get_batch_values(
                     mini_nodes, mini_edges, mini_batch_size
                 )

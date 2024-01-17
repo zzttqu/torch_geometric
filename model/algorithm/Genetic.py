@@ -58,7 +58,7 @@ class GeneticAlgorithmTORCH:
 
     # 输入的是单行的，先转为5行3列的
     def norm_list(self, array: Tensor):
-        # array = array.reshape((self.process_num, self.product_num))
+        # array = array.reshape((self.process_per_product, self.product_num))
         # for i in range(len(array)):
         #     array[i] = array[i] / torch.sum(array[i])
 
@@ -171,7 +171,6 @@ class GeneticAlgorithmTORCH:
                 for child in children:
                     self.mutate(child)
                     new_pops.append(self.norm_list(child))
-            # print(len(new_pops))
             self.population = torch.stack(new_pops, dim=0)
         # logger.info(
         #     # 最优解：{self.best_solution}，最优解适应度：{self.best_fitness: .2f}
@@ -184,19 +183,19 @@ import numpy as np
 
 class GeneticAlgorithmNUMPY:
 
-    def __init__(self, population_num, generation, order: list, process_speed: list, rmt_units: list):
+    def __init__(self, population_num, generation, order: np.ndarray, process_speed: np.ndarray, rmt_units: np.ndarray):
 
         # 既然不用这个单元种类，那他的占用时间就按0算咯
         #  [[5, 10, 15, 20, 12], [8, 12, 18, 0, 12], [3, 6, 0, 10, 8]]
-        self.process_speed = np.array(process_speed)
+        self.process_speed = process_speed
         # orders = [[10, 20, 4], [60, 5, 5], [20, 10, 15]]
         self.order = order
-        self.RMT_units = np.array(rmt_units)
+        self.RMT_units = rmt_units
         self.population_num = population_num
         self.generation = generation
-        self.process_num = len(process_speed)
+        self.process_num = process_speed.shape[0]
         self.process_list = [i for i in range(self.process_num)]
-        self.product_num = len(order)
+        self.product_num = order.shape[0]
         self.population = np.zeros((self.population_num, self.product_num, self.process_num), dtype=np.float32)
         # logger.debug(self.population.shape)
         self.fitness = np.zeros(self.population_num)
@@ -210,10 +209,11 @@ class GeneticAlgorithmNUMPY:
     def init_order(self):
         # 那我还不如干脆按产品分别进行优化，一个产品一列
         for _product_id in range(self.product_num):
-            # 按顺序计算每个产品的当前环节所需的总时间
+            # 按顺序计算每个产品的当前环节所需的总时间(当前order在每个环节的耗时，已经除以了speed，单位是个/（个*1/步*1/台）=步*台)
             # 每行是一个工序，每列是一个产品
             for _process_id, _time in enumerate(self.eta_total_time):
                 assert isinstance(_time, np.ndarray)
+                # 如果是0就跳过
                 if self.process_speed[_process_id][_product_id] != 0:
                     _time[_product_id] = self.order[_product_id] / self.process_speed[_process_id][_product_id]
                 else:
@@ -221,6 +221,7 @@ class GeneticAlgorithmNUMPY:
         # time0 = total_time[0]
         # 第0个订单每个产品每个工序的用时
         # logger.info(self.eta_total_time)
+        # raise SystemExit
 
     # 输入的是单行的，先转为5行3列的
     def norm_list(self, array: np.ndarray):
@@ -250,15 +251,19 @@ class GeneticAlgorithmNUMPY:
         _process_units = np.round(np.maximum(raw_process_units, 1))
 
         # 计算产品使用时间
-        # 需要忽略nan
-        raw_fitness = np.nansum(self.eta_total_time[np.newaxis, :, :] / (process_units * self.process_speed),
-                                axis=(1, 2))
+        # 除法产生0忽略警告
+        with np.errstate(divide='ignore', invalid='ignore'):
+            # 需要忽略nan
+            raw_fitness = np.nansum(self.eta_total_time[np.newaxis, :, :] / process_units,
+                                    axis=(1, 2))
 
-        # logger.info(raw_fitness)
+            # logger.info(raw_fitness)
 
-        # 计算适应度
-        self.fitness = 10 - raw_fitness / 1e2
-        self.time = np.nansum(self.eta_total_time[np.newaxis, :, :] / _process_units, axis=(1, 2))
+            # 计算适应度
+            self.fitness = 10 - raw_fitness / 1e2
+            # 总时间的步*台 除以 台=步数
+            self.time = np.nansum(self.eta_total_time[np.newaxis, :, :] / _process_units,
+                                  axis=(1, 2))
 
     def select(self):
         select_method = 'best'

@@ -3,6 +3,7 @@
 """
 from datetime import datetime
 
+import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 
 from PPOMemory import PPOMemory
@@ -12,16 +13,19 @@ from algorithm.Genetic import GeneticAlgorithmNUMPY
 import torch
 from model.GNNAgent import Agent
 from torch_geometric.data import HeteroData
+from utils.DataUtils import data_generator
 
 
 def main():
-    process_speed = [[5, 8, 3],
-                     [10, 12, 6],
-                     [15, 18, float('nan')],
-                     [20, float('nan'), 10],
-                     [12, 12, 8]]
-    orders = [[100, 200, 400], [600, 500, 500], [200, 100, 105], [180, 300, 200]]
-    rmt_units = [16, 10, 10, 15, 10]
+    speed_list = [np.array([[0, 8, 3],
+                            [10, 12, 6],
+                            [15, 18, 0],
+                            [20, 0, 10],
+                            [0, 12, 8]])]
+    order_list = [np.array([100, 200, 400]), [600, 500, 500], [200, 100, 105], [180, 300, 200]]
+    rmt_units_num_list = [np.array([16, 10, 10, 15, 10])]
+    data_len = 5
+    speed_list, order_list, rmt_units_num_list = data_generator(5, 5, data_len)
     # 自然选择部分
     pop_num = 100
     generation = 50
@@ -31,10 +35,10 @@ def main():
     # device = torch.device('cpu')
 
     # 初始化模型用
-    ga = GeneticAlgorithmNUMPY(pop_num, generation, orders[0], process_speed, rmt_units)
+    ga = GeneticAlgorithmNUMPY(pop_num, generation, order_list[0], speed_list[0], rmt_units_num_list[0])
     best_time, best_solution = ga.evolve()
     env = EnvRun(device=device)
-    env.initialize(order=orders[0], work_center_init_func=best_solution, speed_list=process_speed,
+    env.initialize(order=order_list[0], work_center_init_func=best_solution, speed_list=speed_list[0],
                    expected_step=best_time, episode_step_max=best_time * 2)
     obs_states, edge_index, _, _, _, _ = env.get_obs()
     n_epochs = 8
@@ -52,9 +56,9 @@ def main():
         init_data=hetero_data,
         device=device
     )
-    # load_model_name = "last_model.pth"
-    # logger.debug(f'加载了模型{load_model_name}')
-    # agent.load_model(load_model_name)
+    load_model_name = "last_model.pth"
+    logger.debug(f'加载了模型{load_model_name}')
+    agent.load_model(load_model_name)
     # 添加计算图
     a, b = agent.network(obs_states, edge_index)
     writer = SummaryWriter(log_dir="logs/train")
@@ -69,27 +73,32 @@ def main():
 
     total_step = 0
     episode = 0
-    indexes = torch.randint(0, len(orders), size=(3,))
+    learn_num = 0
+    indexes = torch.randint(0, data_len, size=(data_len,))
 
-    for index in indexes:
+    for i, index in enumerate(indexes):
         # TODO 应该先测试一下当前模型的效果
-        order = orders[index]
+        order = order_list[index]
+        speed = speed_list[index]
+        rmt_units_num = rmt_units_num_list[index]
+
         torch.cuda.empty_cache()
+        logger.success(f'第{i + 1}个场景')
         logger.info(f'=======当前订单为: {order}=======')
-        ga = GeneticAlgorithmNUMPY(pop_num, generation, order, process_speed, rmt_units)
+        logger.info(f'=======当前速度为: {speed}=======')
+        logger.info(f'=======当前工作单元数量为: {rmt_units_num}=======')
+        ga = GeneticAlgorithmNUMPY(pop_num, generation, order, speed, rmt_units_num)
         best_time, best_solution = ga.evolve()
         logger.success(f'算法最优{best_time},配置为{best_solution}')
         init_step = total_step
         init_episode = episode
         batch_size = 16
-        max_steps = batch_size * 20
+        max_steps = min(batch_size * 20, best_time * 10)
 
-        learn_num = 0
-
-        env.reinit(order=order, work_center_init_func=best_solution, speed_list=process_speed,
-                   expected_step=best_time, episode_step_max=best_time * 2)
+        env.reinit(order=order, work_center_init_func=best_solution, speed_list=speed,
+                   expected_step=best_time, episode_step_max=best_time * 10)
         obs_states, edge_index, reward, dones, _, _ = env.get_obs()
-        agent.init(batch_size, env.center_per_process, env.process_num, env.total_center_num)
+        agent.init(batch_size, env.center_per_process, env.total_center_num)
         memory = PPOMemory(
             batch_size,
             device,
@@ -106,12 +115,12 @@ def main():
                     obs_states, edge_index)
                 value = agent.get_value(obs_states, edge_index)
 
-            env.update(centers_power_action.cpu(), center_func_action.cpu(), centers_ratio.cpu(), total_step)
+            env.update(centers_power_action.cpu(), center_func_action.cpu(), centers_ratio.cpu())
             # 可视化状态
             # logger.debug(f"{total_step} {env.read_state()}")
             p = env.read_state()
-            a = {f"{i}storage": mm[0] for i, mm in enumerate(p['storage'][-3:])}
-            b = {f"{i}storage": mm[0] for i, mm in enumerate(p['storage'][:3])}
+            a = {f"{i}storage": mm[0] for i, mm in enumerate(p['product'])}
+            b = {f"{i}storage": mm[0] for i, mm in enumerate(p['material'])}
             writer.add_scalars(f"storage/product", a, total_step)
             writer.add_scalars(f"storage/material", b, total_step)
 
@@ -147,9 +156,14 @@ def main():
                     mini_batch_size=batch_size // 2,
                     progress=episode_step / max_steps,
                 )
-                # learn_time = (datetime.now() - now_time).seconds
+                tmp_time = datetime.now()
+                learn_time = (tmp_time - now_time).seconds
+                cost_micro = (tmp_time - now_time).microseconds
+                ms_time = learn_time * 1000 + cost_micro / 1000
+                writer.add_scalar("learn/loss", loss, learn_num)
+                writer.add_scalar("learn/time", ms_time, learn_num)
                 # logger.info(f"第{learn_num}次学习，学习用时：{learn_time}秒")
-                # now_time = datetime.now()
+                now_time = datetime.now()
                 agent.save_model("last_model.pth")
             if dones == 1:
                 episode += 1

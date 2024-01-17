@@ -3,25 +3,33 @@ import pandas as pd
 from loguru import logger
 
 
-def data_generator(process_num, product_num):
+def data_generator(process_num, product_num, data_len) -> tuple[list, list, list]:
     """
     生成数据
     Args:
+        data_len: 生成数量
         process_num: 工序数量
         product_num: 产品种类
 
     Returns:
 
     """
-    speed = np.random.randint(5, 21, size=(process_num, product_num))
-    # 百分之10的概率为nan
-    mask = np.less(np.random.rand(process_num, product_num), 0.1)
-    speed[mask] = 0
-    # 生成orders
-    order = np.random.randint(100, 1000, size=product_num)
-    # 生成可重构单元
-    rmt_units_num = np.random.randint(10, 50, size=process_num)
-    return speed, order, rmt_units_num
+    speed_list = [_ for _ in range(data_len)]
+    order_list = [_ for _ in range(data_len)]
+    rmt_units_num_list = [_ for _ in range(data_len)]
+    for i in range(data_len):
+        speed = np.random.randint(5, 21, size=(process_num, product_num))
+        # 百分之10的概率为nan
+        mask = np.less(np.random.rand(process_num, product_num), 0.1)
+        speed[mask] = 0
+        speed_list[i] = speed
+        # 生成orders
+        order = np.random.randint(100, 1000, size=product_num)
+        order_list[i] = order
+        # 生成可重构单元
+        rmt_units_num = np.random.randint(10, 50, size=process_num)
+        rmt_units_num_list[i] = rmt_units_num
+    return speed_list, order_list, rmt_units_num_list
 
 
 def save_to_csv(data: tuple):

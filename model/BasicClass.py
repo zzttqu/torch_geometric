@@ -8,7 +8,7 @@ import torch
 class BasicClass(ABC):
     class_id = 0
 
-    def __init__(self, process_id):
+    def __init__(self, process_id: int):
         """
         父类不建议使用私有属性，因为会导致子类无法继承
         Args:

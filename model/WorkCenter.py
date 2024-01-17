@@ -13,7 +13,7 @@ from torch import Tensor
 # 这个类是用来定义加工中心的，一个加工中心包括多个加工单元，但同一时间只能有一个加工单元工作
 class WorkCenter(BasicClass):
 
-    def __init__(self, process_id: int, speed_list: Tensor, init_func: int):
+    def __init__(self, process_id: int, speed_list: Tensor, init_func: int, product_num: int, process_num: int):
         """
         工作中心初始化
         Args:
@@ -38,6 +38,9 @@ class WorkCenter(BasicClass):
         self._working_speed = int(self._speed_list[init_func].item())
         self._working_cell = self.workcell_list[init_func]
         self._all_cell_id = torch.tensor([workcell.id for workcell in self.workcell_list], dtype=torch.int)
+        self._process_num = process_num if process_num > 1 else 2
+        self._product_num = product_num
+        self._center_state_code_len = len(CenterCode)
 
     @property
     def func_list(self):
@@ -174,15 +177,17 @@ class WorkCenter(BasicClass):
     def get_func_list(self):
         return self._func_list
 
-    def get_all_cell_state(self, max_speed=1, func_num=1, state_code_len=1):
-        return [cell.status(max_speed, func_num, state_code_len) for cell in self.workcell_list]
+    def get_all_cell_status(self, max_speed=1):
+        return [cell.status(max_speed, self._product_num, self._process_num) for cell in self.workcell_list]
 
-    def status(self, function_num=1, state_code_len=1):
-        func_norm = self._working_func / function_num
-        state_norm = self._working_status.value / state_code_len
+    def status(self):
+        func_norm = self._working_func / (self._product_num - 1)
+        process_norm = self.process / self._process_num
+        state_norm = self._working_status.value / (self._center_state_code_len - 1)
         return torch.tensor(
             [
                 func_norm,
+                process_norm,
                 state_norm,
             ],
             dtype=torch.float32,
@@ -194,12 +199,6 @@ class WorkCenter(BasicClass):
         total_p = [cell.product_count for cell in self.workcell_list]
 
         return [self.working_func, self.working_status.value, total_m[self.working_func], total_p[self.working_func]]
-
-    def read_all_cell_state(self):
-        a = []
-        for cell in self.workcell_list:
-            a.append(cell.read_state())
-        return a
 
     @property
     def speed_list(self):

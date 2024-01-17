@@ -1,4 +1,4 @@
-from datetime import datetime
+# from datetime import datetime
 
 from typing import List, Dict, Tuple, Union
 
@@ -9,15 +9,11 @@ import numpy as np
 import torch
 from torch import Tensor
 
-from model.StateCode import CellCode, CenterCode
 from model.WorkCell import WorkCell
 from model.WorkCenter import WorkCenter
 from model.StorageCenter import StorageCenter
 from loguru import logger
 
-# from model.WorkCell import WorkCell
-# plt.rcParams["font.sans-serif"] = ["SimHei"]  # 显示中文标签
-# plt.rcParams["axes.unicode_minus"] = False
 import warnings
 
 
@@ -88,7 +84,6 @@ class EnvRun:
         self.device = device
         self.edge_index: Dict[str, Union[torch.Tensor, list]] = {}
 
-        self.state_code_size = len(CellCode)
         self.episode_step_max = episode_step_max
 
         # 一次循环的step数量
@@ -97,48 +92,60 @@ class EnvRun:
         self.reward = 0
         self.done = 0
 
-    def initialize(self, order: list, work_center_init_func: list[list[int]], speed_list: list, expected_step,
+    def initialize(self, order: np.ndarray, work_center_init_func: list[list[int]], speed_list: np.ndarray,
+                   expected_step,
                    episode_step_max: int):
-        self.order = torch.tensor(order)
+        # 一次循环的step数量
+        self.episode_step = 0
+        # 奖励和完成与否
+        self.reward = 0
+        self.done = 0
+        self.order = torch.from_numpy(order)
         self.work_center_init_func = torch.tensor(work_center_init_func)
-        self.speed_list = torch.tensor(speed_list)
+        self.speed_list = torch.from_numpy(speed_list)
         self.work_center_list: list[WorkCenter] = []
-        self.process_num = len(work_center_init_func)
         self.product_num = self.order.shape[0]
         self.expected_step = expected_step
         self.episode_step_max = episode_step_max
-        self.episode_step_max = 2 * expected_step
         # 每个工序的工作中心数量
         self._center_per_process = torch.sum(self.work_center_init_func, dim=1)
         self.total_center_num = self.work_center_init_func.sum()
-        self.max_speed = torch.max(self.speed_list[~torch.isnan(self.speed_list)])
+        self.max_speed = torch.max(self.speed_list)
+
+        # 初始化货架
+        # 货架数量是产品工序和产品类别共同构成的
+        # 不包括没有那道工序的半成品
+        # 这个是找到不为0的元素位置，是一个（2，n）的tensor
+        storage_need_tensor = torch.nonzero(self.speed_list, as_tuple=False)
+
+        # 需要新增1，也就是现在货架的process_id对应的是cell的process+1
+        storage_need_tensor[:, 0] += 1
+
+        # 为了从原料货架起始，需要加一个
+        material_id = torch.tensor([[0, i] for i in range(self.product_num)], dtype=torch.int)
+        storage_need_tensor = torch.cat((material_id, storage_need_tensor), dim=0)
+        # 每个产品的最终工序不一定一样，会影响判断是否完成
+        self.process_per_product = [torch.max(storage_need_tensor[storage_need_tensor[:, 1] == i, 0]).item() for i in
+                                    range(self.product_num)]
+
+        # 根据speed构建storage
+        self.storage_list = [StorageCenter(product.item(), process.item(), order[product.item()], self.product_num,
+                                           self.process_per_product[product]) for
+                             process, product in
+                             storage_need_tensor]
+
+        self.storage_id_relation: list[Tensor] = [torch.empty((0, 2), dtype=torch.int) for _ in
+                                                  range(max(self.process_per_product) + 1)]
+
         # 第一层解析工序，第二层解析每个工序中的产品，第三层生成工作中心
         for process, funcs in enumerate(work_center_init_func):
             for func, num in enumerate(funcs):
                 # 这里加一主要是为了配合原料仓库的process为0
                 self.work_center_list.extend([
-                    WorkCenter(process + 1, self.speed_list[process], func)
+                    WorkCenter(process + 1, self.speed_list[process], func, self.product_num,
+                               self.process_per_product[func])
                     for _ in range(0, num)
                 ])
-        self._work_center2cell_list = [torch.tensor([cell_id for cell_id in cell.all_cell_id]) for cell in
-                                       self.work_center_list]
-        # 初始化货架
-        # 货架数量是产品工序和产品类别共同构成的
-        # 不包括没有那道工序的半成品
-        # 这个是找到不为0的元素位置，是一个（2，n）的tensor
-        storage_need_tensor = torch.nonzero(~self.speed_list.isnan(), as_tuple=False)
-        # 需要新增1，也就是现在货架的processid对应的是cell的process+1
-        storage_need_tensor[:, 0] += 1
-        # 为了从原料货架起始，需要加一个
-        material_id = torch.tensor([[0, i] for i in range(self.product_num)], dtype=torch.int)
-        storage_need_tensor = torch.cat((material_id, storage_need_tensor), dim=0)
-        # 根据speed构建storage
-        self.storage_list = [StorageCenter(product.item(), process.item(), order[product.item()], self.product_num) for
-                             process, product in
-                             storage_need_tensor]
-
-        self.storage_id_relation: list[Tensor] = [torch.empty((0, 2), dtype=torch.int) for _ in
-                                                  range(self.process_num + 1)]
         # 生成货架和半成品的对应关系
         for storage in self.storage_list:
             # 要增加一个维度，要不然无法cat
@@ -146,17 +153,13 @@ class EnvRun:
             self.storage_id_relation[storage.process] = torch.cat(
                 (self.storage_id_relation[storage.process], storage_data), dim=0)
         # 该step各个工序的变化
-        self.step_product_count = torch.zeros((self.process_num + 1, self.product_num), dtype=torch.int)
+        self.step_product_count = torch.zeros((max(self.process_per_product) + 1, self.product_num), dtype=torch.int)
         self.order_finish_count = torch.zeros(self.order.shape[0], dtype=torch.int)
         self.build_edge()
 
     @property
     def center_per_process(self):
         return self._center_per_process
-
-    @property
-    def work_center2cell_list(self):
-        return self._work_center2cell_list
 
     def build_edge(self) -> Dict[str, torch.Tensor]:
         edge_names = ["cell2center", "cell2storage", "storage2center", "storage2cell", "center2cell"]
@@ -172,7 +175,7 @@ class EnvRun:
             self.edge_index[edge_name] = tmp.to(self.device)
         return self.edge_index
 
-    def update(self, centers_power_action, center_func_action, centers_ratio, total_step):
+    def update(self, centers_power_action, center_func_action, centers_ratio):
         # logger.info(f'{total_step}')
         assert isinstance(center_func_action, Tensor), 'center_func_action必须是Tensor类'
         assert center_func_action.shape[0] == self.total_center_num, 'center_func_action长度必须是center个数'
@@ -258,15 +261,15 @@ class EnvRun:
             self.step_product_count[_process][_spd] = _spdc - self.step_product_count[_process][_spd]
             # 当前货架的变化情况，如果小于0说明被消耗了，要大大奖励
             tmp_count = self.step_product_count[_process][_spd]
-            if _process < self.process_num:
+            if not storage.is_last:
                 # 当前货架的变化情况，如果小于0说明被消耗了，要大大奖励
                 products_reward -= tmp_count / self.order[_spd] * 0.05
                 # 只有非0工序库存过大的时候才会扣血
                 # if _spdc > 8 * self.speed_list[_process][_spd] and _process != 0:
-                #     products_reward -= _spdc / self.process_num * 0.1
+                #     products_reward -= _spdc / self.process_per_product * 0.1
             # 最终产物大大奖励
             # 但是完成这个之后就不再增加reward了
-            elif _process == self.process_num and self.order_finish_count[_spd] != 1:
+            elif storage.is_last and self.order_finish_count[_spd] != 1:
                 products_reward += tmp_count / self.order[_spd] * 0.1
                 # 如果达到订单数量且这个产品型号并未达到过订单数量，就+50奖励
                 if _spdc >= self.order[_spd]:
@@ -297,17 +300,15 @@ class EnvRun:
     ) -> Tuple[Dict[str, Tensor], Dict[str, Tensor], float, int, int, Tensor]:
         # 先从workcenter中取出来，再从celllist的list中取出来每个cell的tensor
         work_cell_states = torch.stack([cell for work_center in self.work_center_list for cell in
-                                        work_center.get_all_cell_state(self.max_speed, self.product_num,
-                                                                       self.state_code_size)], dim=0).to(self.device)
+                                        work_center.get_all_cell_status(self.max_speed)], dim=0).to(self.device)
         # for work_center in self.work_center_list:
         #     a += work_center.get_all_cell_state()
         # 按cellid排序，因为要构造数据结构，其实不用排序，因为本来就是按顺序生成的。。。。
         # sort_state = sorted(a, key=lambda x: x[0])
         # 这里会因为cell_id的自增出问题
         storage_states = torch.stack([storage.status() for storage in self.storage_list], dim=0).to(self.device)
-        work_center_states = torch.stack([center.status(self.product_num) for center in self.work_center_list],
-                                         dim=0).to(
-            self.device)
+        work_center_states = torch.stack([center.status() for center in self.work_center_list],
+                                         dim=0).to(self.device)
 
         obs_states: Dict[str, torch.Tensor] = {
             "cell": work_cell_states,
@@ -334,9 +335,12 @@ class EnvRun:
         for storage in self.storage_list:
             num, _id = storage.read_state()
             products[f'{_id}'] += num
-        c = [storage.read_state() for storage in self.storage_list]
+        s_raw = [storage.read_state() for storage in self.storage_list]
+        s_last = [storage.read_state() for storage in self.storage_list if storage.is_last]
+        s_first = [storage.read_state() for storage in self.storage_list if storage.is_first]
         center = [work_center.read_state() for work_center in self.work_center_list]
-        return {"storage": c, 'center': center, 'total_storage_num': products}
+        return {"storage": s_raw, 'material': s_first, 'product': s_last, 'center': center,
+                'total_storage_num': products}
 
     def reset(self):
         # 只有重新生成的时候再resetid
@@ -354,8 +358,8 @@ class EnvRun:
             storage.reset()
 
     def reinit(self, work_center_init_func: Union[Tensor, list],
-               order: Union[Tensor, list],
-               speed_list: Union[Tensor, list],
+               order: np.ndarray,
+               speed_list: np.ndarray,
                expected_step, episode_step_max):
         WorkCenter.reset_class_id()
         WorkCell.reset_class_id()
@@ -593,7 +597,7 @@ class EnvRun:
 #         a, b = key.split('2')
 #         hh[a, 'to', b].edge_index = value
 #     G = to_networkx(hh)
-#     import matplotlib.pyplot as plt
+#
 #
 #     plt.rcParams['figure.dpi'] = 300
 #     plt.rcParams['figure.figsize'] = (15, 15)

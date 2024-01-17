@@ -33,6 +33,7 @@ class WorkCell(BasicClass):
         self._speed = int(speed)
         self._function = function_id
         self.state = CellCode.workcell_ready
+        self._cell_state_code_len = len(CellCode)
 
     @property
     def product_count(self):
@@ -125,7 +126,7 @@ class WorkCell(BasicClass):
         self._product_count = 0
 
     # 状态空间
-    def status(self, max_speed=1, func_num=1, state_code_len=1) -> torch.Tensor:
+    def status(self, max_speed=1, func_num=1, process_num=1) -> torch.Tensor:
         """
         获取工作单元状态，规范化后的
         Returns:
@@ -139,10 +140,12 @@ class WorkCell(BasicClass):
         speed_norm = self.speed / max_speed
         materials_norm = self._materials / self.speed if self.speed != 0 else 0
         func_norm = self.function / func_num
-        state_norm = self.state.value / state_code_len
+        process_norm = self.process / process_num
+        state_norm = self.state.value / self._cell_state_code_len
         return torch.tensor(
             [
                 func_norm,
+                process_norm,
                 state_norm,
                 speed_norm,
                 materials_norm,

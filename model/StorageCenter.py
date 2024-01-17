@@ -12,7 +12,7 @@ class StorageCenter(BasicClass):
     def work(self, *args):
         pass
 
-    def __init__(self, product_id: int, process_id: int, goal: int, max_func: int):
+    def __init__(self, product_id: int, process_id: int, goal: int, max_func: int, process_num: int):
         """
             初始化产品中心
         Args:
@@ -22,15 +22,22 @@ class StorageCenter(BasicClass):
         """
         super().__init__(process_id)
         self._product_id = product_id
-        self.max_func = 2 if max_func <= 1 else max_func
-
+        self.max_func = max_func if max_func > 1 else max_func
         self._product_count: int = 0
-        # 如果是process=0是原料仓库，库存就是产品数量*1.5，防止因为中间不够而卡主无法达到order数量
-        if self._process_id == 0:
+
+        self._is_last = process_id == process_num
+        self._is_first = process_id == 0
+        # 如果是process=0是原料仓库，库存就是产品数量*1.2，防止因为中间不够而卡住无法达到order数量
+        if self._is_first:
             self._product_count = int(1.2 * goal)
+        self.process_num = process_num
         self.goal = goal
         self.state = CellCode.workcell_working
         self.step_send_product = 0
+
+    @property
+    def is_last(self):
+        return self._is_last
 
     @property
     def product_id(self):
@@ -62,6 +69,7 @@ class StorageCenter(BasicClass):
         if self._product_count == 0:
             return 0
         product = math.floor(self._product_count * ratio)
+        # 保证只要send就能send出一次工作需要的，防止囤积在cell中
         if product >= speed:
             product = speed
         else:
@@ -79,7 +87,7 @@ class StorageCenter(BasicClass):
 
     def reset(self):
         self._product_count = 0
-        if self._process_id == 0:
+        if self._is_first:
             self._product_count = int(1.2 * self.goal)
 
     def status(self) -> torch.Tensor:
@@ -91,7 +99,8 @@ class StorageCenter(BasicClass):
         # id归一化
         produce_progress = self._product_count / self.goal
         product_id_norm = self.product_id / (self.max_func - 1)
-        return torch.tensor([product_id_norm, produce_progress], dtype=torch.float32)
+        process_norm = self.process / self.process_num
+        return torch.tensor([product_id_norm, process_norm, produce_progress], dtype=torch.float32)
 
     def read_state(self) -> tuple[int, int]:
         """
@@ -99,3 +108,7 @@ class StorageCenter(BasicClass):
         :return:【产品id，产品数量】
         """
         return self._product_count, self.product_id
+
+    @property
+    def is_first(self):
+        return self._is_first
