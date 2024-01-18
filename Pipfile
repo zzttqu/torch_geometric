@@ -10,6 +10,12 @@ torchaudio = "*"
 numpy = "*"
 torch-geometric = "*"
 loguru = "*"
+tensorboard = "*"
+pandas = "*"
+fastapi = "*"
+uvicorn = {extras = ["standard"], version = "*"}
+websockets = "*"
+celery = "*"
 
 [dev-packages]
 

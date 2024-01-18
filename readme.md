@@ -43,6 +43,7 @@
 * pip install -U channels["daphne"]
 * pipreqs ./ --encoding UTF-8 --ignore ".venv"
 * pipreqs --ignore .venv --force --encoding=utf-8
+* 选择了fastapi作为服务器，搭建celery和rabbitmq作为消息队列，独立处理机器学习任务
 
 ## Todo
 
