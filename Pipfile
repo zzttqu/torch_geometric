@@ -15,7 +15,6 @@ pandas = "*"
 fastapi = "*"
 uvicorn = {extras = ["standard"], version = "*"}
 websockets = "*"
-celery = "*"
 
 [dev-packages]
 
