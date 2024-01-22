@@ -22,7 +22,7 @@ class WorkCenter(BasicClass):
         """
         super().__init__(process_id)
         # 这个是工作中心属于第几道工序
-        self._speed_list = torch.nan_to_num(speed_list, nan=0).to(dtype=torch.int)
+        self._speed_list = speed_list.to(dtype=torch.int)
         # 这次的list长度不包括nan，有几个就是几个，但是对应序号是【1,2】这样，不是【nan，1,2】
         # 所以在选择working_cell的时候需要注意workcell_list长度不是和funclist中的元素一样长的，可能会出现越界
         # 比如只有两个，但是里边是[1,2]选了2就会导致越界
@@ -197,7 +197,6 @@ class WorkCenter(BasicClass):
 
         # total_m = [cell.materials for cell in self.workcell_list]
         # total_p = [cell.product_count for cell in self.workcell_list]
-
         return self.working_func, self.working_status.value, self.working_speed, self.process
 
     @property

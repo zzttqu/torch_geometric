@@ -11,8 +11,8 @@ from train_class import Train
 
 
 class Setting(BaseModel):
-    processNum: str
-    productNum: int | None = None
+    processNum: int = 5
+    productNum: int = 5
 
 
 class Res(BaseModel):
@@ -27,11 +27,11 @@ websockets_connection = None
 train: Optional[Train] = None
 
 
-@app.get('/')
-async def root(background_tasks: BackgroundTasks):
+@app.get('/start')
+async def root(background_tasks: BackgroundTasks, step_num: int = 1):
     if websockets_connection is not None:
-        background_tasks.add_task(send_msg, msg='111', websocket=websockets_connection)
-        return {'message': 'Hello World!'}
+        background_tasks.add_task(send_msg, websocket=websockets_connection, step_num=step_num)
+        return {'message': '启动成功！'}
     else:
         return {'message': '还没有建立websocket连接'}
 
@@ -39,33 +39,38 @@ async def root(background_tasks: BackgroundTasks):
 @app.post('/setting', response_model=Res)
 async def create_setting(setting: Setting):
     global train
-    train = Train()
+    train = Train(1, setting.processNum, setting.productNum)
     return {'message': '1'}
 
 
+@app.get('/select_env')
+async def create_setting(index: int = 0):
+    global train
+    env_init_info = train.init_setting(index)
+    return env_init_info
+
+
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, msg='000'):
+async def websocket_endpoint(websocket: WebSocket):
     global websockets_connection
     websockets_connection = websocket
     await websocket.accept()
     try:
         while True:
             data = await websocket.receive_text()
-            await websocket.send_text(f"Message text was: {data}{msg}")
+            await websocket.send_text(f"Message text was: {data}")
     except Exception as e:
         print(f"websocket connection disconnected{e}")
     finally:
         websockets_connection = None
 
 
-async def send_msg(msg, websocket: WebSocket):
-    try:
-        for _ in range(10):
-            global train
-            msg = train.step()
-            await websocket.send_json(msg)
-    except Exception as e:
-        print(f"websocket connection empty{e}")
+async def send_msg(websocket: WebSocket, step_num: int = 1):
+    for _ in range(step_num):
+        global train
+        msg = train.step()
+        print(msg)
+        await websocket.send_json(msg)
 
 
 if __name__ == '__main__':

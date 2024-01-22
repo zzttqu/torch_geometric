@@ -3,7 +3,7 @@ import pandas as pd
 from loguru import logger
 
 
-def data_generator(process_num, product_num, data_len) -> tuple[list, list, list]:
+def data_generator(process_num, product_num, data_len) -> tuple[list[np.ndarray], list[np.ndarray], list[np.ndarray]]:
     """
     生成数据
     Args:
