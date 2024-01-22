@@ -20,7 +20,7 @@ class Res(BaseModel):
 
 
 app = FastAPI()
-origins = ['http://localhost:8080']
+origins = ['http://localhost:3000']
 app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True, allow_methods=["*"],
                    allow_headers=["*"])
 websockets_connection = None
@@ -39,15 +39,21 @@ async def root(background_tasks: BackgroundTasks, step_num: int = 1):
 @app.post('/setting', response_model=Res)
 async def create_setting(setting: Setting):
     global train
-    train = Train(1, setting.processNum, setting.productNum)
-    return {'message': '1'}
+    if train is None:
+        train = Train(1, setting.processNum, setting.productNum)
+        return {'message': '1'}
+    else:
+        return {'message': '0'}
 
 
 @app.get('/select_env')
 async def create_setting(index: int = 0):
     global train
-    env_init_info = train.init_setting(index)
-    return env_init_info
+    if train is not None:
+        env_init_info = train.init_setting(index)
+        return env_init_info
+    else:
+        return {'message': '0'}
 
 
 @app.websocket("/ws")
@@ -68,8 +74,8 @@ async def websocket_endpoint(websocket: WebSocket):
 async def send_msg(websocket: WebSocket, step_num: int = 1):
     for _ in range(step_num):
         global train
-        msg = train.step()
-        print(msg)
+        time.sleep(0.5)
+        msg = train.step(step_num)
         await websocket.send_json(msg)
 
 

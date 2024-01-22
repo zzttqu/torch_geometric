@@ -83,7 +83,11 @@ class Train:
                 'speed': self.speed_list[env_index].tolist(),
                 'rmt_units_num': self.rmt_units_num_list[env_index].tolist()}
 
-    def step(self):
+    def step(self, step_num):
+        if self.total_step > step_num:
+            torch.cuda.empty_cache()
+            del self
+            return
         self.agent.network.eval()
         read_state = self.env.read_state()
         self.total_step += 1
@@ -135,4 +139,3 @@ if __name__ == '__main__':
 
     for _ in range(10):
         res = train.step()
-

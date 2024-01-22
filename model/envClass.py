@@ -335,31 +335,31 @@ class EnvRun:
         raw_state = self.read_state()
         return process_raw_data(self.edge_index, raw_state)
 
-    def read_state(self) -> dict[str, dict[str, list[int]]]:
+    def read_state(self) -> dict[str, list[list[int]]]:
         # 使用条状图
         # 因为产量总数是一定的
-        total_step_working_count = {f'product{i}': [0 for _ in range(self.process_per_product[i])] for i in
-                                    range(self.product_num)}
+        total_step_working_count = [[0 for _ in range(self.process_per_product[i])] for i in
+                                    range(self.product_num)]
         product_process = [[0 for _ in range(self.product_num)] for _ in
                            range(max(self.process_per_product))]
         process_product = [[0 for _ in range(self.process_per_product[i])] for i in
                            range(self.product_num)]
-        products_storage = [[0 for _ in range(self.process_per_product[i] + 1)] for i in
-                            range(self.product_num)]
+        storage_process_products = [[0 for _ in range(self.process_per_product[i] + 1)] for i in
+                                    range(self.product_num)]
         for storage in self.storage_list:
             num, _product_id, _process = storage.read_state()
-            products_storage[_product_id][_process] += num
+            storage_process_products[_product_id][_process] += num
         for work_center in self.work_center_list:
             _func, _status, _speed, _process = work_center.read_state()
             if _status == 1:
-                total_step_working_count[f'product{_func}'][_process - 1] += _speed
+                total_step_working_count[_func][_process - 1] += _speed
                 product_process[_process - 1][_func] += 1
                 process_product[_func][_process - 1] += 1
         s_raw = [storage.read_state() for storage in self.storage_list]
         # s_last = [storage.read_state() for storage in self.storage_list if storage.is_last]
         # s_first = [storage.read_state() for storage in self.storage_list if storage.is_first]
         # 第一个是每个工序运行的总共生产数量
-        return {'working': total_step_working_count, 'total_storage_num': products_storage,
+        return {'working': total_step_working_count, 'storage_process_products': storage_process_products,
                 'product_process': product_process, 'process_product': process_product}
 
     def reset(self):
