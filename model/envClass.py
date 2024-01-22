@@ -111,6 +111,10 @@ class EnvRun:
         self._center_per_process = torch.sum(self.work_center_init_func, dim=1)
         self.total_center_num = self.work_center_init_func.sum()
         self.max_speed = torch.max(self.speed_list)
+        # 可视化资料
+        # self.total_step_product_count = []
+        # self.total_step_working_count = {f'product{i}': [0 for _ in range(self._center_per_process[i])] for i in
+        #                                  range(self.product_num)}
 
         # 初始化货架
         # 货架数量是产品工序和产品类别共同构成的
@@ -326,21 +330,37 @@ class EnvRun:
             self.order_finish_count
         )
 
+    @deprecated
     def online_state(self):
         raw_state = self.read_state()
         return process_raw_data(self.edge_index, raw_state)
 
     def read_state(self):
-        products = {f'{i}': 0 for i in range(self.product_num)}
+        # 使用条状图
+        # 因为产量总数是一定的
+        total_step_working_count = {f'product{i}': [0 for _ in range(self.process_per_product[i])] for i in
+                                    range(self.product_num)}
+        total_center_working_count = {f'process{i}': [0 for _ in range(self.product_num + 1)] for i in
+                                      range(1, max(self.process_per_product) + 1)}
+        products = {f'product{i}': [0 for _ in range(self.process_per_product[i] + 1)] for i in
+                    range(self.product_num)}
         for storage in self.storage_list:
-            num, _id = storage.read_state()
-            products[f'{_id}'] += num
+            num, _product_id, _process = storage.read_state()
+            products[f'product{_product_id}'][_process] += num
+        for work_center in self.work_center_list:
+            _func, _status, _speed, _process = work_center.read_state()
+            if _status == 1:
+                total_step_working_count[f'product{_func}'][_process - 1] += _speed
+                total_center_working_count[f'process{_process}'][_func] += 1
+        for i in range(1, max(self.process_per_product) + 1):
+            total_center_working_count[f'process{i}'][self.product_num] = self.center_per_process[i - 1].item()
+
         s_raw = [storage.read_state() for storage in self.storage_list]
-        s_last = [storage.read_state() for storage in self.storage_list if storage.is_last]
-        s_first = [storage.read_state() for storage in self.storage_list if storage.is_first]
-        center = [work_center.read_state() for work_center in self.work_center_list]
-        return {"storage": s_raw, 'material': s_first, 'product': s_last, 'center': center,
-                'total_storage_num': products}
+        # s_last = [storage.read_state() for storage in self.storage_list if storage.is_last]
+        # s_first = [storage.read_state() for storage in self.storage_list if storage.is_first]
+        # 第一个是每个工序运行的总共生产数量
+        return {'working': total_step_working_count, 'total_storage_num': products,
+                'working_center': total_center_working_count}
 
     def reset(self):
         # 只有重新生成的时候再resetid

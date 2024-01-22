@@ -1,4 +1,5 @@
 import time
+from typing import Optional
 
 import uvicorn
 from fastapi import FastAPI, WebSocket
@@ -6,10 +7,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi import BackgroundTasks
 from pydantic import BaseModel
 
+from train_class import Train
+
 
 class Setting(BaseModel):
-    name: str
-    age: int | None = None
+    processNum: str
+    productNum: int | None = None
 
 
 class Res(BaseModel):
@@ -21,6 +24,7 @@ origins = ['http://localhost:8080']
 app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True, allow_methods=["*"],
                    allow_headers=["*"])
 websockets_connection = None
+train: Optional[Train] = None
 
 
 @app.get('/')
@@ -34,6 +38,8 @@ async def root(background_tasks: BackgroundTasks):
 
 @app.post('/setting', response_model=Res)
 async def create_setting(setting: Setting):
+    global train
+    train = Train()
     return {'message': '1'}
 
 
@@ -54,9 +60,10 @@ async def websocket_endpoint(websocket: WebSocket, msg='000'):
 
 async def send_msg(msg, websocket: WebSocket):
     try:
-        time.sleep(3)
-        await websocket.send_text(msg)
-        print("send msg success")
+        for _ in range(10):
+            global train
+            msg = train.step()
+            await websocket.send_json(msg)
     except Exception as e:
         print(f"websocket connection empty{e}")
 

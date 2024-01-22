@@ -193,12 +193,12 @@ class WorkCenter(BasicClass):
             dtype=torch.float32,
         )
 
-    def read_state(self):
+    def read_state(self) -> tuple[int, int, int, int]:
 
-        total_m = [cell.materials for cell in self.workcell_list]
-        total_p = [cell.product_count for cell in self.workcell_list]
+        # total_m = [cell.materials for cell in self.workcell_list]
+        # total_p = [cell.product_count for cell in self.workcell_list]
 
-        return [self.working_func, self.working_status.value, total_m[self.working_func], total_p[self.working_func]]
+        return self.working_func, self.working_status.value, self.working_speed, self.process
 
     @property
     def speed_list(self):

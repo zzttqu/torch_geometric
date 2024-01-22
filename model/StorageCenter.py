@@ -102,12 +102,12 @@ class StorageCenter(BasicClass):
         process_norm = self.process / self.process_num
         return torch.tensor([product_id_norm, process_norm, produce_progress], dtype=torch.float32)
 
-    def read_state(self) -> tuple[int, int]:
+    def read_state(self) -> tuple[int, int, int]:
         """
         读取产品状态，不用规范化
         :return:【产品id，产品数量】
         """
-        return self._product_count, self.product_id
+        return self._product_count, self.product_id, self.process
 
     @property
     def is_first(self):

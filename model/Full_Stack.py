@@ -24,12 +24,13 @@ def main():
                             [0, 12, 8]])]
     order_list = [np.array([100, 200, 400]), [600, 500, 500], [200, 100, 105], [180, 300, 200]]
     rmt_units_num_list = [np.array([16, 10, 10, 15, 10])]
+    torch.manual_seed(3407)
+    np.random.seed(3407)
     data_len = 1
     speed_list, order_list, rmt_units_num_list = data_generator(5, 5, data_len)
     # 自然选择部分
     pop_num = 100
     generation = 50
-    torch.manual_seed(3407)
     batch_size = 32
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # device = torch.device('cpu')
