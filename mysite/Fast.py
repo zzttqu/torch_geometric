@@ -25,12 +25,20 @@ app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True
                    allow_headers=["*"])
 websockets_connection = None
 train: Optional[Train] = None
+start_flag = False
+first_init = True
 
 
 @app.get('/start')
 async def root(background_tasks: BackgroundTasks, step_num: int = 1):
     if websockets_connection is not None:
+        global start_flag
+        global first_init
+        if start_flag:
+            return {'message': '训练正在进行中'}
         background_tasks.add_task(send_msg, websocket=websockets_connection, step_num=step_num)
+        start_flag = True
+        first_init = False
         return {'message': '启动成功！'}
     else:
         return {'message': '还没有建立websocket连接'}
@@ -50,7 +58,7 @@ async def create_setting(setting: Setting):
 async def create_setting(index: int = 0):
     global train
     if train is not None:
-        env_init_info = train.init_setting(index)
+        env_init_info = train.init_setting(index, first_init)
         return env_init_info
     else:
         return {'message': '0'}
@@ -72,11 +80,15 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 async def send_msg(websocket: WebSocket, step_num: int = 1):
-    for _ in range(step_num):
-        global train
-        time.sleep(0.5)
-        msg = train.step(step_num)
-        await websocket.send_json(msg)
+    global train
+    global start_flag
+    if train is not None:
+        for _ in range(step_num):
+            time.sleep(0.5)
+            msg = train.step(step_num)
+            await websocket.send_json(msg)
+        # 循环完成后
+        start_flag = False
 
 
 if __name__ == '__main__':

@@ -1,3 +1,4 @@
+import gc
 from datetime import datetime
 
 import numpy as np
@@ -22,14 +23,15 @@ class Train:
         self.pop_num = 100
         self.generation = 50
         self.batch_size = 32
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device('cpu')
         self.data_len = data_len
         # device = torch.device('cpu')
 
-    def init_setting(self, env_index: int):
+    def init_setting(self, env_index: int, first_init: bool):
         """
         初始化环境为指定索引值
         Args:
+            first_init:
             env_index:
 
         Returns:
@@ -42,7 +44,12 @@ class Train:
                                    self.rmt_units_num_list[env_index])
         best_time, best_solution = ga.evolve()
         self.env = EnvRun(device=self.device)
-        self.env.initialize(order=self.order_list[env_index], work_center_init_func=best_solution,
+        if first_init:
+            self.env.initialize(order=self.order_list[env_index], work_center_init_func=best_solution,
+                                speed_list=self.speed_list[env_index],
+                                expected_step=best_time, episode_step_max=best_time * 2)
+        else:
+            self.env.reinit(order=self.order_list[env_index], work_center_init_func=best_solution,
                             speed_list=self.speed_list[env_index],
                             expected_step=best_time, episode_step_max=best_time * 2)
         self.obs_states, self.edge_index, _, _, _, _ = self.env.get_obs()
@@ -85,8 +92,7 @@ class Train:
 
     def step(self, step_num):
         if self.total_step > step_num:
-            torch.cuda.empty_cache()
-            del self
+            self.delete()
             return
         self.agent.network.eval()
         read_state = self.env.read_state()
@@ -131,6 +137,12 @@ class Train:
             self.agent.save_model("model_" + str(self.total_step) + ".pth")
         # 可视化状态
         return {"step": self.total_step - 1, "state": read_state}
+
+    def delete(self):
+        torch.cuda.empty_cache()
+        del self
+        gc.collect()
+        return
 
 
 if __name__ == '__main__':
