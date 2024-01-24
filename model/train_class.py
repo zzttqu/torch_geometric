@@ -23,9 +23,9 @@ class Train:
         self.pop_num = 100
         self.generation = 50
         self.batch_size = 32
-        self.device = torch.device('cpu')
+        # self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.data_len = data_len
-        # device = torch.device('cpu')
+        self.device = torch.device('cpu')
 
     def init_setting(self, env_index: int, first_init: bool):
         """
@@ -42,18 +42,15 @@ class Train:
                                    self.order_list[env_index],
                                    self.speed_list[env_index],
                                    self.rmt_units_num_list[env_index])
-        best_time, best_solution = ga.evolve()
+        self.best_time, best_solution = ga.evolve()
         self.env = EnvRun(device=self.device)
-        if first_init:
-            self.env.initialize(order=self.order_list[env_index], work_center_init_func=best_solution,
-                                speed_list=self.speed_list[env_index],
-                                expected_step=best_time, episode_step_max=best_time * 2)
-        else:
-            self.env.reinit(order=self.order_list[env_index], work_center_init_func=best_solution,
-                            speed_list=self.speed_list[env_index],
-                            expected_step=best_time, episode_step_max=best_time * 2)
+
+        self.env.reinit(order=self.order_list[env_index], work_center_init_func=best_solution,
+                        speed_list=self.speed_list[env_index],
+                        expected_step=self.best_time, episode_step_max=self.best_time * 2)
+
         self.obs_states, self.edge_index, _, _, _, _ = self.env.get_obs()
-        self.epsoide_max_steps = min(self.batch_size * 20, best_time * 10)
+        self.epsoide_max_steps = min(self.batch_size * 20, self.best_time * 10)
         n_epochs = 8
         hetero_data = HeteroData()
         # 节点信息
@@ -88,12 +85,9 @@ class Train:
         # self.rmt_units_num_list[env_index]
         return {'order': self.order_list[env_index].tolist(),
                 'speed': self.speed_list[env_index].tolist(),
-                'rmt_units_num': self.rmt_units_num_list[env_index].tolist()}
+                'rmt_units_num': self.rmt_units_num_list[env_index].tolist(), 'GA_best_solution': self.best_time}
 
-    def step(self, step_num):
-        if self.total_step > step_num:
-            self.delete()
-            return
+    def step(self):
         self.agent.network.eval()
         read_state = self.env.read_state()
         self.total_step += 1
@@ -109,8 +103,8 @@ class Train:
                              value,
                              reward,
                              dones,
-                             centers_power_action.cuda(),
-                             center_func_action.cuda(),
+                             centers_power_action.to(self.device),
+                             center_func_action.to(self.device),
                              centers_ratio,
                              log_prob_power,
                              log_prob_func)
@@ -136,7 +130,30 @@ class Train:
         if self.total_step % 500 == 0:
             self.agent.save_model("model_" + str(self.total_step) + ".pth")
         # 可视化状态
-        return {"step": self.total_step - 1, "state": read_state}
+        return {"step": self.total_step, "state": read_state}
+
+    def test(self):
+        self.agent.network.eval()
+        read_state = self.env.read_state()
+        with torch.no_grad():
+            centers_power_action, center_func_action, centers_ratio, log_prob_power, log_prob_func, _ = self.agent.get_action(
+                self.obs_states, self.edge_index)
+        self.env.update(centers_power_action.cpu(), center_func_action.cpu(), centers_ratio.cpu())
+        self.obs_states, self.edge_index, reward, dones, episode_step, finish_state = self.env.get_obs()
+        if dones == 1:
+            logger.info(
+                f"本次循环步数为：{episode_step}，奖励为{reward:.3f}，订单完成状态为：{finish_state.tolist()}")
+            self.env.reset()
+            self.obs_states, self.edge_index, _, _, _, _ = self.env.get_obs()
+        # 可视化状态
+        return {"step": episode_step - 1, "dones": dones, "state": read_state}
+
+    def reset(self):
+        self.total_step = 0
+        self.episode = 0
+        self.learn_num = 0
+        self.env.reset()
+        self.obs_states, self.edge_index, _, _, _, _ = self.env.get_obs()
 
     def delete(self):
         torch.cuda.empty_cache()
@@ -147,7 +164,7 @@ class Train:
 
 if __name__ == '__main__':
     train = Train(1, 3, 5)
-    logger.info(train.init_setting(0))
+    logger.info(train.init_setting(0, True))
 
     for _ in range(10):
         res = train.step()

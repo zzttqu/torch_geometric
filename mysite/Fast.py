@@ -13,6 +13,7 @@ from train_class import Train
 class Setting(BaseModel):
     processNum: int = 5
     productNum: int = 5
+    env_len: Optional[int] = 1
 
 
 class Res(BaseModel):
@@ -29,16 +30,29 @@ start_flag = False
 first_init = True
 
 
-@app.get('/start')
+@app.get('/train')
+async def root(background_tasks: BackgroundTasks):
+    if websockets_connection is not None:
+        global start_flag
+        global first_init
+        if start_flag:
+            return {'message': '训练正在进行中'}
+        background_tasks.add_task(train_model, websocket=websockets_connection)
+        start_flag = True
+        first_init = False
+        return {'message': '启动成功！'}
+    else:
+        return {'message': '还没有建立websocket连接'}
+
+
+@app.get('/test')
 async def root(background_tasks: BackgroundTasks, step_num: int = 1):
     if websockets_connection is not None:
         global start_flag
         global first_init
         if start_flag:
             return {'message': '训练正在进行中'}
-        background_tasks.add_task(send_msg, websocket=websockets_connection, step_num=step_num)
-        start_flag = True
-        first_init = False
+        background_tasks.add_task(test_model, websocket=websockets_connection, step_num=step_num)
         return {'message': '启动成功！'}
     else:
         return {'message': '还没有建立websocket连接'}
@@ -48,7 +62,7 @@ async def root(background_tasks: BackgroundTasks, step_num: int = 1):
 async def create_setting(setting: Setting):
     global train
     if train is None:
-        train = Train(1, setting.processNum, setting.productNum)
+        train = Train(setting.env_len, setting.processNum, setting.productNum)
         return {'message': '1'}
     else:
         return {'message': '0'}
@@ -79,16 +93,33 @@ async def websocket_endpoint(websocket: WebSocket):
         websockets_connection = None
 
 
-async def send_msg(websocket: WebSocket, step_num: int = 1):
+async def train_model(websocket: WebSocket):
     global train
     global start_flag
     if train is not None:
+        # 先训练
+        batch_size = train.batch_size
+        best_time = train.best_time
+        max_steps = min(batch_size * 10, best_time * 5)
+        for _ in range(max_steps):
+            msg = train.step()
+            await websocket.send_json(
+                {'total_step': max_steps, 'step': msg['step'], 'progress': msg['step'] / max_steps})
+        # 学习完成后
+        start_flag = False
+
+
+async def test_model(websocket: WebSocket, step_num: int = 1):
+    global train
+    if train is not None:
+        # 再测试可视化
+        train.reset()
         for _ in range(step_num):
             time.sleep(0.5)
-            msg = train.step(step_num)
+            msg = train.test()
             await websocket.send_json(msg)
-        # 循环完成后
-        start_flag = False
+            if msg['dones'] == 1:
+                break
 
 
 if __name__ == '__main__':
