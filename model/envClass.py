@@ -9,6 +9,7 @@ import numpy as np
 import torch
 from torch import Tensor
 
+from model.StateCode import CenterCode
 from model.WorkCell import WorkCell
 from model.WorkCenter import WorkCenter
 from model.StorageCenter import StorageCenter
@@ -255,9 +256,15 @@ class EnvRun:
         # 相等的时候刚好是episode，就是1,2,3,4，4如果是max，那等于4的时候就应该跳出了
         if self.episode_step >= self.episode_step_max:
             self.done = 1
+        center_reward = 0
+        # 工作中心奖励
+        for center in self.work_center_list:
+            if center.state == CenterCode.center_working:
+                center_reward += 0.1 / self.total_center_num
+            else:
+                center_reward -= 0.1 / self.total_center_num
         # 生产有奖励，根据产品级别加分
         products_reward = 0
-
         for storage in self.storage_list:
             _process = storage.process
             _spd = storage.product_id
@@ -291,6 +298,7 @@ class EnvRun:
                 # 时间惩罚
         time_penalty = 0.5 * self.episode_step / self.expected_step
         self.reward += products_reward
+        self.reward += center_reward
         self.reward -= time_penalty
         # 最终产物肯定要大大滴加分
 

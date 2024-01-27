@@ -57,9 +57,9 @@ def main():
         init_data=hetero_data,
         device=device
     )
-    load_model_name = "last_model.pth"
-    logger.debug(f'加载了模型{load_model_name}')
-    agent.load_model(load_model_name)
+    # load_model_name = "last_model.pth"
+    # logger.debug(f'加载了模型{load_model_name}')
+    # agent.load_model(load_model_name)
     # 添加计算图
     a, b = agent.network(obs_states, edge_index)
     writer = SummaryWriter(log_dir="logs/train")
@@ -119,11 +119,11 @@ def main():
             env.update(centers_power_action.cpu(), center_func_action.cpu(), centers_ratio.cpu())
             # 可视化状态
             # logger.debug(f"{total_step} {env.read_state()}")
-            p = env.read_state()
-            a = {f"{i}storage": mm[0] for i, mm in enumerate(p['product'])}
-            b = {f"{i}storage": mm[0] for i, mm in enumerate(p['material'])}
-            writer.add_scalars(f"storage/product", a, total_step)
-            writer.add_scalars(f"storage/material", b, total_step)
+            # p = env.read_state()
+            # a = {f"{i}storage": mm[0] for i, mm in enumerate(p['product'])}
+            # b = {f"{i}storage": mm[0] for i, mm in enumerate(p['material'])}
+            # writer.add_scalars(f"storage/product", a, total_step)
+            # writer.add_scalars(f"storage/material", b, total_step)
 
             # for i, (mm, _id) in enumerate(p['storage'][-3:]):
             #     writer.add_scalar(f"storage/storage_{i}_product{_id}", mm, total_step)
@@ -131,7 +131,7 @@ def main():
             # for i, n in enumerate(p['center']):
             #     q = {"func": n[0], 'status': n[1], 'material': n[2], 'product': n[2]}
             #     writer.add_scalars(f"centers/center_{i}", q, total_step)
-            writer.add_scalars(f"storage/total", p['total_storage_num'], total_step)
+            # writer.add_scalars(f"storage/total", p['total_storage_num'], total_step)
 
             obs_states, edge_index, reward, dones, episode_step, finish_state = env.get_obs()
             writer.add_scalar("step/reward", reward, total_step)

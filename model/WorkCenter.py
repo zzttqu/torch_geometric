@@ -163,6 +163,10 @@ class WorkCenter(BasicClass):
         return [cell.send() for cell in self.workcell_list]
 
     @property
+    def state(self):
+        return self._working_status
+
+    @property
     def working_func(self):
         return self._working_func
 
