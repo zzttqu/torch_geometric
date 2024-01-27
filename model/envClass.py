@@ -260,7 +260,7 @@ class EnvRun:
         # 工作中心奖励
         for center in self.work_center_list:
             if center.state == CenterCode.center_working:
-                center_reward += 0.1 / self.total_center_num
+                center_reward += 0.15 / self.total_center_num
             else:
                 center_reward -= 0.1 / self.total_center_num
         # 生产有奖励，根据产品级别加分
@@ -364,11 +364,12 @@ class EnvRun:
                 product_process[_process - 1][_func] += 1
                 process_product[_func][_process - 1] += 1
         s_raw = [storage.read_state() for storage in self.storage_list]
-        # s_last = [storage.read_state() for storage in self.storage_list if storage.is_last]
-        # s_first = [storage.read_state() for storage in self.storage_list if storage.is_first]
+        s_last = [storage.read_state() for storage in self.storage_list if storage.is_last]
+        s_first = [storage.read_state() for storage in self.storage_list if storage.is_first]
         # 第一个是每个工序运行的总共生产数量
         return {'working': total_step_working_count, 'storage_process_products': storage_process_products,
-                'product_process': product_process, 'process_product': process_product}
+                'product_process': product_process, 'process_product': process_product, 'product': s_last,
+                'material': s_first}
 
     def reset(self):
         # 只有重新生成的时候再resetid

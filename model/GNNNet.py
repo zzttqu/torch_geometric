@@ -17,7 +17,7 @@ from torch_geometric.nn import (
     # embedding，增强泛化性，只是在节点没有信息的时候可以用
     MetaPath2Vec,
     # 转为异构图
-    to_hetero,
+    to_hetero, HGTConv,
 )
 import torch
 from torch import nn
@@ -158,17 +158,24 @@ class HGTNet(nn.Module):
         # }
         x_list = [{} for _ in range(len(self.conv_list) + 1)]
         x_list[0] = x_dict
-        # dense残差网络
+        # 非残差网络
         for i, conv in enumerate(self.conv_list):
             x_dict = {
                 node_type: F.tanh(x)
                 for node_type, x in x_dict.items()
             }
             x_dict = conv(x_dict, norm_edge_index_dict)
-            x_list[i + 1] = x_dict
-            for key, value in x_dict.items():
-                for j in range(0, i + 2):
-                    x_dict[key] += x_list[i][key]
+        # dense残差网络
+        # for i, conv in enumerate(self.conv_list):
+        #     x_dict = {
+        #         node_type: F.tanh(x)
+        #         for node_type, x in x_dict.items()
+        #     }
+        #     x_dict = conv(x_dict, norm_edge_index_dict)
+        #     x_list[i + 1] = x_dict
+        #     for key, value in x_dict.items():
+        #         for j in range(0, i + 2):
+        #             x_dict[key] += x_list[i][key]
         # 两个输出，一个需要连接所有节点的特征然后输出一个value
         full_x = torch.cat([x for x in x_dict.values()], dim=0)
 

@@ -26,8 +26,8 @@ def main():
     rmt_units_num_list = [np.array([16, 10, 10, 15, 10])]
     torch.manual_seed(3407)
     np.random.seed(3407)
-    data_len = 1
-    speed_list, order_list, rmt_units_num_list = data_generator(5, 5, data_len)
+    data_len = 4
+    speed_list, order_list, rmt_units_num_list = data_generator(3, 3, data_len)
     # 自然选择部分
     pop_num = 100
     generation = 50
@@ -63,12 +63,12 @@ def main():
     # 添加计算图
     a, b = agent.network(obs_states, edge_index)
     writer = SummaryWriter(log_dir="logs/train")
-    writer.add_graph(
-        agent.network,
-        input_to_model=[obs_states, edge_index],
-        verbose=False,
-        use_strict_trace=False,
-    )
+    # writer.add_graph(
+    #     agent.network,
+    #     input_to_model=[obs_states, edge_index],
+    #     verbose=False,
+    #     use_strict_trace=False,
+    # )
     del obs_states, edge_index
     torch.cuda.empty_cache()
 
@@ -93,11 +93,11 @@ def main():
         logger.success(f'算法最优{best_time},配置为{best_solution}')
         init_step = total_step
         init_episode = episode
-        batch_size = 16
-        max_steps = min(batch_size * 20, best_time * 10)
+        batch_size = batch_size
+        max_steps = min(batch_size * 40, best_time * 20)
 
         env.reinit(order=order, work_center_init_func=best_solution, speed_list=speed,
-                   expected_step=best_time, episode_step_max=best_time * 10)
+                   expected_step=best_time, episode_step_max=best_time * 2)
         obs_states, edge_index, reward, dones, _, _ = env.get_obs()
         agent.init(batch_size, env.center_per_process, env.total_center_num)
         memory = PPOMemory(
@@ -119,11 +119,11 @@ def main():
             env.update(centers_power_action.cpu(), center_func_action.cpu(), centers_ratio.cpu())
             # 可视化状态
             # logger.debug(f"{total_step} {env.read_state()}")
-            # p = env.read_state()
-            # a = {f"{i}storage": mm[0] for i, mm in enumerate(p['product'])}
-            # b = {f"{i}storage": mm[0] for i, mm in enumerate(p['material'])}
-            # writer.add_scalars(f"storage/product", a, total_step)
-            # writer.add_scalars(f"storage/material", b, total_step)
+            p = env.read_state()
+            a = {f"{i}storage": mm[0] for i, mm in enumerate(p['product'])}
+            b = {f"{i}storage": mm[0] for i, mm in enumerate(p['material'])}
+            writer.add_scalars(f"storage/product", a, total_step)
+            writer.add_scalars(f"storage/material", b, total_step)
 
             # for i, (mm, _id) in enumerate(p['storage'][-3:]):
             #     writer.add_scalar(f"storage/storage_{i}_product{_id}", mm, total_step)
@@ -163,7 +163,7 @@ def main():
                 ms_time = learn_time * 1000 + cost_micro / 1000
                 writer.add_scalar("learn/loss", loss, learn_num)
                 writer.add_scalar("learn/time", ms_time, learn_num)
-                # logger.info(f"第{learn_num}次学习，学习用时：{learn_time}秒")
+                logger.info(f"第{learn_num}次学习，学习用时：{learn_time}秒")
                 now_time = datetime.now()
                 agent.save_model("last_model.pth")
             if dones == 1:
