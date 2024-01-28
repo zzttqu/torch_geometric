@@ -140,8 +140,8 @@ def main():
                             value,
                             reward,
                             dones,
-                            centers_power_action.cuda(),
-                            center_func_action.cuda(),
+                            centers_power_action.to(device),
+                            center_func_action.to(device),
                             centers_ratio,
                             log_prob_power,
                             log_prob_func)

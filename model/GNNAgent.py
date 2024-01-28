@@ -38,9 +38,9 @@ class Agent:
         raw_network = HGTNet(
             init_data,
         ).to(self.device)
-        self.network = raw_network if os.name == 'net' else torch.compile(raw_network)
+        self.network = raw_network
         # self.compile_model=torch.compile(self.network)
-        self.optimizer = torch.optim.Adam(raw_network.parameters(), lr=lr, eps=1e-5)
+        self.optimizer = torch.optim.AdamW(raw_network.parameters(), lr=lr, eps=1e-5)
 
     def init(self,
              batch_size: int,
