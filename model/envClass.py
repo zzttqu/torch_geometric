@@ -102,7 +102,7 @@ class EnvRun:
         self.reward = 0
         self.done = 0
         self.order = torch.from_numpy(order)
-        self.work_center_init_func = torch.tensor(work_center_init_func)
+        self.work_center_init_func = torch.as_tensor(work_center_init_func)
         self.speed_list = torch.from_numpy(speed_list)
         self.work_center_list: list[WorkCenter] = []
         self.product_num = self.order.shape[0]
@@ -127,7 +127,7 @@ class EnvRun:
         storage_need_tensor[:, 0] += 1
 
         # 为了从原料货架起始，需要加一个
-        material_id = torch.tensor([[0, i] for i in range(self.product_num)], dtype=torch.int)
+        material_id = torch.as_tensor([[0, i] for i in range(self.product_num)], dtype=torch.int)
         storage_need_tensor = torch.cat((material_id, storage_need_tensor), dim=0)
         # 每个产品的最终工序不一定一样，会影响判断是否完成
         self.process_per_product = [torch.max(storage_need_tensor[storage_need_tensor[:, 1] == i, 0]).item() for i in
@@ -154,7 +154,7 @@ class EnvRun:
         # 生成货架和半成品的对应关系
         for storage in self.storage_list:
             # 要增加一个维度，要不然无法cat
-            storage_data = torch.tensor((storage.id, storage.product_id)).view(1, -1)
+            storage_data = torch.as_tensor((storage.id, storage.product_id)).view(1, -1)
             self.storage_id_relation[storage.process] = torch.cat(
                 (self.storage_id_relation[storage.process], storage_data), dim=0)
         # 该step各个工序的变化
@@ -609,15 +609,15 @@ class EnvRun:
 
 
 # if __name__ == '__main__':
-#     order = torch.tensor([100, 600, 200])
+#     order = torch.as_tensor([100, 600, 200])
 #     # 这里应该是对各个工作单元进行配置了
-#     work_center_init_func = torch.tensor([[3, 3, 10],
+#     work_center_init_func = torch.as_tensor([[3, 3, 10],
 #                                           [2, 2, 6],
 #                                           [4, 5, 0],
 #                                           [3, 0, 12],
 #                                           [2, 3, 5]])
 #
-#     speed_list = torch.tensor([[5, 10, 15, 20, 12], [8, 12, 18, torch.nan, 12], [3, 6, torch.nan, 10, 8]]).T
+#     speed_list = torch.as_tensor([[5, 10, 15, 20, 12], [8, 12, 18, torch.nan, 12], [3, 6, torch.nan, 10, 8]]).T
 #     env = EnvRun(work_center_init_func, order, speed_list, torch.device('cuda:0'))
 #     logger.info(env.get_obs())
 #     hh = HeteroData()
@@ -675,7 +675,7 @@ def edge_weight_init(raw_array):
     normalized_array = np.copy(raw_array)
     for value, ratio in normalized_value.items():
         normalized_array = np.where(normalized_array == value, ratio, normalized_array)
-    return torch.tensor(normalized_array)
+    return torch.as_tensor(normalized_array)
 
 
 @deprecated

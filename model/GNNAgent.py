@@ -26,13 +26,13 @@ class Agent:
             gae_lambda=0.95,
     ):
         self.device = device
-
         self.gamma = gamma
         self.lr = lr
         self.batch_size = batch_size
         self.gae_lambda = gae_lambda
         self.n_epochs = n_epochs
         self.clip = clip
+        self.scaler = torch.cuda.amp.GradScaler()
         # 如果为异质图
         assert init_data is not None, "init_data是异质图必需的"
         raw_network = HGTNet(
@@ -41,6 +41,8 @@ class Agent:
         self.network = raw_network
         # self.compile_model=torch.compile(self.network)
         self.optimizer = torch.optim.AdamW(raw_network.parameters(), lr=lr, eps=1e-5)
+        self.scheduler = torch.optim.lr_scheduler.OneCycleLR(self.optimizer, lr, epochs=n_epochs,
+                                                             steps_per_epoch=2)
 
     def init(self,
              batch_size: int,
@@ -268,7 +270,7 @@ class Agent:
             returns: torch.Tensor = advantages + values
         flat_advantages = advantages.view(-1)
         flat_returns = returns.view(-1)
-        total_loss = torch.tensor(0.0)
+        total_loss = torch.as_tensor(0.0)
         for _ in range(self.n_epochs):
             # 这里是设置minibatch，也就是送入图神经网络的大小
             for index in BatchSampler(
@@ -282,13 +284,14 @@ class Agent:
                 mini_probs_func = [log_probs_func[i] for i in index]
                 mini_probs_power = [log_probs_power[i] for i in index]
                 # 加入了选择熵值
-                new_pf, new_pp, entropy = self.get_batch_actions_probs(
-                    mini_batch_size,
-                    mini_nodes,
-                    mini_edges,
-                    mini_actions_power,
-                    mini_actions_func,
-                )
+                with torch.cuda.amp.autocast():
+                    new_pf, new_pp, entropy = self.get_batch_actions_probs(
+                        mini_batch_size,
+                        mini_nodes,
+                        mini_edges,
+                        mini_actions_power,
+                        mini_actions_func,
+                    )
                 # logger.debug(f"new_log_prob: {new_log_prob}")
 
                 # 这里需要连接起来变成一个，要不然两个tensor不一样大
@@ -304,12 +307,16 @@ class Agent:
                 critic_loss = F.mse_loss(flat_returns[index], new_value)
                 total_loss: torch.Tensor = actor_loss.mean() + 0.5 * critic_loss
                 self.optimizer.zero_grad()
-                total_loss.backward()
+                self.scaler.scale(total_loss).backward()
                 # 裁减
                 # torch.nn.utils.clip_grad_norm_(self.network.parameters(), 10)
-                self.optimizer.step()
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+                # self.optimizer.step()
                 # batch_use_time = (datetime.now() - batch_time).microseconds
-        self.lr_decay(progress)
+                self.scheduler.step()
+        self.scheduler = torch.optim.lr_scheduler.OneCycleLR(self.optimizer, self.lr, epochs=self.n_epochs,
+                                                             steps_per_epoch=2)
         return total_loss
 
     def lr_decay(self, progress):
