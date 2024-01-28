@@ -1,7 +1,7 @@
 import numpy as np
 import torch
-from model.BasicClass import BasicClass
-from model.StateCode import CellCode
+from BasicClass import BasicClass
+from StateCode import CellCode
 from loguru import logger
 
 
