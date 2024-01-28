@@ -35,11 +35,12 @@ class Agent:
         self.clip = clip
         # 如果为异质图
         assert init_data is not None, "init_data是异质图必需的"
-        self.network = HGTNet(
+        raw_network = HGTNet(
             init_data,
         ).to(self.device)
+        self.network = raw_network if os.name == 'net' else torch.compile(raw_network)
         # self.compile_model=torch.compile(self.network)
-        self.optimizer = torch.optim.Adam(self.network.parameters(), lr=lr, eps=1e-5)
+        self.optimizer = torch.optim.Adam(raw_network.parameters(), lr=lr, eps=1e-5)
 
     def init(self,
              batch_size: int,
@@ -202,13 +203,15 @@ class Agent:
 
     def load_model(self, name):
         # 如果没有文件需要跳过
-        name = f"./model/{name}"
+        current_directory = os.path.dirname(os.path.abspath(__file__))
+        name = f"{current_directory}/model/{name}"
         if not os.path.exists(name):
             return
         self.network.load_model(name)
 
     def save_model(self, name):
-        name = f"./model/{name}"
+        current_directory = os.path.dirname(os.path.abspath(__file__))
+        name = f"{current_directory}/model/{name}"
         self.network.save_model(name)
 
     def learn(
