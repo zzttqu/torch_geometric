@@ -108,7 +108,7 @@ class HGTNet(nn.Module):
     def __init__(
             self,
             data: HeteroData,
-            hidden_channels=32,
+            hidden_channels=64,
             num_layers=3,
     ):
         super().__init__()
@@ -121,7 +121,7 @@ class HGTNet(nn.Module):
             )
         self.conv_list = torch.nn.ModuleList()
         for i in range(num_layers):
-            conv = HANConv(hidden_channels, hidden_channels, data.metadata(), heads=2)
+            conv = HANConv(hidden_channels, hidden_channels, data.metadata(), heads=4)
             self.conv_list.append(conv)
         self.lin0 = nn.Linear(hidden_channels, hidden_channels)
         # 这里先写死了吧，应该需要根据需求进行设置

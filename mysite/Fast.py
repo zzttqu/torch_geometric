@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi import BackgroundTasks
 from pydantic import BaseModel
 
-from train_class import Train
+from model.train_class import Train
 
 
 class Setting(BaseModel):

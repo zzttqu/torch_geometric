@@ -6,8 +6,8 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor
 
-from model.GNNNet import HGTNet
-from model.PPOMemory import PPOMemory
+from GNNNet import HGTNet
+from PPOMemory import PPOMemory
 from torch.distributions import Categorical
 from torch.utils.data import BatchSampler, SequentialSampler
 from torch_geometric.data import HeteroData
@@ -38,6 +38,7 @@ class Agent:
         self.network = HGTNet(
             init_data,
         ).to(self.device)
+        # self.compile_model=torch.compile(self.network)
         self.optimizer = torch.optim.Adam(self.network.parameters(), lr=lr, eps=1e-5)
 
     def init(self,

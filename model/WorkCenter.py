@@ -1,5 +1,5 @@
 from typing import List, Tuple, Union
-from BasicClass import BasicClass
+from model.BasicClass import BasicClass
 from numpy import ndarray, dtype
 from model.WorkCell import WorkCell
 import numpy as np
@@ -190,6 +190,7 @@ class WorkCenter(BasicClass):
         state_norm = self._working_status.value / (self._center_state_code_len - 1)
         return torch.tensor(
             [
+                self.id,
                 func_norm,
                 process_norm,
                 state_norm,

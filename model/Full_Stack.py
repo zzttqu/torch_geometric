@@ -11,7 +11,7 @@ from envClass import EnvRun
 from loguru import logger
 from algorithm.Genetic import GeneticAlgorithmNUMPY
 import torch
-from model.GNNAgent import Agent
+from GNNAgent import Agent
 from torch_geometric.data import HeteroData
 from utils.DataUtils import data_generator
 
@@ -26,8 +26,8 @@ def main():
     rmt_units_num_list = [np.array([16, 10, 10, 15, 10])]
     torch.manual_seed(3407)
     np.random.seed(3407)
-    data_len = 4
-    speed_list, order_list, rmt_units_num_list = data_generator(3, 3, data_len)
+    data_len = 1
+    speed_list, order_list, rmt_units_num_list = data_generator(5, 5, data_len)
     # 自然选择部分
     pop_num = 100
     generation = 50
@@ -57,9 +57,9 @@ def main():
         init_data=hetero_data,
         device=device
     )
-    # load_model_name = "last_model.pth"
-    # logger.debug(f'加载了模型{load_model_name}')
-    # agent.load_model(load_model_name)
+    load_model_name = "last_model.pth"
+    logger.debug(f'加载了模型{load_model_name}')
+    agent.load_model(load_model_name)
     # 添加计算图
     a, b = agent.network(obs_states, edge_index)
     writer = SummaryWriter(log_dir="logs/train")

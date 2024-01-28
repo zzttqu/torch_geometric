@@ -9,8 +9,8 @@ from torch_geometric.data import HeteroData
 
 from PPOMemory import PPOMemory
 from algorithm.Genetic import GeneticAlgorithmNUMPY
-from model.GNNAgent import Agent
-from model.envClass import EnvRun
+from GNNAgent import Agent
+from envClass import EnvRun
 from utils.DataUtils import data_generator
 
 

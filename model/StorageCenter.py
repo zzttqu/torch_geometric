@@ -2,7 +2,7 @@ import math
 
 from loguru import logger
 import torch
-from model.StateCode import *
+from StateCode import *
 from typing import ClassVar, Tuple
 from BasicClass import BasicClass
 
@@ -88,7 +88,7 @@ class StorageCenter(BasicClass):
     def reset(self):
         self._product_count = 0
         if self._is_first:
-            self._product_count = int(1.2 * self.goal)
+            self._product_count = int(1.5 * self.goal)
 
     def status(self) -> torch.Tensor:
         """
@@ -100,7 +100,7 @@ class StorageCenter(BasicClass):
         produce_progress = self._product_count / self.goal
         product_id_norm = self.product_id / (self.max_func - 1)
         process_norm = self.process / self.process_num
-        return torch.tensor([product_id_norm, process_norm, produce_progress], dtype=torch.float32)
+        return torch.tensor([self.id, product_id_norm, process_norm, produce_progress], dtype=torch.float32)
 
     def read_state(self) -> tuple[int, int, int]:
         """

@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from BasicClass import BasicClass
+from model.BasicClass import BasicClass
 from model.StateCode import CellCode
 from loguru import logger
 
@@ -144,6 +144,7 @@ class WorkCell(BasicClass):
         state_norm = self.state.value / self._cell_state_code_len
         return torch.tensor(
             [
+                self.id,
                 func_norm,
                 process_norm,
                 state_norm,
