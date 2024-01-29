@@ -15,7 +15,11 @@ if not current_system.startswith('win'):
     current_file_path = os.path.abspath(__file__)
 
     # 获取当前脚本文件的父目录
+    current_file_path = os.path.dirname(current_file_path)
     parent_directory = os.path.dirname(current_file_path)
+    # 新建model文件夹
+    model_folder = os.path.join(parent_directory, 'model/model')
+    os.makedirs(model_folder, exist_ok=True)
     sys.path.append(f'{parent_directory}')
 from model.PPOMemory import PPOMemory
 from envClass import EnvRun
