@@ -305,7 +305,7 @@ class Agent:
                     mini_nodes, mini_edges, mini_batch_size
                 )
                 critic_loss = F.mse_loss(flat_returns[index], new_value)
-                total_loss: torch.Tensor = actor_loss.mean() + 0.5 * critic_loss
+                total_loss: torch.Tensor = actor_loss.mean() + 0.5 * critic_loss - 0.01 * entropy
                 self.optimizer.zero_grad()
                 self.scaler.scale(total_loss).backward()
                 # 裁减

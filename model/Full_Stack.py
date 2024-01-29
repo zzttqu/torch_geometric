@@ -6,7 +6,12 @@ from datetime import datetime
 
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
+import sys
+import os
 
+if os.name != 'nt':
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    sys.path.append(f'{current_dir}/torch_geometric')
 from model.PPOMemory import PPOMemory
 from envClass import EnvRun
 from loguru import logger
@@ -27,7 +32,7 @@ def main():
     rmt_units_num_list = [np.array([16, 10, 10, 15, 10])]
     # torch.manual_seed(3407)
     # np.random.seed(3407)
-    data_len = 1
+    data_len = 0
     speed_list, order_list, rmt_units_num_list = data_generator(6, 6, data_len)
     # 自然选择部分
     pop_num = 100
