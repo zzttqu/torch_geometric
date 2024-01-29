@@ -16,16 +16,16 @@ from model.utils.DataUtils import data_generator
 
 class Train:
     def __init__(self, data_len=1, process_num=5, product_num=5):
-        torch.manual_seed(3407)
-        np.random.seed(3407)
+        # torch.manual_seed(3407)
+        # np.random.seed(3407)
         self.speed_list, self.order_list, self.rmt_units_num_list = data_generator(process_num, product_num, data_len)
         # 自然选择部分
         self.pop_num = 100
         self.generation = 50
         self.batch_size = 32
-        # self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.data_len = data_len
-        self.device = torch.device('cpu')
+        # self.device = torch.device('cpu')
 
     def init_setting(self, env_index: int, first_init: bool):
         """
@@ -85,7 +85,8 @@ class Train:
         # self.rmt_units_num_list[env_index]
         return {'order': self.order_list[env_index].tolist(),
                 'speed': self.speed_list[env_index].tolist(),
-                'rmt_units_num': self.rmt_units_num_list[env_index].tolist(), 'GA_best_solution': self.best_time}
+                'rmt_units_num': self.rmt_units_num_list[env_index].tolist(), 'bestTime': self.best_time,
+                'initUnits': best_solution}
 
     def step(self):
         self.agent.network.eval()

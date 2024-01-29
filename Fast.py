@@ -6,7 +6,7 @@ from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import BackgroundTasks
 from pydantic import BaseModel
-
+from fastapi.staticfiles import StaticFiles
 from model.train_class import Train
 
 
@@ -21,13 +21,15 @@ class Res(BaseModel):
 
 
 app = FastAPI()
-origins = ['http://localhost:3000']
+origins = ['http://localhost:3000', 'http://localhost:8080', 'http://127.0.0.1:8000']
 app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True, allow_methods=["*"],
                    allow_headers=["*"])
 websockets_connection = None
 train: Optional[Train] = None
 start_flag = False
 first_init = True
+
+app.mount('/next-app', StaticFiles(directory='index'))
 
 
 @app.get('/train')
@@ -65,7 +67,9 @@ async def create_setting(setting: Setting):
         train = Train(setting.env_len, setting.processNum, setting.productNum)
         return {'message': '1'}
     else:
-        return {'message': '0'}
+        del train
+        train = Train(setting.env_len, setting.processNum, setting.productNum)
+        return {'message': '1'}
 
 
 @app.get('/select_env')
