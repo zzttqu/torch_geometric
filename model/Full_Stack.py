@@ -10,9 +10,13 @@ import sys
 import os
 
 current_system = sys.platform
-if current_system.startswith('win'):
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    sys.path.append(f'{current_dir}/torch_geometric')
+if not current_system.startswith('win'):
+    # 获取当前脚本文件的路径
+    current_file_path = os.path.abspath(__file__)
+
+    # 获取当前脚本文件的父目录
+    parent_directory = os.path.dirname(current_file_path)
+    sys.path.append(f'{parent_directory}')
 from model.PPOMemory import PPOMemory
 from envClass import EnvRun
 from loguru import logger
