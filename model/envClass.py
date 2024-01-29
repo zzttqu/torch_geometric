@@ -295,12 +295,12 @@ class EnvRun:
                 # 工作中心奖励
         for center in self.work_center_list:
             if center.state == CenterCode.center_working:
-                center_reward += 0.5 / max(finish[center.working_func], 0.1) / self.total_center_num
+                center_reward += 0.3 / max(finish[center.working_func], 0.1) / self.total_center_num
             else:
                 # 工作完成度越高，惩罚越少
                 center_reward -= 0.2 / max(finish[center.working_func], 0.1) / self.total_center_num
         # 时间惩罚
-        time_penalty = 0.5 * self.episode_step / self.expected_step
+        time_penalty = 0.3 * self.episode_step / self.expected_step
         self.reward += products_reward
         self.reward += center_reward
         self.reward -= time_penalty

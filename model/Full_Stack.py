@@ -1,6 +1,7 @@
 """
 本文件主要用于测试包括遗传算法和机器学习
 """
+import cProfile
 from datetime import datetime
 
 import numpy as np
@@ -27,7 +28,7 @@ def main():
     # torch.manual_seed(3407)
     # np.random.seed(3407)
     data_len = 1
-    speed_list, order_list, rmt_units_num_list = data_generator(2, 5, data_len)
+    speed_list, order_list, rmt_units_num_list = data_generator(6, 6, data_len)
     # 自然选择部分
     pop_num = 100
     generation = 50
@@ -82,7 +83,6 @@ def main():
         order = order_list[index]
         speed = speed_list[index]
         rmt_units_num = rmt_units_num_list[index]
-
         torch.cuda.empty_cache()
         logger.success(f'第{i + 1}个场景')
         logger.info(f'=======当前订单为: {order}=======')
@@ -90,34 +90,22 @@ def main():
         logger.info(f'=======当前工作单元数量为: {rmt_units_num}=======')
         ga = GeneticAlgorithmNUMPY(pop_num, generation, order, speed, rmt_units_num)
         best_time, best_solution = ga.evolve()
-        logger.success(f'算法最优{best_time},配置为{best_solution}')
         init_step = total_step
         init_episode = episode
         batch_size = batch_size
-        max_steps = min(batch_size * 20, best_time * 10)
 
         env.reinit(order=order, work_center_init_func=best_solution, speed_list=speed,
                    expected_step=best_time, episode_step_max=best_time * 2)
+        # 测试自然选择算法
+        center_num = torch.as_tensor(best_solution).sum()
+        best_time = ga.test_best(env, center_num)
+        logger.success(f'算法最优{best_time},配置为{best_solution}')
+        max_steps = max(batch_size * 20, best_time * 10)
+        env.reinit(order=order, work_center_init_func=best_solution, speed_list=speed,
+                   expected_step=best_time, episode_step_max=best_time * 5)
         obs_states, edge_index, reward, dones, _, _ = env.get_obs()
         agent.init(batch_size, env.center_per_process, env.total_center_num)
-        ga_solution = torch.empty(0, dtype=torch.int)
-        on_off = torch.ones(env.total_center_num, dtype=torch.int)
-        ratios = torch.ones(env.total_center_num, dtype=torch.float)
-        for process in best_solution:
-            for product, num in enumerate(process):
-                tmp = torch.full((num,), product, dtype=torch.int)
-                ga_solution = torch.cat((ga_solution, tmp), dim=0)
-        # logger.debug(f'{on_off}{ga_solution}{ratios}')
-        ss = 0
-        while True:
-            ss += 1
-            env.update(on_off, ga_solution, ratios)
-            obs_states, edge_index, reward, dones, episode_step, finish_state = env.get_obs()
-            if dones == 1:
-                logger.info(ss)
-                break
-            if ss >= max_steps:
-                break
+
         env.reset()
         memory = PPOMemory(
             batch_size,
@@ -197,4 +185,5 @@ def main():
 
 
 if __name__ == '__main__':
+    # cProfile.run('main()', sort='cumulative')
     main()

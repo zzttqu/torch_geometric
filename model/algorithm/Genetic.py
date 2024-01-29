@@ -337,7 +337,26 @@ class GeneticAlgorithmNUMPY:
         #     # 最优解：{self.best_solution}，最优解适应度：{self.best_fitness: .2f}
         #     f"最优解时间：{self.shortest_time[-1]:.2f}")
         unit_num = [[round(j.item() * self.RMT_units[i]) for j in nums] for i, nums in enumerate(self.best_solution)]
+        self.unit_num = unit_num
         return round(self.shortest_time), unit_num
+
+    def test_best(self, env, center_num):
+        ga_solution = torch.empty(0, dtype=torch.int)
+        on_off = torch.ones(center_num, dtype=torch.int)
+        ratios = torch.ones(center_num, dtype=torch.float)
+        for process in self.unit_num:
+            for product, num in enumerate(process):
+                tmp = torch.full((num,), product, dtype=torch.int)
+                ga_solution = torch.cat((ga_solution, tmp), dim=0)
+        # logger.debug(f'{on_off}{ga_solution}{ratios}')
+        ss = 0
+        while ss < 200:
+            ss += 1
+            env.update(on_off, ga_solution, ratios)
+            obs_states, edge_index, reward, dones, episode_step, finish_state = env.get_obs()
+            if dones == 1:
+                break
+        return ss
 
 
 def mainTorch():
