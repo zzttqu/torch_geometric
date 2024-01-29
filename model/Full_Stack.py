@@ -6,7 +6,7 @@ from datetime import datetime
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 
-from PPOMemory import PPOMemory
+from model.PPOMemory import PPOMemory
 from envClass import EnvRun
 from loguru import logger
 from algorithm.Genetic import GeneticAlgorithmNUMPY
@@ -94,7 +94,7 @@ def main():
         init_step = total_step
         init_episode = episode
         batch_size = batch_size
-        max_steps = min(batch_size * 40, best_time * 20)
+        max_steps = min(batch_size * 20, best_time * 10)
 
         env.reinit(order=order, work_center_init_func=best_solution, speed_list=speed,
                    expected_step=best_time, episode_step_max=best_time * 2)

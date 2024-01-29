@@ -18,10 +18,10 @@ class PPOMemory:
         self.center_ratios = [torch.zeros(0) for _ in range(batch_size)]
         self.log_probs_power = [torch.zeros(0) for _ in range(batch_size)]
         self.log_probs_func = [torch.zeros(0) for _ in range(batch_size)]
-        self.values = torch.zeros(batch_size).to(device)
-        self.rewards = torch.zeros(batch_size).to(device)
-        self.dones = torch.zeros(batch_size).to(device)
-        self.time_step = torch.zeros(batch_size).to(device)
+        self.values = torch.zeros(batch_size, device=device)
+        self.rewards = torch.zeros(batch_size, device=device)
+        self.dones = torch.zeros(batch_size, device=device)
+        self.time_step = torch.zeros(batch_size, device=device)
         self.count = 0
 
     def remember(

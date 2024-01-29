@@ -7,11 +7,11 @@ import torch
 from loguru import logger
 from torch_geometric.data import HeteroData
 
-from PPOMemory import PPOMemory
-from algorithm.Genetic import GeneticAlgorithmNUMPY
-from GNNAgent import Agent
-from envClass import EnvRun
-from utils.DataUtils import data_generator
+from model.PPOMemory import PPOMemory
+from model.algorithm.Genetic import GeneticAlgorithmNUMPY
+from model.GNNAgent import Agent
+from model.envClass import EnvRun
+from model.utils.DataUtils import data_generator
 
 
 class Train:
@@ -66,7 +66,7 @@ class Train:
             init_data=hetero_data,
             device=self.device
         )
-        load_model_name = "last_model.pth"
+        load_model_name = "best2.pth"
         logger.debug(f'加载了模型{load_model_name}')
         self.agent.load_model(load_model_name)
 

@@ -6,8 +6,8 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor
 
-from GNNNet import HGTNet
-from PPOMemory import PPOMemory
+from model.GNNNet import HGTNet
+from model.PPOMemory import PPOMemory
 from torch.distributions import Categorical
 from torch.utils.data import BatchSampler, SequentialSampler
 from torch_geometric.data import HeteroData
@@ -22,7 +22,7 @@ class Agent:
             device: torch.device,
             clip=0.2,
             lr=3e-4,
-            gamma=0.99,
+            gamma=0.98,
             gae_lambda=0.95,
     ):
         self.device = device
@@ -243,7 +243,7 @@ class Agent:
         # 计算GAE
         with torch.no_grad():
             last_value = self.get_value(last_node_state, edge_index)
-            advantages = torch.zeros_like(rewards).to(self.device)
+            advantages = torch.zeros_like(rewards, device=self.device)
             for t in reversed(range(self.batch_size)):
                 last_gae_lam = 0
                 if t == self.batch_size - 1:
