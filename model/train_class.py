@@ -66,7 +66,7 @@ class Train:
             init_data=hetero_data,
             device=self.device
         )
-        load_model_name = "best2.pth"
+        load_model_name = "last_model.pth"
         logger.debug(f'加载了模型{load_model_name}')
         self.agent.load_model(load_model_name)
 

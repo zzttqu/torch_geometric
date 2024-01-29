@@ -104,9 +104,9 @@ def main(process_num, product_num, data_len):
         center_num = torch.as_tensor(best_solution).sum()
         best_time = ga.test_best(env, center_num)
         logger.success(f'算法最优{best_time},配置为{best_solution}')
-        max_steps = max(batch_size * 20, best_time * 10)
+        max_steps = max(batch_size * 10, best_time * 10)
         env.reinit(order=order, work_center_init_func=best_solution, speed_list=speed,
-                   expected_step=best_time, episode_step_max=best_time * 5)
+                   expected_step=best_time * 2, episode_step_max=best_time * 5)
         obs_states, edge_index, reward, dones, _, _ = env.get_obs()
         agent.init(batch_size, env.center_per_process, env.total_center_num)
 
@@ -191,8 +191,8 @@ def main(process_num, product_num, data_len):
 if __name__ == '__main__':
     # cProfile.run('main()', sort='cumulative')
     parser = argparse.ArgumentParser()
-    parser.add_argument('process', type=int, default=4, help='工序数量')
-    parser.add_argument('product', type=int, default=4, help='产品数量')
-    parser.add_argument('data_len', type=int, default=1, help='环境数量')
+    parser.add_argument('--process', type=int, default=4, help='工序数量', required=False)
+    parser.add_argument('--product', type=int, default=4, help='产品数量', required=False)
+    parser.add_argument('--data_len', type=int, default=1, help='环境数量', required=False)
     args = parser.parse_args()
     main(args.process, args.product, args.data_len)

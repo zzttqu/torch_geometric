@@ -138,10 +138,9 @@ class WorkCell(BasicClass):
         """
         # 规范化speed和materials
         speed_norm = self.speed / max_speed
-        materials_norm = self._materials / self.speed if self.speed != 0 else 0
-        func_norm = self.function / func_num
+        func_norm = self.function / (func_num - 1)
         process_norm = self.process / process_num
-        state_norm = self.state.value / self._cell_state_code_len
+        state_norm = self.state.value / (self._cell_state_code_len - 1)
         return torch.tensor(
             [
                 self.id,
@@ -149,7 +148,6 @@ class WorkCell(BasicClass):
                 process_norm,
                 state_norm,
                 speed_norm,
-                materials_norm,
             ],
             dtype=torch.float32,
         )

@@ -11,3 +11,4 @@ class CellCode(Enum):
 class CenterCode(Enum):
     center_ready = 0
     center_working = 1
+    center_switching = 2

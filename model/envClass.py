@@ -270,7 +270,8 @@ class EnvRun:
             tmp_count = self.step_product_count[_process][_spd]
             if not storage.is_last:
                 # 当前货架的变化情况，如果小于0说明被消耗了，要大大奖励
-                products_reward -= tmp_count / self.order[_spd] * 0.5
+                # 完成度越低影响越小
+                products_reward -= finish[_spd] * tmp_count / self.order[_spd] * 0.5
                 # 只有非0工序库存过大的时候才会扣血
                 # if _spdc > 8 * self.speed_list[_process][_spd] and _process != 0:
                 #     products_reward -= _spdc / self.process_per_product * 0.1
@@ -278,11 +279,11 @@ class EnvRun:
             # 但是完成这个之后就不再增加reward了
             elif storage.is_last and self.order_finish_count[_spd] != 1:
                 finish[_spd] = storage.product_count / self.order[_spd]
-                products_reward += tmp_count / self.order[_spd] * 1
+                products_reward += tmp_count / self.order[_spd] * 0.5
                 # 如果达到订单数量且这个产品型号并未达到过订单数量，就+50奖励
                 if _spdc >= self.order[_spd]:
                     # logger.success(f'{_spd}号产品达到所需要的订单数量')
-                    products_reward += 5
+                    products_reward += 10
                     # 如果达到就置为1
                     self.order_finish_count[_spd] = 1
             if self.order_finish_count.sum() >= len(self.order):
@@ -295,12 +296,11 @@ class EnvRun:
                 # 工作中心奖励
         for center in self.work_center_list:
             if center.state == CenterCode.center_working:
-                center_reward += 0.3 / max(finish[center.working_func], 0.1) / self.total_center_num
+                center_reward += 0.3 / self.total_center_num
             else:
-                # 工作完成度越高，惩罚越少
-                center_reward -= 0.2 / max(finish[center.working_func], 0.1) / self.total_center_num
+                center_reward -= 0.3 / self.total_center_num
         # 时间惩罚
-        time_penalty = 0.3 * self.episode_step / self.expected_step
+        time_penalty = 0.5 * self.episode_step / self.expected_step
         self.reward += products_reward
         self.reward += center_reward
         self.reward -= time_penalty

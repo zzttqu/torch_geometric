@@ -37,6 +37,7 @@ class WorkCenter(BasicClass):
         self._working_func: int = init_func
         self._working_speed = int(self._speed_list[init_func].item())
         self._working_cell = self.workcell_list[init_func]
+        self._switching_func = None
         self._all_cell_id = torch.tensor([workcell.id for workcell in self.workcell_list], dtype=torch.int)
         self._process_num = process_num if process_num > 1 else 2
         self._product_num = product_num
@@ -140,6 +141,12 @@ class WorkCenter(BasicClass):
             return
         # 如果全都工作才能走到这里
         state = CellCode.workcell_ready
+        # if activate_cell != self._working_cell and self._working_status != CenterCode.center_switching:
+        #     self._working_status = CenterCode.center_switching
+        #     self._switching_func = activate_cell
+        #     self.workcell_list[activate_cell].work(0)
+        #     return
+        # if self._working_status == CenterCode.center_switching:
         for i, cell in enumerate(self.workcell_list):
             if i == activate_cell:
                 state = cell.work(1)
