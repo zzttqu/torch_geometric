@@ -9,7 +9,8 @@ from torch.utils.tensorboard import SummaryWriter
 import sys
 import os
 
-if os.name != 'nt':
+current_system = sys.platform
+if current_system.startswith('win'):
     current_dir = os.path.dirname(os.path.abspath(__file__))
     sys.path.append(f'{current_dir}/torch_geometric')
 from model.PPOMemory import PPOMemory
