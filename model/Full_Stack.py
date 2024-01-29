@@ -3,7 +3,7 @@
 """
 import cProfile
 from datetime import datetime
-
+import argparse
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 import sys
@@ -22,7 +22,7 @@ from torch_geometric.data import HeteroData
 from utils.DataUtils import data_generator
 
 
-def main():
+def main(process_num, product_num, data_len):
     speed_list = [np.array([[0, 8, 3],
                             [10, 12, 6],
                             [15, 18, 0],
@@ -32,8 +32,7 @@ def main():
     rmt_units_num_list = [np.array([16, 10, 10, 15, 10])]
     # torch.manual_seed(3407)
     # np.random.seed(3407)
-    data_len = 0
-    speed_list, order_list, rmt_units_num_list = data_generator(6, 6, data_len)
+    speed_list, order_list, rmt_units_num_list = data_generator(process_num, product_num, data_len)
     # 自然选择部分
     pop_num = 100
     generation = 50
@@ -191,4 +190,9 @@ def main():
 
 if __name__ == '__main__':
     # cProfile.run('main()', sort='cumulative')
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('process', type=int, default=4, help='工序数量')
+    parser.add_argument('product', type=int, default=4, help='产品数量')
+    parser.add_argument('data_len', type=int, default=1, help='环境数量')
+    args = parser.parse_args()
+    main(args.process, args.product, args.data_len)
